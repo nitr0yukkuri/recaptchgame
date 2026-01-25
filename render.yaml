@@ -1,0 +1,160 @@
+import React, { useEffect, useState } from 'react';
+import useWebSocket from 'react-use-websocket';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useGameStore } from './store';
+
+// RenderでデプロイされたバックエンドのURLを設定してください
+// ローカル開発時は 'ws://localhost:8080/ws'
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://recaptchgame-backend.onrender.com/ws';
+
+function App() {
+  const { 
+    gameState, roomId, playerId, target, images, opponentScore, 
+    setGameState, setRoomInfo, startGame, updateOpponentScore, endGame, winner
+  } = useGameStore();
+  
+  const [inputRoom, setInputRoom] = useState('');
+  
+  const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
+    onOpen: () => console.log('Connected to Server'),
+    shouldReconnect: () => true,
+  });
+
+  useEffect(() => {
+    if (lastMessage !== null) {
+      const msg = JSON.parse(lastMessage.data);
+      switch (msg.type) {
+        case 'STATUS_UPDATE':
+          setGameState('WAITING');
+          break;
+        case 'GAME_START':
+          startGame(msg.payload.target, msg.payload.images);
+          break;
+        case 'OPPONENT_PROGRESS':
+          if (msg.payload.player_id !== playerId) {
+            updateOpponentScore(msg.payload.correct_count);
+          }
+          break;
+        case 'GAME_FINISHED':
+          endGame(msg.payload.winner_id);
+          break;
+      }
+    }
+  }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId]);
+
+  const joinRoom = () => {
+    if (!inputRoom) return;
+    setRoomInfo(inputRoom, playerId);
+    sendMessage(JSON.stringify({
+      type: 'JOIN_ROOM',
+      payload: { room_id: inputRoom, player_id: playerId }
+    }));
+  };
+
+  const handleImageClick = (index: number) => {
+    // 演出: クリックした画像をフェードアウトさせるなどのロジックをここに追加可能
+    sendMessage(JSON.stringify({
+      type: 'SELECT_IMAGE',
+      payload: { room_id: roomId, player_id: playerId, image_index: index }
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-google-gray flex items-center justify-center font-sans text-gray-800">
+      <div className="bg-white p-6 rounded-sm shadow-xl max-w-lg w-full border border-gray-300">
+        
+        {/* Header (Always Visible mimicking ReCAPTCHA) */}
+        <div className="bg-google-blue text-white p-4 mb-4 flex justify-between items-center shadow-sm">
+          <h1 className="text-xl font-bold">I'm not a robot</h1>
+          <div className="flex flex-col items-end text-xs">
+            <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" className="w-8 mb-1" alt="logo" />
+            <span>reCAPTCHA Game</span>
+          </div>
+        </div>
+
+        {/* --- LOGIN SCREEN --- */}
+        {gameState === 'LOGIN' && (
+          <div className="space-y-4">
+            <h2 className="text-lg">Select all images with <br/><strong className="text-2xl font-black">PLAYERS</strong></h2>
+            <input 
+              type="text" 
+              value={inputRoom} 
+              onChange={(e) => setInputRoom(e.target.value)} 
+              placeholder="Enter Room ID" 
+              className="w-full p-2 border border-gray-300 focus:ring-2 focus:ring-google-blue outline-none"
+            />
+            <button onClick={joinRoom} className="w-full bg-google-blue text-white py-2 font-bold hover:bg-blue-600 transition">
+              VERIFY (JOIN)
+            </button>
+          </div>
+        )}
+
+        {/* --- WAITING SCREEN --- */}
+        {gameState === 'WAITING' && (
+          <div className="text-center py-10">
+            <div className="animate-spin h-8 w-8 border-4 border-google-blue border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p>Waiting for opponent...</p>
+          </div>
+        )}
+
+        {/* --- GAME SCREEN --- */}
+        {gameState === 'PLAYING' && (
+          <div>
+            <div className="bg-google-blue text-white p-4 mb-2">
+              <p>Select all images with</p>
+              <h2 className="text-3xl font-bold uppercase">{target}</h2>
+              <p className="text-xs mt-1">Click verify once there are none left.</p>
+            </div>
+            
+            {/* Grid */}
+            <div className="grid grid-cols-3 gap-1 mb-4">
+              {images.map((img, idx) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleImageClick(idx)}
+                  className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200"
+                >
+                  <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Status Bar */}
+            <div className="flex justify-between items-center text-sm font-bold text-gray-500">
+              <div>You</div>
+              <div className="flex-1 mx-4 h-2 bg-gray-200 rounded">
+                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 100}%` }}></div>
+              </div>
+              <div>Opponent: {opponentScore}/5</div>
+            </div>
+          </div>
+        )}
+
+        {/* --- RESULT SCREEN --- */}
+        {gameState === 'RESULT' && (
+          <div className="text-center py-8">
+            {winner === playerId ? (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600">
+                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                <h2 className="text-2xl font-bold">You are Human!</h2>
+                <p className="text-sm text-gray-500 mt-2">Verification Passed.</p>
+              </motion.div>
+            ) : (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600">
+                <h2 className="text-4xl font-black mb-2">ROBOT DETECTED</h2>
+                <p>Access Denied.</p>
+              </motion.div>
+            )}
+            <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline">Try Again</button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+export default App;
