@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion } from 'framer-motion';

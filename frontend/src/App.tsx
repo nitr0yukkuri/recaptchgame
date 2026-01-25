@@ -112,7 +112,7 @@ function App() {
 
                         {/* Grid */}
                         <div className="grid grid-cols-3 gap-1 mb-4">
-                            {images.map((img, idx) => (
+                            {images.map((img: string, idx: number) => (
                                 <motion.div
                                     key={idx}
                                     initial={{ opacity: 0 }}
