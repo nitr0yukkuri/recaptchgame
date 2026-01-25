@@ -1,78 +1,164 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import useWebSocket from 'react-use-websocket';
 import { motion } from 'framer-motion';
+import { useGameStore } from './store';
 
-export default function App() {
-    const [images, setImages] = useState(Array(9).fill(null));
-    const [selected, setSelected] = useState<number[]>([]);
-    const [isBot, setIsBot] = useState(false);
+// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-    // 100ms以内の低遅延通信用 (要件2.2)
-    const [ws, setWs] = useState<WebSocket | null>(null);
+function App() {
+    const {
+        gameState, roomId, playerId, target, images, opponentScore,
+        setGameState, setRoomInfo, startGame, updateOpponentScore, endGame, winner
+    } = useGameStore();
+
+    const [inputRoom, setInputRoom] = useState('');
+
+    const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
+        onOpen: () => console.log('Connected to Server'),
+        shouldReconnect: () => true,
+    });
 
     useEffect(() => {
-        const socket = new WebSocket(`ws://${window.location.host}/ws`);
-        setWs(socket);
-        return () => socket.close();
-    }, []);
+        if (lastMessage !== null) {
+            try {
+                const msg = JSON.parse(lastMessage.data);
+                switch (msg.type) {
+                    case 'STATUS_UPDATE':
+                        setGameState('WAITING');
+                        break;
+                    case 'GAME_START':
+                        startGame(msg.payload.target, msg.payload.images);
+                        break;
+                    case 'OPPONENT_PROGRESS':
+                        if (msg.payload.player_id !== playerId) {
+                            updateOpponentScore(msg.payload.correct_count);
+                        }
+                        break;
+                    case 'GAME_FINISHED':
+                        endGame(msg.payload.winner_id);
+                        break;
+                }
+            } catch (e) {
+                console.error("Failed to parse message:", e);
+            }
+        }
+    }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId]);
 
-    const toggleSelect = (index: number) => {
-        setSelected(prev =>
-            prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
-        );
-        ws?.send(JSON.stringify({ type: 'SELECT_IMAGE', payload: { image_index: index } }));
+    const joinRoom = () => {
+        if (!inputRoom) return;
+        setRoomInfo(inputRoom, playerId);
+        sendMessage(JSON.stringify({
+            type: 'JOIN_ROOM',
+            payload: { room_id: inputRoom, player_id: playerId }
+        }));
+    };
+
+    const handleImageClick = (index: number) => {
+        sendMessage(JSON.stringify({
+            type: 'SELECT_IMAGE',
+            payload: { room_id: roomId, player_id: playerId, image_index: index }
+        }));
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 font-sans">
-            <div className="bg-white shadow-lg p-2 max-w-sm w-full border border-gray-300">
-                <div className="bg-[#4A90E2] p-6 text-white mb-2">
-                    <p className="text-sm">お題を選択してください：</p>
-                    <p className="text-2xl font-bold leading-tight">消火栓</p>
-                    <p className="text-xs mt-1">すべて選択したら [確認] を押してください</p>
-                </div>
+        <div className="min-h-screen bg-google-gray flex items-center justify-center font-sans text-gray-800">
+            <div className="bg-white p-6 rounded-sm shadow-xl max-w-lg w-full border border-gray-300">
 
-                <div className="grid grid-cols-3 gap-1 mb-2 bg-gray-200">
-                    {images.map((_, i) => (
-                        <motion.div
-                            key={i}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => toggleSelect(i)}
-                            className="relative aspect-square bg-gray-400 cursor-pointer overflow-hidden"
-                        >
-                            <img src={`https://picsum.photos/200?sig=${i}`} alt="captcha" className="w-full h-full object-cover" />
-                            {selected.includes(i) && (
-                                <div className="absolute inset-0 bg-white/40 flex items-center justify-center border-4 border-[#4A90E2]">
-                                    <div className="bg-[#4A90E2] rounded-full p-1">
-                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                </div>
-                            )}
-                        </motion.div>
-                    ))}
-                </div>
-
-                <div className="flex justify-between items-center p-2 border-t">
-                    <div className="flex space-x-4 text-gray-500">
-                        {/* アイコン類 */}
-                        <div className="w-5 h-5 bg-gray-300 rounded-sm" />
+                {/* Header */}
+                <div className="bg-google-blue text-white p-4 mb-4 flex justify-between items-center shadow-sm">
+                    <h1 className="text-xl font-bold">I'm not a robot</h1>
+                    <div className="flex flex-col items-end text-xs">
+                        <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" className="w-8 mb-1" alt="logo" />
+                        <span>reCAPTCHA Game</span>
                     </div>
-                    <button
-                        onClick={() => setIsBot(true)}
-                        className="bg-[#4A90E2] text-white px-6 py-2 font-bold rounded-sm text-sm hover:bg-blue-600 active:bg-blue-700"
-                    >
-                        確認
-                    </button>
                 </div>
-            </div>
 
-            {/* デバフ演出用オーバーレイ (要件2.1.3) */}
-            {isBot && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center text-white text-4xl font-black">
-                    お前はボットだ
-                </div>
-            )}
+                {/* --- LOGIN SCREEN --- */}
+                {gameState === 'LOGIN' && (
+                    <div className="space-y-4">
+                        <h2 className="text-lg">Select all images with <br /><strong className="text-2xl font-black">PLAYERS</strong></h2>
+                        <input
+                            type="text"
+                            value={inputRoom}
+                            onChange={(e) => setInputRoom(e.target.value)}
+                            placeholder="Enter Room ID (e.g. 123)"
+                            className="w-full p-2 border border-gray-300 focus:ring-2 focus:ring-google-blue outline-none"
+                        />
+                        <button onClick={joinRoom} className="w-full bg-google-blue text-white py-2 font-bold hover:bg-blue-600 transition">
+                            VERIFY (JOIN)
+                        </button>
+                        <p className="text-xs text-gray-400 text-center">Wait for another player to join the same room ID.</p>
+                    </div>
+                )}
+
+                {/* --- WAITING SCREEN --- */}
+                {gameState === 'WAITING' && (
+                    <div className="text-center py-10">
+                        <div className="animate-spin h-8 w-8 border-4 border-google-blue border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p>Waiting for opponent...</p>
+                        <p className="text-xs text-gray-400 mt-2">Room ID: {roomId}</p>
+                    </div>
+                )}
+
+                {/* --- GAME SCREEN --- */}
+                {gameState === 'PLAYING' && (
+                    <div>
+                        <div className="bg-google-blue text-white p-4 mb-2">
+                            <p>Select all images with</p>
+                            <h2 className="text-3xl font-bold uppercase">{target}</h2>
+                            <p className="text-xs mt-1">Click verify once there are none left.</p>
+                        </div>
+
+                        {/* Grid */}
+                        <div className="grid grid-cols-3 gap-1 mb-4">
+                            {images.map((img: string, idx: number) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleImageClick(idx)}
+                                    className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200 border border-white"
+                                >
+                                    <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                                </motion.div>
+                            ))}
+                        </div>
+
+                        {/* Status Bar */}
+                        <div className="flex justify-between items-center text-sm font-bold text-gray-500">
+                            <div>You</div>
+                            <div className="flex-1 mx-4 h-2 bg-gray-200 rounded overflow-hidden">
+                                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 100}%` }}></div>
+                            </div>
+                            <div>Rival: {opponentScore}/5</div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- RESULT SCREEN --- */}
+                {gameState === 'RESULT' && (
+                    <div className="text-center py-8">
+                        {winner === playerId ? (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600">
+                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                <h2 className="text-2xl font-bold">You are Human!</h2>
+                                <p className="text-sm text-gray-500 mt-2">Verification Passed.</p>
+                            </motion.div>
+                        ) : (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600">
+                                <h2 className="text-4xl font-black mb-2">ROBOT DETECTED</h2>
+                                <p>Access Denied.</p>
+                            </motion.div>
+                        )}
+                        <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline cursor-pointer">Try Again</button>
+                    </div>
+                )}
+
+            </div>
         </div>
     );
 }
+
+export default App;

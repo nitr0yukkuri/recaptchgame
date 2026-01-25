@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useGameStore } from './store';
 
-// RenderでデプロイされたバックエンドのURLを設定してください
-// ローカル開発時は 'ws://localhost:8080/ws'
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://recaptchgame-backend.onrender.com/ws';
+// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
 function App() {
     const {
@@ -22,22 +21,26 @@ function App() {
 
     useEffect(() => {
         if (lastMessage !== null) {
-            const msg = JSON.parse(lastMessage.data);
-            switch (msg.type) {
-                case 'STATUS_UPDATE':
-                    setGameState('WAITING');
-                    break;
-                case 'GAME_START':
-                    startGame(msg.payload.target, msg.payload.images);
-                    break;
-                case 'OPPONENT_PROGRESS':
-                    if (msg.payload.player_id !== playerId) {
-                        updateOpponentScore(msg.payload.correct_count);
-                    }
-                    break;
-                case 'GAME_FINISHED':
-                    endGame(msg.payload.winner_id);
-                    break;
+            try {
+                const msg = JSON.parse(lastMessage.data);
+                switch (msg.type) {
+                    case 'STATUS_UPDATE':
+                        setGameState('WAITING');
+                        break;
+                    case 'GAME_START':
+                        startGame(msg.payload.target, msg.payload.images);
+                        break;
+                    case 'OPPONENT_PROGRESS':
+                        if (msg.payload.player_id !== playerId) {
+                            updateOpponentScore(msg.payload.correct_count);
+                        }
+                        break;
+                    case 'GAME_FINISHED':
+                        endGame(msg.payload.winner_id);
+                        break;
+                }
+            } catch (e) {
+                console.error("Failed to parse message:", e);
             }
         }
     }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId]);
@@ -52,7 +55,6 @@ function App() {
     };
 
     const handleImageClick = (index: number) => {
-        // 演出: クリックした画像をフェードアウトさせるなどのロジックをここに追加可能
         sendMessage(JSON.stringify({
             type: 'SELECT_IMAGE',
             payload: { room_id: roomId, player_id: playerId, image_index: index }
@@ -63,7 +65,7 @@ function App() {
         <div className="min-h-screen bg-google-gray flex items-center justify-center font-sans text-gray-800">
             <div className="bg-white p-6 rounded-sm shadow-xl max-w-lg w-full border border-gray-300">
 
-                {/* Header (Always Visible mimicking ReCAPTCHA) */}
+                {/* Header */}
                 <div className="bg-google-blue text-white p-4 mb-4 flex justify-between items-center shadow-sm">
                     <h1 className="text-xl font-bold">I'm not a robot</h1>
                     <div className="flex flex-col items-end text-xs">
@@ -80,12 +82,13 @@ function App() {
                             type="text"
                             value={inputRoom}
                             onChange={(e) => setInputRoom(e.target.value)}
-                            placeholder="Enter Room ID"
+                            placeholder="Enter Room ID (e.g. 123)"
                             className="w-full p-2 border border-gray-300 focus:ring-2 focus:ring-google-blue outline-none"
                         />
                         <button onClick={joinRoom} className="w-full bg-google-blue text-white py-2 font-bold hover:bg-blue-600 transition">
                             VERIFY (JOIN)
                         </button>
+                        <p className="text-xs text-gray-400 text-center">Wait for another player to join the same room ID.</p>
                     </div>
                 )}
 
@@ -94,6 +97,7 @@ function App() {
                     <div className="text-center py-10">
                         <div className="animate-spin h-8 w-8 border-4 border-google-blue border-t-transparent rounded-full mx-auto mb-4"></div>
                         <p>Waiting for opponent...</p>
+                        <p className="text-xs text-gray-400 mt-2">Room ID: {roomId}</p>
                     </div>
                 )}
 
@@ -115,7 +119,7 @@ function App() {
                                     animate={{ opacity: 1 }}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => handleImageClick(idx)}
-                                    className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200"
+                                    className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200 border border-white"
                                 >
                                     <img src={img} alt="captcha" className="w-full h-full object-cover" />
                                 </motion.div>
@@ -125,10 +129,10 @@ function App() {
                         {/* Status Bar */}
                         <div className="flex justify-between items-center text-sm font-bold text-gray-500">
                             <div>You</div>
-                            <div className="flex-1 mx-4 h-2 bg-gray-200 rounded">
+                            <div className="flex-1 mx-4 h-2 bg-gray-200 rounded overflow-hidden">
                                 <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 100}%` }}></div>
                             </div>
-                            <div>Opponent: {opponentScore}/5</div>
+                            <div>Rival: {opponentScore}/5</div>
                         </div>
                     </div>
                 )}
@@ -148,7 +152,7 @@ function App() {
                                 <p>Access Denied.</p>
                             </motion.div>
                         )}
-                        <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline">Try Again</button>
+                        <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline cursor-pointer">Try Again</button>
                     </div>
                 )}
 
