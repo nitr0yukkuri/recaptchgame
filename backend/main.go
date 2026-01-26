@@ -1,10 +1,7 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -72,7 +69,6 @@ func handleWebSocket(c echo.Context) error {
 
 	defer func() {
 		mu.Lock()
-		playerID := clients[ws]
 		delete(clients, ws)
 		for rid, conns := range rooms {
 			if _, ok := conns[ws]; ok {
@@ -122,7 +118,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		scoreMu.Lock()
-		// インデックス4（5枚目）をハズレとするロジックを維持
 		isCorrect := p.ImageIndex != 4 
 		if isCorrect {
 			scores[p.PlayerID]++
@@ -146,7 +141,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func startGame(roomID string) {
-	// ローカルパスに変更
 	images := []string{
 		"/images/1.jpg", "/images/2.jpg", "/images/3.jpg",
 		"/images/4.jpg", "/images/5.jpg", "/images/6.jpg",

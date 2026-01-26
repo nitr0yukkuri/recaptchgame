@@ -11,15 +11,15 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 const CPU_GAME_DATA = {
     target: 'CARS',
     images: [
-        'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=300&q=80', // 0: Car
-        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80', // 1: Car
-        'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80', // 2: Car
-        'https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80', // 3: Car
-        'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=300&q=80', // 4: Coffee (FALSE)
-        'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=300&q=80', // 5: Car
-        'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=300&q=80', // 6: Car
-        'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=300&q=80', // 7: Car
-        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80', // 8: Car
+        '/images/1.jpg',
+        '/images/2.jpg',
+        '/images/3.jpg',
+        '/images/4.jpg',
+        '/images/5.png',
+        '/images/6.jpg',
+        '/images/7.jpg',
+        '/images/8.jpg',
+        '/images/9.jpg',
     ],
     correctIndices: [0, 1, 2, 3, 5, 6, 7, 8] // CPU判定用
 };
@@ -343,7 +343,6 @@ function App() {
                                                 src={img}
                                                 alt="captcha"
                                                 className="w-full h-full object-cover"
-                                                referrerPolicy="no-referrer"
                                             />
                                         </motion.div>
                                     ))}
