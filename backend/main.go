@@ -48,23 +48,27 @@ type GameResultPayload struct {
 }
 
 var (
-	scores    = make(map[string]int)
-	scoreMu   sync.Mutex
-	upgrader  = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	clients   = make(map[*websocket.Conn]string)
-	rooms     = make(map[string]map[*websocket.Conn]bool)
-	mu        sync.Mutex
-	ctx       = context.Background()
+	scores   = make(map[string]int)
+	scoreMu  sync.Mutex
+	upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	clients  = make(map[*websocket.Conn]string)
+	rooms    = make(map[string]map[*websocket.Conn]bool)
+	mu       sync.Mutex
+	ctx      = context.Background()
 )
 
 func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok { return value }
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
 	return fallback
 }
 
 func handleWebSocket(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer ws.Close()
 
 	defer func() {
@@ -74,7 +78,9 @@ func handleWebSocket(c echo.Context) error {
 		for rid, conns := range rooms {
 			if _, ok := conns[ws]; ok {
 				delete(conns, ws)
-				if len(conns) == 0 { delete(rooms, rid) }
+				if len(conns) == 0 {
+					delete(rooms, rid)
+				}
 				fmt.Printf("Player %s disconnected from room %s\n", playerID, rid)
 			}
 		}
@@ -83,7 +89,9 @@ func handleWebSocket(c echo.Context) error {
 
 	for {
 		var msg Message
-		if err := ws.ReadJSON(&msg); err != nil { break }
+		if err := ws.ReadJSON(&msg); err != nil {
+			break
+		}
 		handleMessage(ws, msg)
 	}
 	return nil
@@ -93,10 +101,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 	switch msg.Type {
 	case "JOIN_ROOM":
 		var p JoinRoomPayload
-		if err := json.Unmarshal(msg.Payload, &p); err != nil { return }
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return
+		}
 		mu.Lock()
 		clients[ws] = p.PlayerID
-		if rooms[p.RoomID] == nil { rooms[p.RoomID] = make(map[*websocket.Conn]bool) }
+		if rooms[p.RoomID] == nil {
+			rooms[p.RoomID] = make(map[*websocket.Conn]bool)
+		}
 		rooms[p.RoomID][ws] = true
 		roomSize := len(rooms[p.RoomID])
 		mu.Unlock()
@@ -108,35 +120,61 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 	case "SELECT_IMAGE":
 		var p SelectImagePayload
-		if err := json.Unmarshal(msg.Payload, &p); err != nil { return }
-		isCorrect := p.ImageIndex%2 == 0
-		if isCorrect {
-			scoreMu.Lock()
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return
+		}
+
+		scoreMu.Lock()
+		// 正誤判定: インデックス4（コーヒー）以外は正解（車）
+		// フロントエンドの画像リストと一致させる
+		if p.ImageIndex != 4 {
 			scores[p.PlayerID]++
-			newScore := scores[p.PlayerID]
-			scoreMu.Unlock()
-			if newScore >= 5 {
-				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
-				b, _ := json.Marshal(res)
-				broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
-			} else {
-				prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(newScore), TotalNeeded: 5}
-				b, _ := json.Marshal(prog)
-				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
+		} else {
+			// 間違いなら減点（スパムクリック防止）
+			scores[p.PlayerID]--
+			if scores[p.PlayerID] < 0 {
+				scores[p.PlayerID] = 0
 			}
+		}
+		currentScore := scores[p.PlayerID]
+		scoreMu.Unlock()
+
+		if currentScore >= 5 {
+			res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
+			b, _ := json.Marshal(res)
+			broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
+		} else {
+			prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(currentScore), TotalNeeded: 5}
+			b, _ := json.Marshal(prog)
+			broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
 		}
 	}
 }
 
 func startGame(roomID string) {
-	images :=make([]string, 9)
-	for i := 0; i < 9; i++ { images[i] = fmt.Sprintf("https://via.placeholder.com/150?text=Img+%d", i) }
-	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: "Traffic Lights"}
+	// フロントエンドのUnsplash画像リストと同一のものを配信
+	images := []string{
+		"https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80", // 0: Car
+		"https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=300&q=80", // 1: Car
+		"https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80", // 2: Car
+		"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80", // 3: Car
+		"https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=300&q=80", // 4: Coffee (False)
+		"https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80", // 5: Car
+		"https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=300&q=80", // 6: Car
+		"https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=300&q=80", // 7: Car
+		"https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80", // 8: Car
+	}
+	
+	targetWord := "CARS"
+
+	payload := GameStartPayload{ProblemID: "prob_cars_001", Images: images, Target: targetWord}
 	b, _ := json.Marshal(payload)
 	mu.Lock()
 	if conns, ok := rooms[roomID]; ok {
 		scoreMu.Lock()
-		for ws := range conns { scores[clients[ws]] = 0 }
+		for ws := range conns {
+			scores[clients[ws]] = 0
+		}
 		scoreMu.Unlock()
 	}
 	mu.Unlock()
@@ -147,7 +185,9 @@ func broadcastToRoom(roomID string, msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
 	if conns, ok := rooms[roomID]; ok {
-		for ws := range conns { ws.WriteJSON(msg) }
+		for ws := range conns {
+			ws.WriteJSON(msg)
+		}
 	}
 }
 

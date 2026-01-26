@@ -7,20 +7,21 @@ import { useGameStore } from './store';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPU対戦用のモックデータ
+// CPU対戦用のモックデータ（バックエンドと同じ構成にする）
 const CPU_GAME_DATA = {
     target: 'CARS',
     images: [
-        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1532974297617-c0f05fe48bff?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1580273916550-e323be2ebcc6?auto=format&fit=crop&w=300&q=80',
-        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80',
-    ]
+        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80', // 0: Car
+        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=300&q=80', // 1: Car
+        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80', // 2: Car
+        'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80', // 3: Car
+        'https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=300&q=80', // 4: Coffee (False)
+        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80', // 5: Car
+        'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=300&q=80', // 6: Car
+        'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=300&q=80', // 7: Car
+        'https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80', // 8: Car
+    ],
+    correctIndices: [0, 1, 2, 3, 5, 6, 7, 8] // CPU判定用
 };
 
 function App() {
@@ -32,30 +33,36 @@ function App() {
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
+    const [myScore, setMyScore] = useState(0); // フロントエンド側での簡易スコア管理（表示用）
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
 
-    // CPU対戦ロジック
+    // CPU対戦ロジック（相手の進行状況をシミュレーション）
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             const interval = setInterval(() => {
+                // CPUはランダムなタイミングで正解する
                 if (Math.random() > 0.6) {
                     useGameStore.getState().updateOpponentScore(useGameStore.getState().opponentScore + 1);
                 }
-            }, 2000);
+            }, 1500);
             return () => clearInterval(interval);
         }
     }, [gameMode, gameState]);
 
-    // CPUの勝利判定監視
+    // CPU/自分の勝利判定監視
     useEffect(() => {
-        if (gameMode === 'CPU' && opponentScore >= 5 && gameState === 'PLAYING') {
-            endGame('cpu');
+        if (gameMode === 'CPU' && gameState === 'PLAYING') {
+            if (opponentScore >= 5) {
+                endGame('cpu');
+            } else if (myScore >= 5) {
+                endGame('human');
+            }
         }
-    }, [opponentScore, gameMode, gameState, endGame]);
+    }, [opponentScore, myScore, gameMode, gameState, endGame]);
 
 
     useEffect(() => {
@@ -70,10 +77,14 @@ function App() {
                         break;
                     case 'GAME_START':
                         startGame(msg.payload.target, msg.payload.images);
+                        setMyScore(0);
                         break;
                     case 'OPPONENT_PROGRESS':
                         if (msg.payload.player_id !== playerId) {
                             updateOpponentScore(msg.payload.correct_count);
+                        } else {
+                            // 自分のスコアがサーバーから確認として返ってくる場合
+                            setMyScore(msg.payload.correct_count);
                         }
                         break;
                     case 'GAME_FINISHED':
@@ -89,6 +100,7 @@ function App() {
     const startCpuGame = () => {
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
+        setMyScore(0);
         startGame(CPU_GAME_DATA.target, CPU_GAME_DATA.images);
     };
 
@@ -115,11 +127,14 @@ function App() {
 
     const handleImageClick = (index: number) => {
         if (gameMode === 'CPU') {
-            sendMessage(JSON.stringify({
-                type: 'SELECT_IMAGE',
-                payload: { room_id: 'LOCAL', player_id: playerId, image_index: index }
-            }));
+            // CPUモードでのローカル判定
+            const isCorrect = CPU_GAME_DATA.correctIndices.includes(index);
+            if (isCorrect) {
+                setMyScore(prev => prev + 1);
+            }
+            // サーバーには送らない
         } else {
+            // オンラインモード
             sendMessage(JSON.stringify({
                 type: 'SELECT_IMAGE',
                 payload: { room_id: roomId, player_id: playerId, image_index: index }
@@ -139,6 +154,7 @@ function App() {
         setLoginStep('SELECT');
         setGameMode(null);
         setInputRoom('');
+        setMyScore(0);
     };
 
     return (
@@ -177,7 +193,7 @@ function App() {
                             {loginStep === 'SELECT' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
 
-                                    {/* 説明とルール: lg:text-left を削除し中央揃えに統一 */}
+                                    {/* 説明とルール */}
                                     <div className="flex-1 w-full max-w-md space-y-6">
                                         <div className="text-center space-y-2">
                                             <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
@@ -199,7 +215,7 @@ function App() {
                                                 </li>
                                                 <li className="flex items-start gap-3">
                                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    制限時間は60秒
+                                                    5ポイント先取で勝利！
                                                 </li>
                                             </ul>
                                         </div>
@@ -256,20 +272,28 @@ function App() {
 
                             {/* 友達対戦用ルーム入力 */}
                             {loginStep === 'FRIEND' && (
-                                <div className="space-y-8 text-center flex-1 flex flex-col justify-center max-w-lg mx-auto w-full">
-                                    <h2 className="text-3xl font-bold text-gray-700">ルームIDを入力</h2>
-                                    <input
-                                        type="text"
-                                        value={inputRoom}
-                                        onChange={(e) => setInputRoom(e.target.value)}
-                                        placeholder="123"
-                                        className="w-full text-6xl font-black text-center py-8 rounded-3xl border-4 border-gray-200 bg-gray-50 focus:border-[#5B46F5] focus:ring-0 outline-none transition"
-                                    />
+                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
+                                    <div className="space-y-2">
+                                        <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
+                                        <p className="text-sm text-gray-400">友達から教えてもらったIDを入力してね</p>
+                                    </div>
+
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={inputRoom}
+                                            onChange={(e) => setInputRoom(e.target.value)}
+                                            placeholder="1234"
+                                            className="w-full text-3xl font-bold text-center py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
+                                            autoFocus
+                                        />
+                                    </div>
+
                                     <button
                                         onClick={() => joinRoomInternal(inputRoom)}
-                                        className="w-full bg-[#5B46F5] text-white text-2xl font-bold py-5 rounded-2xl hover:bg-indigo-700 transition shadow-xl"
+                                        className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
                                     >
-                                        入室
+                                        入室する
                                     </button>
                                 </div>
                             )}
@@ -297,10 +321,10 @@ function App() {
                     {/* --- GAME SCREEN --- */}
                     {gameState === 'PLAYING' && (
                         <div className="flex flex-col h-full">
-                            {/* Game Header */}
-                            <div className="bg-[#5B46F5] text-white p-6 rounded-3xl mb-4 shadow-lg text-center shrink-0">
-                                <p className="text-sm md:text-base opacity-90 mb-1">以下の画像をすべて選択：</p>
-                                <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-wider">{target}</h2>
+                            {/* Game Header (Styled & Smaller) */}
+                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-3 shadow-md shrink-0 text-left flex flex-col justify-center">
+                                <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
+                                <h2 className="text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
                             </div>
 
                             {/* Grid */}
@@ -325,7 +349,7 @@ function App() {
                             <div className="shrink-0 flex justify-between items-center text-base md:text-lg font-bold text-gray-600 px-2 pb-2">
                                 <div className="flex items-center gap-3">
                                     <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
-                                    You
+                                    You: {myScore}/5
                                 </div>
                                 <div className="flex-1 mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
                                     <div
@@ -360,8 +384,8 @@ function App() {
                                         <span className="text-6xl">🤖</span>
                                     </div>
                                     <div>
-                                        <h2 className="text-4xl md:text-5xl font-black text-gray-800">ROBOT DETECTED</h2>
-                                        <p className="text-xl text-gray-500 mt-3">アクセスが拒否されました。</p>
+                                        <h2 className="text-4xl md:text-5xl font-black text-gray-800">DEFEAT</h2>
+                                        <p className="text-xl text-gray-500 mt-3">敗北しました...</p>
                                     </div>
                                 </motion.div>
                             )}

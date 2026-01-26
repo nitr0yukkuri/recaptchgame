@@ -3,7 +3,25 @@
 @tailwind utilities;
 
 body {
-    background-color: #09090b;
-    color: #e4e4e7;
-    font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+    background-color: #cccccc; /* 背景を少し濃いグレーにしてポップアップを際立たせる */
+    color: #202124;
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* スクロールバーのカスタマイズ（任意） */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #bdc1c6;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #9aa0a6;
 }
