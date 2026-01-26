@@ -175,7 +175,7 @@ function App() {
 
                             {/* 統合されたホーム画面 (説明 + ボタン) */}
                             {loginStep === 'SELECT' && (
-                                <div className="flex flex-col lg:flex-row items-center justify-center gap-8 h-full py-4">
+                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
 
                                     {/* 左側: 説明とルール */}
                                     <div className="flex-1 w-full max-w-md space-y-6">
