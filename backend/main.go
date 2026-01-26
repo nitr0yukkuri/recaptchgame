@@ -64,6 +64,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// 【修正箇所】ここが前回間違っていました
 func handleWebSocket(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
@@ -125,12 +126,13 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		scoreMu.Lock()
-		// 正誤判定: インデックス4（コーヒー）以外は正解（車）
-		// フロントエンドの画像リストと一致させる
-		if p.ImageIndex != 4 {
+		// 正誤判定ロジック: インデックス4（コーヒー）以外は正解（車）
+		isCorrect := p.ImageIndex != 4 
+
+		if isCorrect {
 			scores[p.PlayerID]++
 		} else {
-			// 間違いなら減点（スパムクリック防止）
+			// 間違いなら減点
 			scores[p.PlayerID]--
 			if scores[p.PlayerID] < 0 {
 				scores[p.PlayerID] = 0
@@ -152,19 +154,19 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func startGame(roomID string) {
-	// フロントエンドのUnsplash画像リストと同一のものを配信
+	// フロントエンドと画像を一致させる
 	images := []string{
-		"https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80", // 0: Car
-		"https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=300&q=80", // 1: Car
-		"https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80", // 2: Car
-		"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80", // 3: Car
+		"https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=300&q=80", // 0: Car
+		"https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=300&q=80",   // 1: Car
+		"https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=300&q=80", // 2: Car
+		"https://images.unsplash.com/photo-1532974297617-c0f05fe48bff?auto=format&fit=crop&w=300&q=80", // 3: Car
 		"https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=300&q=80", // 4: Coffee (False)
 		"https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80", // 5: Car
-		"https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=300&q=80", // 6: Car
-		"https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=300&q=80", // 7: Car
-		"https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80", // 8: Car
+		"https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=300&q=80",   // 6: Car
+		"https://images.unsplash.com/photo-1580273916550-e323be2ebcc6?auto=format&fit=crop&w=300&q=80", // 7: Car
+		"https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80", // 8: Car
 	}
-	
+
 	targetWord := "CARS"
 
 	payload := GameStartPayload{ProblemID: "prob_cars_001", Images: images, Target: targetWord}
