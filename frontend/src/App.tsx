@@ -31,8 +31,7 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
-    // 初期状態は 'LANDING' (ゲームスタート画面)
-    const [loginStep, setLoginStep] = useState<'LANDING' | 'SELECT' | 'FRIEND' | 'WAITING'>('LANDING');
+    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
@@ -128,230 +127,253 @@ function App() {
         }
     };
 
+    // 待機キャンセル処理
+    const cancelWaiting = () => {
+        setGameState('LOGIN');
+        setLoginStep('SELECT');
+    };
+
+    // ホームに戻る処理
+    const goHome = () => {
+        setGameState('LOGIN');
+        setLoginStep('SELECT');
+        setGameMode(null);
+        setInputRoom('');
+    };
+
     return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-gray-800">
-            <div className="bg-white w-full max-w-[520px] rounded-3xl shadow-xl p-8 border border-gray-100 relative overflow-hidden">
+        <div className="h-screen w-screen bg-white flex flex-col items-center p-4 md:p-8 font-sans text-gray-800 overflow-hidden relative">
+
+            <div className="w-full h-full max-w-4xl flex flex-col relative">
+
+                {/* ★変更: 家アイコンから「← ホームに戻る」ボタンへ変更 */}
+                {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
+                    <button
+                        onClick={goHome}
+                        className="absolute top-0 left-0 flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition z-20 font-bold"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span>ホームに戻る</span>
+                    </button>
+                )}
 
                 {/* --- HEADER --- */}
-                <div className="flex flex-col items-center mb-6">
-                    <h1 className="text-3xl font-bold flex items-center gap-2 mb-1">
+                <div className="flex flex-col items-center mb-4 md:mb-6 shrink-0">
+                    <h1 className="text-4xl md:text-5xl font-bold flex items-center gap-3 mb-2">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
                         <span className="text-[#BFA15F]">ゲーム</span>
                     </h1>
-                    <p className="text-sm text-gray-500">あなたはロボットですか？</p>
                 </div>
 
-                {/* --- LOGIN & MODE SELECTION --- */}
-                {gameState === 'LOGIN' && (
-                    <div className="animate-fade-in">
+                {/* --- CONTENT AREA --- */}
+                <div className="flex-1 flex flex-col w-full min-h-0 overflow-y-auto">
 
-                        {/* 1. ランディング画面 (ゲームスタートボタン) */}
-                        {loginStep === 'LANDING' && (
-                            <div className="space-y-8 text-center">
-                                <div className="space-y-2">
-                                    <p className="text-sm text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
-                                    <h2 className="text-2xl font-bold text-[#5B46F5] leading-relaxed">
-                                        60秒以内に何回人間か<br />証明できる？
-                                    </h2>
-                                </div>
+                    {gameState === 'LOGIN' && (
+                        <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col">
 
-                                <div className="bg-[#F9F9F7] p-6 rounded-2xl text-left space-y-3">
-                                    <h3 className="text-center font-bold text-gray-800 mb-2">ルール：</h3>
-                                    <ul className="space-y-3 text-sm text-gray-700 font-medium">
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
-                                            画像選択、テキスト入力、計算問題などのチャレンジをクリア
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
-                                            正解するたびに1ポイント獲得
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
-                                            制限時間は60秒
-                                        </li>
-                                    </ul>
-                                </div>
+                            {/* 統合されたホーム画面 (説明 + ボタン) */}
+                            {loginStep === 'SELECT' && (
+                                <div className="flex flex-col lg:flex-row items-center justify-center gap-8 h-full py-4">
 
-                                <button
-                                    onClick={() => setLoginStep('SELECT')}
-                                    className="w-full bg-[#5B46F5] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 text-lg"
-                                >
-                                    ゲームスタート！
-                                </button>
-                            </div>
-                        )}
-
-                        {/* 2. モード選択画面 (ボタン三つ縦並び) */}
-                        {loginStep === 'SELECT' && (
-                            <div className="space-y-4">
-                                <h3 className="text-center font-bold text-gray-400 mb-4">対戦モードを選択</h3>
-                                <div className="flex flex-col gap-4">
-                                    {/* ボタン1: CPU対戦 */}
-                                    <button
-                                        onClick={startCpuGame}
-                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-indigo-50 border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                                    >
-                                        <div className="text-left">
-                                            <p className="text-xl font-black">CPUと対戦</p>
-                                            <p className="text-xs opacity-60 font-bold">一人で練習</p>
+                                    {/* 左側: 説明とルール */}
+                                    <div className="flex-1 w-full max-w-md space-y-6">
+                                        <div className="text-center lg:text-left space-y-2">
+                                            <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
+                                            <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
+                                                60秒以内に何回人間か<br />証明できる？
+                                            </h2>
                                         </div>
-                                        <span className="text-4xl">🤖</span>
-                                    </button>
 
-                                    {/* ボタン2: 誰かと対戦 */}
-                                    <button
-                                        onClick={joinRandom}
-                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-pink-50 border-2 border-pink-100 hover:border-pink-500 hover:bg-pink-600 hover:text-white transition-all shadow-sm"
-                                    >
-                                        <div className="text-left">
-                                            <p className="text-xl font-black">誰かと対戦</p>
-                                            <p className="text-xs opacity-60 font-bold">ランダムマッチ</p>
+                                        <div className="bg-[#F9F9F7] p-6 rounded-3xl text-left space-y-4 shadow-sm border border-gray-100">
+                                            <h3 className="text-center font-bold text-gray-800 text-lg mb-2">ルール：</h3>
+                                            <ul className="space-y-3 text-base text-gray-700 font-medium">
+                                                <li className="flex items-start gap-3">
+                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
+                                                    画像選択などのチャレンジをクリア
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
+                                                    正解するたびに1ポイント獲得
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
+                                                    制限時間は60秒
+                                                </li>
+                                            </ul>
                                         </div>
-                                        <span className="text-4xl">🌍</span>
-                                    </button>
+                                    </div>
 
-                                    {/* ボタン3: 友達と対戦 */}
-                                    <button
-                                        onClick={joinFriend}
-                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-teal-50 border-2 border-teal-100 hover:border-teal-500 hover:bg-teal-600 hover:text-white transition-all shadow-sm"
-                                    >
-                                        <div className="text-left">
-                                            <p className="text-xl font-black">友達と対戦</p>
-                                            <p className="text-xs opacity-60 font-bold">ルームID指定</p>
-                                        </div>
-                                        <span className="text-4xl">🤝</span>
-                                    </button>
+                                    {/* 右側: モード選択ボタン */}
+                                    <div className="flex-1 w-full max-w-md space-y-4">
+                                        <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
+
+                                        <button
+                                            onClick={startCpuGame}
+                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🤖</span>
+                                                <div className="text-left">
+                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-indigo-600 transition">CPUと対戦</p>
+                                                    <p className="text-sm text-gray-400 font-medium">一人で練習</p>
+                                                </div>
+                                            </div>
+                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+
+                                        <button
+                                            onClick={joinRandom}
+                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl bg-pink-50 p-3 rounded-xl group-hover:scale-110 transition">🌍</span>
+                                                <div className="text-left">
+                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-pink-600 transition">誰かと対戦</p>
+                                                    <p className="text-sm text-gray-400 font-medium">ランダムマッチ</p>
+                                                </div>
+                                            </div>
+                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-pink-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+
+                                        <button
+                                            onClick={joinFriend}
+                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🤝</span>
+                                                <div className="text-left">
+                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-teal-600 transition">友達と対戦</p>
+                                                    <p className="text-sm text-gray-400 font-medium">ルームID指定</p>
+                                                </div>
+                                            </div>
+                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => setLoginStep('LANDING')}
-                                    className="w-full py-4 text-gray-400 text-sm hover:text-gray-600 font-bold"
-                                >
-                                    戻る
-                                </button>
-                            </div>
-                        )}
+                            )}
 
-                        {/* 3. 友達対戦用ルーム入力 */}
-                        {loginStep === 'FRIEND' && (
-                            <div className="space-y-6 text-center pt-4">
-                                <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
-                                <input
-                                    type="text"
-                                    value={inputRoom}
-                                    onChange={(e) => setInputRoom(e.target.value)}
-                                    placeholder="123"
-                                    className="w-full text-4xl font-black text-center py-6 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#5B46F5] focus:ring-0 outline-none transition"
-                                />
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => setLoginStep('SELECT')}
-                                        className="flex-1 py-4 rounded-xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition"
-                                    >
-                                        戻る
-                                    </button>
+                            {/* 友達対戦用ルーム入力 */}
+                            {loginStep === 'FRIEND' && (
+                                <div className="space-y-8 text-center flex-1 flex flex-col justify-center max-w-lg mx-auto w-full">
+                                    <h2 className="text-3xl font-bold text-gray-700">ルームIDを入力</h2>
+                                    <input
+                                        type="text"
+                                        value={inputRoom}
+                                        onChange={(e) => setInputRoom(e.target.value)}
+                                        placeholder="123"
+                                        className="w-full text-6xl font-black text-center py-8 rounded-3xl border-4 border-gray-200 bg-gray-50 focus:border-[#5B46F5] focus:ring-0 outline-none transition"
+                                    />
                                     <button
                                         onClick={() => joinRoomInternal(inputRoom)}
-                                        className="flex-[2] bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 transition shadow-lg"
+                                        className="w-full bg-[#5B46F5] text-white text-2xl font-bold py-5 rounded-2xl hover:bg-indigo-700 transition shadow-xl"
                                     >
                                         入室
                                     </button>
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* --- WAITING SCREEN --- */}
+                    {gameState === 'WAITING' && (
+                        <div className="text-center h-full flex flex-col items-center justify-center space-y-10">
+                            <div className="animate-spin h-20 w-20 border-8 border-[#5B46F5] border-t-transparent rounded-full"></div>
+                            <div>
+                                <p className="text-3xl font-bold text-gray-700">対戦相手を待機中...</p>
+                                <p className="text-lg text-gray-400 mt-2">Room: {roomId}</p>
                             </div>
-                        )}
-                    </div>
-                )}
 
-                {/* --- WAITING SCREEN --- */}
-                {gameState === 'WAITING' && (
-                    <div className="text-center py-12 space-y-6">
-                        <div className="animate-spin h-12 w-12 border-4 border-[#5B46F5] border-t-transparent rounded-full mx-auto"></div>
-                        <div>
-                            <p className="text-xl font-bold text-gray-700">対戦相手を待機中...</p>
-                            <p className="text-sm text-gray-400 mt-2">Room: {roomId}</p>
+                            <button
+                                onClick={cancelWaiting}
+                                className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition"
+                            >
+                                キャンセル
+                            </button>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* --- GAME SCREEN --- */}
-                {gameState === 'PLAYING' && (
-                    <div>
-                        {/* Game Header */}
-                        <div className="bg-[#5B46F5] text-white p-5 rounded-xl mb-6 shadow-md text-center">
-                            <p className="text-xs opacity-90 mb-1">以下の画像をすべて選択：</p>
-                            <h2 className="text-3xl font-bold uppercase tracking-wider">{target}</h2>
+                    {/* --- GAME SCREEN --- */}
+                    {gameState === 'PLAYING' && (
+                        <div className="flex flex-col h-full">
+                            {/* Game Header */}
+                            <div className="bg-[#5B46F5] text-white p-6 rounded-3xl mb-4 shadow-lg text-center shrink-0">
+                                <p className="text-sm md:text-base opacity-90 mb-1">以下の画像をすべて選択：</p>
+                                <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-wider">{target}</h2>
+                            </div>
+
+                            {/* Grid */}
+                            <div className="flex-1 min-h-0 bg-gray-100 rounded-3xl p-3 md:p-4 mb-4 overflow-hidden">
+                                <div className="grid grid-cols-3 gap-2 md:gap-4 h-full w-full">
+                                    {images.map((img: string, idx: number) => (
+                                        <motion.div
+                                            key={idx}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => handleImageClick(idx)}
+                                            className="relative w-full h-full cursor-pointer overflow-hidden rounded-xl border-4 border-transparent hover:border-[#5B46F5] transition"
+                                        >
+                                            <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Status Bar */}
+                            <div className="shrink-0 flex justify-between items-center text-base md:text-lg font-bold text-gray-600 px-2 pb-2">
+                                <div className="flex items-center gap-3">
+                                    <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
+                                    You
+                                </div>
+                                <div className="flex-1 mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
+                                    <div
+                                        className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
+                                        style={{ width: `${(opponentScore / 5) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
+                                    <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
+                                </div>
+                            </div>
                         </div>
+                    )}
 
-                        {/* Grid */}
-                        <div className="grid grid-cols-3 gap-2 mb-6 p-2 bg-gray-100 rounded-lg">
-                            {images.map((img: string, idx: number) => (
-                                <motion.div
-                                    key={idx}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => handleImageClick(idx)}
-                                    className="relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 border-transparent hover:border-[#5B46F5] transition"
-                                >
-                                    <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                    {/* --- RESULT SCREEN --- */}
+                    {gameState === 'RESULT' && (
+                        <div className="flex flex-col items-center justify-center h-full text-center space-y-10">
+                            {winner === playerId || (winner === 'human' && gameMode === 'CPU') ? (
+                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600 space-y-6">
+                                    <div className="bg-green-100 w-32 h-32 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                                        <span className="text-6xl">🎉</span>
+                                    </div>
+                                    <div>
+                                        <h2 className="text-4xl md:text-5xl font-bold text-gray-800">You are Human!</h2>
+                                        <p className="text-xl text-gray-500 mt-3">人間であることが証明されました。</p>
+                                    </div>
                                 </motion.div>
-                            ))}
+                            ) : (
+                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600 space-y-6">
+                                    <div className="bg-red-100 w-32 h-32 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                                        <span className="text-6xl">🤖</span>
+                                    </div>
+                                    <div>
+                                        <h2 className="text-4xl md:text-5xl font-black text-gray-800">ROBOT DETECTED</h2>
+                                        <p className="text-xl text-gray-500 mt-3">アクセスが拒否されました。</p>
+                                    </div>
+                                </motion.div>
+                            )}
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-10 py-5 bg-gray-900 text-white rounded-2xl font-bold text-xl hover:bg-black transition shadow-2xl"
+                            >
+                                もう一度プレイ
+                            </button>
                         </div>
-
-                        {/* Status Bar */}
-                        <div className="flex justify-between items-center text-sm font-bold text-gray-600 px-1">
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                                You
-                            </div>
-                            <div className="flex-1 mx-4 h-3 bg-gray-200 rounded-full overflow-hidden relative">
-                                <div
-                                    className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
-                                    style={{ width: `${(opponentScore / 5) * 100}%` }}
-                                ></div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
-                                <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                            </div>
-                        </div>
-                        <p className="text-xs text-center text-gray-400 mt-4">該当する画像がない場合はクリックして更新</p>
-                    </div>
-                )}
-
-                {/* --- RESULT SCREEN --- */}
-                {gameState === 'RESULT' && (
-                    <div className="text-center py-8">
-                        {winner === playerId || (winner === 'human' && gameMode === 'CPU') ? (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600 space-y-4">
-                                <div className="bg-green-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-4xl">🎉</span>
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-bold text-gray-800">You are Human!</h2>
-                                    <p className="text-gray-500 mt-2">人間であることが証明されました。</p>
-                                </div>
-                            </motion.div>
-                        ) : (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600 space-y-4">
-                                <div className="bg-red-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-4xl">🤖</span>
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-black text-gray-800">ROBOT DETECTED</h2>
-                                    <p className="text-gray-500 mt-2">アクセスが拒否されました。</p>
-                                </div>
-                            </motion.div>
-                        )}
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="mt-10 px-8 py-3 bg-gray-800 text-white rounded-lg font-bold hover:bg-gray-900 transition shadow-lg w-full"
-                        >
-                            もう一度プレイ
-                        </button>
-                    </div>
-                )}
-
+                    )}
+                </div>
             </div>
         </div>
     );
