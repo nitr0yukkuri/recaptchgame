@@ -54,7 +54,6 @@ var (
 	clients  = make(map[*websocket.Conn]string)
 	rooms    = make(map[string]map[*websocket.Conn]bool)
 	mu       sync.Mutex
-	ctx      = context.Background()
 )
 
 func getEnv(key, fallback string) string {
@@ -81,7 +80,6 @@ func handleWebSocket(c echo.Context) error {
 				if len(conns) == 0 {
 					delete(rooms, rid)
 				}
-				fmt.Printf("Player %s disconnected from room %s\n", playerID, rid)
 			}
 		}
 		mu.Unlock()
@@ -112,7 +110,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		rooms[p.RoomID][ws] = true
 		roomSize := len(rooms[p.RoomID])
 		mu.Unlock()
-		log.Printf("Player %s joined room %s (Count: %d)", p.PlayerID, p.RoomID, roomSize)
 		if roomSize == 2 {
 			startGame(p.RoomID)
 		} else {
@@ -125,15 +122,13 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		scoreMu.Lock()
+		// インデックス4（5枚目）をハズレとするロジックを維持
 		isCorrect := p.ImageIndex != 4 
-
 		if isCorrect {
 			scores[p.PlayerID]++
 		} else {
 			scores[p.PlayerID]--
-			if scores[p.PlayerID] < 0 {
-				scores[p.PlayerID] = 0
-			}
+			if scores[p.PlayerID] < 0 { scores[p.PlayerID] = 0 }
 		}
 		currentScore := scores[p.PlayerID]
 		scoreMu.Unlock()
@@ -151,22 +146,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func startGame(roomID string) {
-	// Unsplash以外の方法: Lorem Flickrを使用 (lockパラメータで画像を固定)
+	// ローカルパスに変更
 	images := []string{
-		"https://loremflickr.com/300/300/car?lock=1", // 0: Car
-		"https://loremflickr.com/300/300/car?lock=2", // 1: Car
-		"https://loremflickr.com/300/300/car?lock=3", // 2: Car
-		"https://loremflickr.com/300/300/car?lock=4", // 3: Car
-		"https://loremflickr.com/300/300/coffee?lock=1", // 4: Coffee (False)
-		"https://loremflickr.com/300/300/car?lock=5", // 5: Car
-		"https://loremflickr.com/300/300/car?lock=6", // 6: Car
-		"https://loremflickr.com/300/300/car?lock=7", // 7: Car
-		"https://loremflickr.com/300/300/car?lock=8", // 8: Car
+		"/images/1.jpg", "/images/2.jpg", "/images/3.jpg",
+		"/images/4.jpg", "/images/5.jpg", "/images/6.jpg",
+		"/images/7.jpg", "/images/8.jpg", "/images/9.jpg",
 	}
 
-	targetWord := "CARS"
-
-	payload := GameStartPayload{ProblemID: "prob_cars_001", Images: images, Target: targetWord}
+	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: "CARS"}
 	b, _ := json.Marshal(payload)
 	mu.Lock()
 	if conns, ok := rooms[roomID]; ok {
