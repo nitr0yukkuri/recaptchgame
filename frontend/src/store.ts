@@ -8,13 +8,12 @@ interface Store {
     playerId: string;
     target: string;
     images: string[];
-    score: number;
     opponentScore: number;
     winner: string | null;
-    isCpuMode: boolean; // 追加
     setGameState: (state: GameState) => void;
-    setRoomInfo: (roomId: string, playerId: string, isCpu?: boolean) => void; // 変更
+    setRoomInfo: (roomId: string, playerId: string) => void;
     startGame: (target: string, images: string[]) => void;
+    updatePattern: (target: string, images: string[]) => void; // 追加
     updateOpponentScore: (score: number) => void;
     endGame: (winner: string) => void;
 }
@@ -22,16 +21,15 @@ interface Store {
 export const useGameStore = create<Store>((set) => ({
     gameState: 'LOGIN',
     roomId: '',
-    playerId: `player_${Math.floor(Math.random() * 10000)}`,
+    playerId: `p_${Math.floor(Math.random() * 1000)}`,
     target: '',
     images: [],
-    score: 0,
     opponentScore: 0,
     winner: null,
-    isCpuMode: false,
     setGameState: (state) => set({ gameState: state }),
-    setRoomInfo: (roomId, playerId, isCpu = false) => set({ roomId, playerId, isCpuMode: isCpu }),
-    startGame: (target, images) => set({ gameState: 'PLAYING', target, images, score: 0, opponentScore: 0 }),
+    setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),
+    startGame: (target, images) => set({ gameState: 'PLAYING', target, images, opponentScore: 0, winner: null }),
+    updatePattern: (target, images) => set({ target, images }), // スコアをリセットしない
     updateOpponentScore: (score) => set({ opponentScore: score }),
     endGame: (winner) => set({ gameState: 'RESULT', winner }),
 }));

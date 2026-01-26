@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -16,10 +18,10 @@ type Message struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
-type SelectImagePayload struct {
-	RoomID     string `json:"room_id"`
-	PlayerID   string `json:"player_id"`
-	ImageIndex int    `json:"image_index"`
+type VerifyPayload struct {
+	RoomID          string `json:"room_id"`
+	PlayerID        string `json:"player_id"`
+	SelectedIndices []int  `json:"selected_indices"`
 }
 
 type JoinRoomPayload struct {
@@ -45,13 +47,18 @@ type GameResultPayload struct {
 }
 
 var (
-	scores   = make(map[string]int)
-	scoreMu  sync.Mutex
-	upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	clients  = make(map[*websocket.Conn]string)
-	rooms    = make(map[string]map[*websocket.Conn]bool)
-	mu       sync.Mutex
+	scores     = make(map[string]int)
+	roomImages = make(map[string][]string)
+	scoreMu    sync.Mutex
+	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	clients    = make(map[*websocket.Conn]string)
+	rooms      = make(map[string]map[*websocket.Conn]bool)
+	mu         sync.Mutex
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -75,6 +82,7 @@ func handleWebSocket(c echo.Context) error {
 				delete(conns, ws)
 				if len(conns) == 0 {
 					delete(rooms, rid)
+					delete(roomImages, rid)
 				}
 			}
 		}
@@ -106,24 +114,57 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		rooms[p.RoomID][ws] = true
 		roomSize := len(rooms[p.RoomID])
 		mu.Unlock()
+
 		if roomSize == 2 {
-			startGame(p.RoomID)
+			scoreMu.Lock()
+			for _, pid := range clients {
+				scores[pid] = 0
+			}
+			scoreMu.Unlock()
+			sendNewPattern(p.RoomID)
 		} else {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		}
-	case "SELECT_IMAGE":
-		var p SelectImagePayload
+
+	case "VERIFY":
+		var p VerifyPayload
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return
 		}
 
+		mu.Lock()
+		currentImages, ok := roomImages[p.RoomID]
+		mu.Unlock()
+
+		if !ok {
+			return
+		}
+
+		// 検証ロジック：正解（5.png以外）がすべて選択され、かつ5.pngが含まれていないか
+		isCorrect := true
+		correctCountInPattern := 0
+		for _, img := range currentImages {
+			if img != "/images/5.png" {
+				correctCountInPattern++
+			}
+		}
+
+		if len(p.SelectedIndices) != correctCountInPattern {
+			isCorrect = false
+		} else {
+			for _, idx := range p.SelectedIndices {
+				if idx < 0 || idx >= len(currentImages) || currentImages[idx] == "/images/5.png" {
+					isCorrect = false
+					break
+				}
+			}
+		}
+
 		scoreMu.Lock()
-		isCorrect := p.ImageIndex != 4 
 		if isCorrect {
 			scores[p.PlayerID]++
 		} else {
-			scores[p.PlayerID]--
-			if scores[p.PlayerID] < 0 { scores[p.PlayerID] = 0 }
+			scores[p.PlayerID] = 0 // 間違えたら0にリセット
 		}
 		currentScore := scores[p.PlayerID]
 		scoreMu.Unlock()
@@ -136,28 +177,28 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(currentScore), TotalNeeded: 5}
 			b, _ := json.Marshal(prog)
 			broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
+			sendNewPattern(p.RoomID) // 次のパターンへ
 		}
 	}
 }
 
-func startGame(roomID string) {
+func sendNewPattern(roomID string) {
 	images := []string{
 		"/images/1.jpg", "/images/2.jpg", "/images/3.jpg",
-		"/images/4.jpg", "/images/5.jpg", "/images/6.jpg",
+		"/images/4.jpg", "/images/5.png", "/images/6.jpg",
 		"/images/7.jpg", "/images/8.jpg", "/images/9.jpg",
 	}
 
+	rand.Shuffle(len(images), func(i, j int) {
+		images[i], images[j] = images[j], images[i]
+	})
+
+	mu.Lock()
+	roomImages[roomID] = images
+	mu.Unlock()
+
 	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: "CARS"}
 	b, _ := json.Marshal(payload)
-	mu.Lock()
-	if conns, ok := rooms[roomID]; ok {
-		scoreMu.Lock()
-		for ws := range conns {
-			scores[clients[ws]] = 0
-		}
-		scoreMu.Unlock()
-	}
-	mu.Unlock()
 	broadcastToRoom(roomID, Message{Type: "GAME_START", Payload: b})
 }
 
