@@ -1,223 +1,357 @@
+/// <reference types="vite/client" />
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion } from 'framer-motion';
 import { useGameStore } from './store';
 
+// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
+
+// CPU対戦用のモックデータ
+const CPU_GAME_DATA = {
+    target: 'CARS',
+    images: [
+        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1532974297617-c0f05fe48bff?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1580273916550-e323be2ebcc6?auto=format&fit=crop&w=300&q=80',
+        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80',
+    ]
+};
 
 function App() {
     const {
-        gameState, roomId, playerId, target, images, opponentScore, isCpuMode,
+        gameState, roomId, playerId, target, images, opponentScore,
         setGameState, setRoomInfo, startGame, updateOpponentScore, endGame, winner
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
-    const { sendMessage, lastMessage } = useWebSocket(isCpuMode ? null : WS_URL, {
+    const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
+    // 初期状態は 'LANDING' (ゲームスタート画面)
+    const [loginStep, setLoginStep] = useState<'LANDING' | 'SELECT' | 'FRIEND' | 'WAITING'>('LANDING');
+
+    const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
 
-    // CPU戦のロジック
+    // CPU対戦ロジック
     useEffect(() => {
-        if (gameState === 'PLAYING' && isCpuMode) {
+        if (gameMode === 'CPU' && gameState === 'PLAYING') {
             const interval = setInterval(() => {
-                if (opponentScore < 5) {
-                    const newScore = opponentScore + 1;
-                    updateOpponentScore(newScore);
-                    if (newScore >= 5) endGame('CPU');
+                if (Math.random() > 0.6) {
+                    useGameStore.getState().updateOpponentScore(useGameStore.getState().opponentScore + 1);
                 }
-            }, Math.random() * 2000 + 1000);
+            }, 2000);
             return () => clearInterval(interval);
         }
-    }, [gameState, isCpuMode, opponentScore, updateOpponentScore, endGame]);
+    }, [gameMode, gameState]);
+
+    // CPUの勝利判定監視
+    useEffect(() => {
+        if (gameMode === 'CPU' && opponentScore >= 5 && gameState === 'PLAYING') {
+            endGame('cpu');
+        }
+    }, [opponentScore, gameMode, gameState, endGame]);
+
 
     useEffect(() => {
+        if (gameMode === 'CPU') return;
+
         if (lastMessage !== null) {
             try {
                 const msg = JSON.parse(lastMessage.data);
                 switch (msg.type) {
-                    case 'STATUS_UPDATE': setGameState('WAITING'); break;
-                    case 'GAME_START': startGame(msg.payload.target, msg.payload.images); break;
-                    case 'OPPONENT_PROGRESS':
-                        if (msg.payload.player_id !== playerId) updateOpponentScore(msg.payload.correct_count);
+                    case 'STATUS_UPDATE':
+                        setGameState('WAITING');
                         break;
-                    case 'GAME_FINISHED': endGame(msg.payload.winner_id); break;
+                    case 'GAME_START':
+                        startGame(msg.payload.target, msg.payload.images);
+                        break;
+                    case 'OPPONENT_PROGRESS':
+                        if (msg.payload.player_id !== playerId) {
+                            updateOpponentScore(msg.payload.correct_count);
+                        }
+                        break;
+                    case 'GAME_FINISHED':
+                        endGame(msg.payload.winner_id);
+                        break;
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error("Failed to parse message:", e);
+            }
         }
-    }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId]);
+    }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId, gameMode]);
 
-    const joinRoom = (mode: 'PVP' | 'CPU') => {
-        if (mode === 'PVP') {
-            if (!inputRoom) return;
-            setRoomInfo(inputRoom, playerId, false);
-            sendMessage(JSON.stringify({ type: 'JOIN_ROOM', payload: { room_id: inputRoom, player_id: playerId } }));
-        } else {
-            setRoomInfo('CPU_ROOM', playerId, true);
-            const mockImages = Array.from({ length: 9 }, (_, i) => `https://via.placeholder.com/150?text=Img+${i}`);
-            startGame('Traffic Lights', mockImages);
-        }
+    const startCpuGame = () => {
+        setGameMode('CPU');
+        setRoomInfo('LOCAL_CPU', playerId);
+        startGame(CPU_GAME_DATA.target, CPU_GAME_DATA.images);
+    };
+
+    const joinRandom = () => {
+        setGameMode('ONLINE');
+        const randomRoom = 'PUB_' + Math.floor(Math.random() * 5);
+        setInputRoom(randomRoom);
+        joinRoomInternal(randomRoom);
+    };
+
+    const joinFriend = () => {
+        setLoginStep('FRIEND');
+        setGameMode('ONLINE');
+    };
+
+    const joinRoomInternal = (room: string) => {
+        if (!room) return;
+        setRoomInfo(room, playerId);
+        sendMessage(JSON.stringify({
+            type: 'JOIN_ROOM',
+            payload: { room_id: room, player_id: playerId }
+        }));
     };
 
     const handleImageClick = (index: number) => {
-        if (isCpuMode) {
-            const newScore = useGameStore.getState().score + 1;
-            useGameStore.setState({ score: newScore });
-            if (newScore >= 5) endGame(playerId);
+        if (gameMode === 'CPU') {
+            sendMessage(JSON.stringify({
+                type: 'SELECT_IMAGE',
+                payload: { room_id: 'LOCAL', player_id: playerId, image_index: index }
+            }));
         } else {
-            sendMessage(JSON.stringify({ type: 'SELECT_IMAGE', payload: { room_id: roomId, player_id: playerId, image_index: index } }));
+            sendMessage(JSON.stringify({
+                type: 'SELECT_IMAGE',
+                payload: { room_id: roomId, player_id: playerId, image_index: index }
+            }));
         }
     };
 
     return (
-        <div className="min-h-screen bg-cyber-bg text-cyber-text font-mono flex items-center justify-center p-4">
-            <div className="bg-cyber-card border border-cyber-secondary p-1 rounded-sm shadow-[0_0_20px_rgba(0,0,0,0.5)] max-w-lg w-full relative">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-gray-800">
+            <div className="bg-white w-full max-w-[520px] rounded-3xl shadow-xl p-8 border border-gray-100 relative overflow-hidden">
 
-                {/* Decoration Lines */}
-                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-cyber-primary"></div>
-                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-cyber-primary"></div>
-                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-cyber-primary"></div>
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-cyber-primary"></div>
-
-                <div className="bg-cyber-secondary/30 border-b border-cyber-primary/20 p-5 mb-6 flex justify-between items-center backdrop-blur-sm">
-                    <div>
-                        <p className="text-[10px] text-cyber-primary tracking-widest mb-1 opacity-80">SYSTEM: RECAPTCHA_PROTOCOL_V3</p>
-                        <h1 className="text-xl font-bold tracking-tighter text-white">
-                            <span className="text-cyber-primary mr-2">PROVE</span>
-                            YOU ARE HUMAN
-                        </h1>
-                    </div>
-                    <div className="flex flex-col items-center justify-center border border-cyber-primary/30 rounded p-1">
-                        <div className="w-8 h-8 border-2 border-cyber-primary rounded-full flex items-center justify-center animate-pulse">
-                            <div className="w-4 h-4 bg-cyber-primary rounded-sm"></div>
-                        </div>
-                    </div>
+                {/* --- HEADER --- */}
+                <div className="flex flex-col items-center mb-6">
+                    <h1 className="text-3xl font-bold flex items-center gap-2 mb-1">
+                        <span className="text-[#4A90E2]">reCAPTCHA</span>
+                        <span className="text-[#BFA15F]">ゲーム</span>
+                    </h1>
+                    <p className="text-sm text-gray-500">あなたはロボットですか？</p>
                 </div>
 
-                <div className="p-4">
-                    {gameState === 'LOGIN' && (
-                        <div className="space-y-8">
-                            <div className="border-l-2 border-cyber-primary pl-4 py-2 bg-cyber-primary/5">
-                                <h2 className="text-lg font-bold text-cyber-primary mb-2">MISSION OBJECTIVE</h2>
-                                <ul className="text-xs space-y-2 text-cyber-muted">
-                                    <li className="flex items-center"><span className="w-1 h-1 bg-cyber-primary mr-2"></span>IDENTIFY TARGET IMAGES</li>
-                                    <li className="flex items-center"><span className="w-1 h-1 bg-cyber-primary mr-2"></span>OUTPERFORM OPPONENT SPEED</li>
-                                    <li className="flex items-center"><span className="w-1 h-1 bg-cyber-primary mr-2"></span>AVOID BOT DETECTION</li>
-                                </ul>
-                            </div>
+                {/* --- LOGIN & MODE SELECTION --- */}
+                {gameState === 'LOGIN' && (
+                    <div className="animate-fade-in">
 
+                        {/* 1. ランディング画面 (ゲームスタートボタン) */}
+                        {loginStep === 'LANDING' && (
+                            <div className="space-y-8 text-center">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
+                                    <h2 className="text-2xl font-bold text-[#5B46F5] leading-relaxed">
+                                        60秒以内に何回人間か<br />証明できる？
+                                    </h2>
+                                </div>
+
+                                <div className="bg-[#F9F9F7] p-6 rounded-2xl text-left space-y-3">
+                                    <h3 className="text-center font-bold text-gray-800 mb-2">ルール：</h3>
+                                    <ul className="space-y-3 text-sm text-gray-700 font-medium">
+                                        <li className="flex items-start gap-3">
+                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
+                                            画像選択、テキスト入力、計算問題などのチャレンジをクリア
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
+                                            正解するたびに1ポイント獲得
+                                        </li>
+                                        <li className="flex items-start gap-3">
+                                            <span className="text-[#5B46F5] font-bold mt-0.5">✓</span>
+                                            制限時間は60秒
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <button
+                                    onClick={() => setLoginStep('SELECT')}
+                                    className="w-full bg-[#5B46F5] text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 text-lg"
+                                >
+                                    ゲームスタート！
+                                </button>
+                            </div>
+                        )}
+
+                        {/* 2. モード選択画面 (ボタン三つ縦並び) */}
+                        {loginStep === 'SELECT' && (
                             <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs text-cyber-muted mb-1 block">ACCESS CODE (ROOM ID)</label>
-                                    <input
-                                        type="text" value={inputRoom} onChange={(e) => setInputRoom(e.target.value)}
-                                        placeholder="ENTER_ID..."
-                                        className="w-full bg-black/30 border border-cyber-secondary p-3 text-cyber-primary focus:border-cyber-primary focus:shadow-[0_0_10px_rgba(0,255,157,0.2)] outline-none transition-all placeholder-cyber-secondary"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 pt-2">
-                                    <button onClick={() => joinRoom('PVP')} className="group relative bg-cyber-primary/10 border border-cyber-primary text-cyber-primary py-3 font-bold hover:bg-cyber-primary hover:text-black transition-all duration-300 overflow-hidden">
-                                        <span className="relative z-10">INITIATE PVP {'>>'}</span>
-                                        <div className="absolute inset-0 bg-cyber-primary/20 transform -skew-x-12 translate-x-full group-hover:translate-x-0 transition-transform duration-300"></div>
-                                    </button>
-                                    <button onClick={() => joinRoom('CPU')} className="group border border-cyber-secondary text-cyber-muted py-3 font-bold hover:border-cyber-text hover:text-cyber-text transition-all bg-transparent">
-                                        <span>TRAINING MODE</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {gameState === 'WAITING' && (
-                        <div className="text-center py-16 relative">
-                            <div className="absolute inset-0 flex items-center justify-center opacity-10">
-                                <div className="w-32 h-32 border border-cyber-primary rounded-full animate-ping"></div>
-                            </div>
-                            <div className="w-12 h-12 border-t-2 border-l-2 border-cyber-primary rounded-full mx-auto mb-6 animate-spin"></div>
-                            <p className="font-bold text-lg text-cyber-primary tracking-widest animate-pulse">SCANNING NETWORK...</p>
-                            <p className="text-xs text-cyber-muted mt-4 font-mono">ROOM_ID: <span className="text-white">{roomId}</span></p>
-                        </div>
-                    )}
-
-                    {gameState === 'PLAYING' && (
-                        <div>
-                            <div className="bg-cyber-primary/10 border border-cyber-primary/30 p-4 mb-4 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-1">
-                                    <div className="flex space-x-1">
-                                        <div className="w-1 h-1 bg-cyber-primary"></div>
-                                        <div className="w-1 h-1 bg-cyber-primary"></div>
-                                        <div className="w-1 h-1 bg-cyber-primary"></div>
-                                    </div>
-                                </div>
-                                <p className="text-[10px] text-cyber-primary mb-1">TARGET IDENTIFICATION</p>
-                                <h2 className="text-2xl font-bold uppercase tracking-wider text-white drop-shadow-[0_0_5px_rgba(0,255,157,0.5)]">{target}</h2>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 mb-6 p-1 bg-black/20 border border-cyber-secondary">
-                                {images.map((img, idx) => (
-                                    <motion.div
-                                        key={idx}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => handleImageClick(idx)}
-                                        className="relative aspect-square cursor-pointer overflow-hidden border border-cyber-secondary/50 hover:border-cyber-primary transition-colors group"
+                                <h3 className="text-center font-bold text-gray-400 mb-4">対戦モードを選択</h3>
+                                <div className="flex flex-col gap-4">
+                                    {/* ボタン1: CPU対戦 */}
+                                    <button
+                                        onClick={startCpuGame}
+                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-indigo-50 border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
                                     >
-                                        <div className="absolute inset-0 bg-cyber-primary/0 group-hover:bg-cyber-primary/10 transition-colors z-10"></div>
-                                        <img src={img} className="w-full h-full object-cover filter sepia-[0.5] hue-rotate-[130deg] contrast-125 group-hover:filter-none transition-all duration-300" alt="captcha" />
-                                        <div className="absolute bottom-1 right-1 text-[8px] text-cyber-primary bg-black/50 px-1 opacity-0 group-hover:opacity-100">SEL</div>
-                                    </motion.div>
-                                ))}
-                            </div>
+                                        <div className="text-left">
+                                            <p className="text-xl font-black">CPUと対戦</p>
+                                            <p className="text-xs opacity-60 font-bold">一人で練習</p>
+                                        </div>
+                                        <span className="text-4xl">🤖</span>
+                                    </button>
 
-                            <div className="space-y-3">
-                                <div className="flex justify-between text-xs font-bold text-cyber-muted uppercase tracking-wider">
-                                    <span className="flex items-center"><span className="w-2 h-2 bg-cyber-primary rounded-full mr-2 animate-pulse"></span>YOU: {isCpuMode ? useGameStore.getState().score : '...'} / 5</span>
-                                    <span className="flex items-center text-red-400">{isCpuMode ? 'CPU' : 'RIVAL'}: {opponentScore} / 5<span className="w-2 h-2 bg-red-500 rounded-full ml-2"></span></span>
+                                    {/* ボタン2: 誰かと対戦 */}
+                                    <button
+                                        onClick={joinRandom}
+                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-pink-50 border-2 border-pink-100 hover:border-pink-500 hover:bg-pink-600 hover:text-white transition-all shadow-sm"
+                                    >
+                                        <div className="text-left">
+                                            <p className="text-xl font-black">誰かと対戦</p>
+                                            <p className="text-xs opacity-60 font-bold">ランダムマッチ</p>
+                                        </div>
+                                        <span className="text-4xl">🌍</span>
+                                    </button>
+
+                                    {/* ボタン3: 友達と対戦 */}
+                                    <button
+                                        onClick={joinFriend}
+                                        className="group flex items-center justify-between px-6 py-5 rounded-xl bg-teal-50 border-2 border-teal-100 hover:border-teal-500 hover:bg-teal-600 hover:text-white transition-all shadow-sm"
+                                    >
+                                        <div className="text-left">
+                                            <p className="text-xl font-black">友達と対戦</p>
+                                            <p className="text-xs opacity-60 font-bold">ルームID指定</p>
+                                        </div>
+                                        <span className="text-4xl">🤝</span>
+                                    </button>
                                 </div>
-                                <div className="w-full h-2 bg-black/50 border border-cyber-secondary/30 flex relative">
-                                    <div className="absolute inset-0 flex justify-between px-1">
-                                        {[...Array(9)].map((_, i) => <div key={i} className="w-px h-full bg-cyber-secondary/20"></div>)}
-                                    </div>
-                                    <div className="h-full bg-cyber-primary shadow-[0_0_10px_rgba(0,255,157,0.5)] transition-all duration-300 relative z-10" style={{ width: `${(useGameStore.getState().score / 5) * 50}%` }}></div>
-                                    <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-300 relative z-10" style={{ width: `${(opponentScore / 5) * 50}%` }}></div>
+                                <button
+                                    onClick={() => setLoginStep('LANDING')}
+                                    className="w-full py-4 text-gray-400 text-sm hover:text-gray-600 font-bold"
+                                >
+                                    戻る
+                                </button>
+                            </div>
+                        )}
+
+                        {/* 3. 友達対戦用ルーム入力 */}
+                        {loginStep === 'FRIEND' && (
+                            <div className="space-y-6 text-center pt-4">
+                                <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
+                                <input
+                                    type="text"
+                                    value={inputRoom}
+                                    onChange={(e) => setInputRoom(e.target.value)}
+                                    placeholder="123"
+                                    className="w-full text-4xl font-black text-center py-6 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#5B46F5] focus:ring-0 outline-none transition"
+                                />
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setLoginStep('SELECT')}
+                                        className="flex-1 py-4 rounded-xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition"
+                                    >
+                                        戻る
+                                    </button>
+                                    <button
+                                        onClick={() => joinRoomInternal(inputRoom)}
+                                        className="flex-[2] bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 transition shadow-lg"
+                                    >
+                                        入室
+                                    </button>
                                 </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* --- WAITING SCREEN --- */}
+                {gameState === 'WAITING' && (
+                    <div className="text-center py-12 space-y-6">
+                        <div className="animate-spin h-12 w-12 border-4 border-[#5B46F5] border-t-transparent rounded-full mx-auto"></div>
+                        <div>
+                            <p className="text-xl font-bold text-gray-700">対戦相手を待機中...</p>
+                            <p className="text-sm text-gray-400 mt-2">Room: {roomId}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- GAME SCREEN --- */}
+                {gameState === 'PLAYING' && (
+                    <div>
+                        {/* Game Header */}
+                        <div className="bg-[#5B46F5] text-white p-5 rounded-xl mb-6 shadow-md text-center">
+                            <p className="text-xs opacity-90 mb-1">以下の画像をすべて選択：</p>
+                            <h2 className="text-3xl font-bold uppercase tracking-wider">{target}</h2>
+                        </div>
+
+                        {/* Grid */}
+                        <div className="grid grid-cols-3 gap-2 mb-6 p-2 bg-gray-100 rounded-lg">
+                            {images.map((img: string, idx: number) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleImageClick(idx)}
+                                    className="relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 border-transparent hover:border-[#5B46F5] transition"
+                                >
+                                    <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                                </motion.div>
+                            ))}
+                        </div>
+
+                        {/* Status Bar */}
+                        <div className="flex justify-between items-center text-sm font-bold text-gray-600 px-1">
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                                You
+                            </div>
+                            <div className="flex-1 mx-4 h-3 bg-gray-200 rounded-full overflow-hidden relative">
+                                <div
+                                    className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
+                                    style={{ width: `${(opponentScore / 5) * 100}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
+                                <span className="w-3 h-3 rounded-full bg-red-500"></span>
                             </div>
                         </div>
-                    )}
+                        <p className="text-xs text-center text-gray-400 mt-4">該当する画像がない場合はクリックして更新</p>
+                    </div>
+                )}
 
-                    {gameState === 'RESULT' && (
-                        <div className="text-center py-12 relative overflow-hidden">
-                            {winner === playerId ? (
-                                <div className="text-cyber-primary relative z-10">
-                                    <div className="inline-block border-2 border-cyber-primary rounded-full p-4 mb-4 shadow-[0_0_20px_rgba(0,255,157,0.3)]">
-                                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                    </div>
-                                    <h2 className="text-3xl font-bold italic tracking-tighter mb-2 text-white">ACCESS GRANTED</h2>
-                                    <p className="text-sm font-mono text-cyber-primary/80">HUMAN VERIFICATION COMPLETE</p>
+                {/* --- RESULT SCREEN --- */}
+                {gameState === 'RESULT' && (
+                    <div className="text-center py-8">
+                        {winner === playerId || (winner === 'human' && gameMode === 'CPU') ? (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600 space-y-4">
+                                <div className="bg-green-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-4xl">🎉</span>
                                 </div>
-                            ) : (
-                                <div className="text-red-500 relative z-10">
-                                    <div className="inline-block border-2 border-red-500 rounded-full p-4 mb-4 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
-                                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                    </div>
-                                    <h2 className="text-3xl font-bold italic tracking-tighter mb-2 text-white">ACCESS DENIED</h2>
-                                    <p className="text-sm font-mono text-red-400">BOT ACTIVITY DETECTED</p>
+                                <div>
+                                    <h2 className="text-3xl font-bold text-gray-800">You are Human!</h2>
+                                    <p className="text-gray-500 mt-2">人間であることが証明されました。</p>
                                 </div>
-                            )}
+                            </motion.div>
+                        ) : (
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600 space-y-4">
+                                <div className="bg-red-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="text-4xl">🤖</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-3xl font-black text-gray-800">ROBOT DETECTED</h2>
+                                    <p className="text-gray-500 mt-2">アクセスが拒否されました。</p>
+                                </div>
+                            </motion.div>
+                        )}
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="mt-10 px-8 py-3 bg-gray-800 text-white rounded-lg font-bold hover:bg-gray-900 transition shadow-lg w-full"
+                        >
+                            もう一度プレイ
+                        </button>
+                    </div>
+                )}
 
-                            <div className="absolute inset-0 bg-[url('https://media.giphy.com/media/U3qYN8SMQZsTFJu8M/giphy.gif')] opacity-5 mix-blend-screen pointer-events-none"></div>
-
-                            <button onClick={() => window.location.reload()} className="mt-10 bg-cyber-primary text-black px-8 py-3 font-bold hover:bg-white transition shadow-[0_0_15px_rgba(0,255,157,0.4)] relative z-20">
-                                REBOOT SYSTEM
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer Status */}
-                <div className="bg-black/40 p-2 flex justify-between text-[10px] text-cyber-secondary font-mono border-t border-cyber-secondary/20">
-                    <span>SECURE CONNECTION</span>
-                    <span>LATENCY: 12ms</span>
-                </div>
             </div>
         </div>
     );

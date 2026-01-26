@@ -63,95 +63,56 @@ function App() {
     };
 
     return (
-        // 全体の背景色などを画像に合わせて明るくモダンに調整
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans text-gray-800 p-4">
-            <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full border border-gray-100">
+        <div className="min-h-screen bg-google-gray flex items-center justify-center font-sans text-gray-800">
+            <div className="bg-white p-6 rounded-sm shadow-xl max-w-lg w-full border border-gray-300">
 
-                {/* --- LOGIN SCREEN (画像のUIを再現) --- */}
+                {/* Header */}
+                <div className="bg-google-blue text-white p-4 mb-4 flex justify-between items-center shadow-sm">
+                    <h1 className="text-xl font-bold">I'm not a robot</h1>
+                    <div className="flex flex-col items-end text-xs">
+                        <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" className="w-8 mb-1" alt="logo" />
+                        <span>reCAPTCHA Game</span>
+                    </div>
+                </div>
+
+                {/* --- LOGIN SCREEN --- */}
                 {gameState === 'LOGIN' && (
-                    <div className="flex flex-col items-center text-center space-y-6">
-                        {/* ヘッダータイトル */}
-                        <div className="space-y-1">
-                            <h1 className="text-3xl font-bold flex items-center justify-center gap-2">
-                                <span className="text-teal-600">reCAPTCHA</span>
-                                <span className="text-yellow-600">ゲーム</span>
-                            </h1>
-                            <p className="text-sm text-gray-500 font-medium">あなたはロボットですか？</p>
-                        </div>
-
-                        {/* メインキャッチコピー */}
-                        <div className="py-2">
-                            <p className="text-sm text-gray-600 mb-2 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
-                            <h2 className="text-2xl font-bold text-indigo-600 leading-tight">
-                                60秒以内に何回人間か<br />証明できる？
-                            </h2>
-                        </div>
-
-                        {/* ルールボックス */}
-                        <div className="bg-amber-50 p-6 rounded-2xl w-full text-left space-y-3 border border-amber-100">
-                            <h3 className="text-center font-bold text-gray-800 mb-1">ルール：</h3>
-                            <ul className="space-y-2 text-sm text-gray-700 font-medium">
-                                <li className="flex items-start gap-2">
-                                    <span className="text-indigo-500 font-bold">✓</span>
-                                    画像選択、テキスト入力、計算問題などのチャレンジをクリア
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <span className="text-indigo-500 font-bold">✓</span>
-                                    正解するたびに1ポイント獲得
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <span className="text-indigo-500 font-bold">✓</span>
-                                    制限時間は60秒
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <span className="text-indigo-500 font-bold">✓</span>
-                                    できるだけ高いスコアを目指そう！
-                                </li>
-                            </ul>
-                        </div>
-
-                        {/* 入力フォームとボタン */}
-                        <div className="w-full space-y-4 pt-2">
-                            <input
-                                type="text"
-                                value={inputRoom}
-                                onChange={(e) => setInputRoom(e.target.value)}
-                                placeholder="ルームIDを入力 (例: 123)"
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                            />
-                            <button
-                                onClick={joinRoom}
-                                className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 transition transform active:scale-95 text-lg"
-                            >
-                                ゲームスタート！
-                            </button>
-                        </div>
+                    <div className="space-y-4">
+                        <h2 className="text-lg">Select all images with <br /><strong className="text-2xl font-black">PLAYERS</strong></h2>
+                        <input
+                            type="text"
+                            value={inputRoom}
+                            onChange={(e) => setInputRoom(e.target.value)}
+                            placeholder="Enter Room ID (e.g. 123)"
+                            className="w-full p-2 border border-gray-300 focus:ring-2 focus:ring-google-blue outline-none"
+                        />
+                        <button onClick={joinRoom} className="w-full bg-google-blue text-white py-2 font-bold hover:bg-blue-600 transition">
+                            VERIFY (JOIN)
+                        </button>
+                        <p className="text-xs text-gray-400 text-center">Wait for another player to join the same room ID.</p>
                     </div>
                 )}
 
                 {/* --- WAITING SCREEN --- */}
                 {gameState === 'WAITING' && (
-                    <div className="text-center py-12 space-y-6">
-                        <div className="animate-spin h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto"></div>
-                        <div>
-                            <p className="text-xl font-bold text-gray-700">対戦相手を待機中...</p>
-                            <p className="text-sm text-gray-400 mt-2">Room ID: {roomId}</p>
-                        </div>
+                    <div className="text-center py-10">
+                        <div className="animate-spin h-8 w-8 border-4 border-google-blue border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p>Waiting for opponent...</p>
+                        <p className="text-xs text-gray-400 mt-2">Room ID: {roomId}</p>
                     </div>
                 )}
 
                 {/* --- GAME SCREEN --- */}
                 {gameState === 'PLAYING' && (
                     <div>
-                        {/* Game Header */}
-                        <div className="bg-indigo-600 text-white p-5 rounded-xl mb-6 shadow-md text-center">
-                            <p className="text-sm opacity-90">以下の画像をすべて選択：</p>
-                            <h2 className="text-3xl font-bold uppercase my-1 tracking-wider">{target}</h2>
-                            <p className="text-xs opacity-75">該当する画像がなくなったら確認ボタンを押してください</p>
+                        <div className="bg-google-blue text-white p-4 mb-2">
+                            <p>Select all images with</p>
+                            <h2 className="text-3xl font-bold uppercase">{target}</h2>
+                            <p className="text-xs mt-1">Click verify once there are none left.</p>
                         </div>
 
                         {/* Grid */}
-                        <div className="grid grid-cols-3 gap-2 mb-6 p-2 bg-gray-100 rounded-lg">
+                        <div className="grid grid-cols-3 gap-1 mb-4">
                             {images.map((img: string, idx: number) => (
                                 <motion.div
                                     key={idx}
@@ -159,7 +120,7 @@ function App() {
                                     animate={{ opacity: 1 }}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => handleImageClick(idx)}
-                                    className="relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 border-transparent hover:border-indigo-400 transition"
+                                    className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200 border border-white"
                                 >
                                     <img src={img} alt="captcha" className="w-full h-full object-cover" />
                                 </motion.div>
@@ -167,55 +128,32 @@ function App() {
                         </div>
 
                         {/* Status Bar */}
-                        <div className="flex justify-between items-center text-sm font-bold text-gray-600 px-2">
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                                You
+                        <div className="flex justify-between items-center text-sm font-bold text-gray-500">
+                            <div>You</div>
+                            <div className="flex-1 mx-4 h-2 bg-gray-200 rounded overflow-hidden">
+                                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 100}%` }}></div>
                             </div>
-                            <div className="flex-1 mx-4 h-3 bg-gray-200 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-indigo-500 transition-all duration-500 ease-out"
-                                    style={{ width: `${(opponentScore / 5) * 100}%` }}
-                                ></div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                Rival: {opponentScore}/5
-                                <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                            </div>
+                            <div>Rival: {opponentScore}/5</div>
                         </div>
                     </div>
                 )}
 
                 {/* --- RESULT SCREEN --- */}
                 {gameState === 'RESULT' && (
-                    <div className="text-center py-10">
+                    <div className="text-center py-8">
                         {winner === playerId ? (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600 space-y-4">
-                                <div className="bg-green-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-bold text-gray-800">You are Human!</h2>
-                                    <p className="text-gray-500 mt-2">人間であることが証明されました。</p>
-                                </div>
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600">
+                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                <h2 className="text-2xl font-bold">You are Human!</h2>
+                                <p className="text-sm text-gray-500 mt-2">Verification Passed.</p>
                             </motion.div>
                         ) : (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600 space-y-4">
-                                <div className="bg-red-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </div>
-                                <div>
-                                    <h2 className="text-3xl font-black text-gray-800">ROBOT DETECTED</h2>
-                                    <p className="text-gray-500 mt-2">アクセスが拒否されました。</p>
-                                </div>
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600">
+                                <h2 className="text-4xl font-black mb-2">ROBOT DETECTED</h2>
+                                <p>Access Denied.</p>
                             </motion.div>
                         )}
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="mt-10 px-8 py-3 bg-gray-800 text-white rounded-lg font-bold hover:bg-gray-900 transition shadow-lg"
-                        >
-                            もう一度プレイ
-                        </button>
+                        <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline cursor-pointer">Try Again</button>
                     </div>
                 )}
 
