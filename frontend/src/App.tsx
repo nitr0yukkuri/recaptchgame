@@ -146,7 +146,7 @@ function App() {
 
             <div className="w-full h-full max-w-4xl flex flex-col relative">
 
-                {/* ★変更: 家アイコンから「← ホームに戻る」ボタンへ変更 */}
+                {/* ホームに戻るボタン */}
                 {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                     <button
                         onClick={goHome}
@@ -173,13 +173,13 @@ function App() {
                     {gameState === 'LOGIN' && (
                         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col">
 
-                            {/* 統合されたホーム画面 (説明 + ボタン) */}
+                            {/* 統合されたホーム画面 */}
                             {loginStep === 'SELECT' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
 
-                                    {/* 左側: 説明とルール */}
+                                    {/* 説明とルール: lg:text-left を削除し中央揃えに統一 */}
                                     <div className="flex-1 w-full max-w-md space-y-6">
-                                        <div className="text-center lg:text-left space-y-2">
+                                        <div className="text-center space-y-2">
                                             <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
                                             <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
                                                 60秒以内に何回人間か<br />証明できる？
@@ -205,7 +205,7 @@ function App() {
                                         </div>
                                     </div>
 
-                                    {/* 右側: モード選択ボタン */}
+                                    {/* モード選択ボタン */}
                                     <div className="flex-1 w-full max-w-md space-y-4">
                                         <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
 
