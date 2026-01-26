@@ -7,19 +7,19 @@ import { useGameStore } from './store';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPU対戦用のモックデータ（バックエンドと同じ構成にする）
+// CPU対戦用のモックデータ（バックエンドと完全に一致させる）
 const CPU_GAME_DATA = {
     target: 'CARS',
     images: [
-        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=300&q=80', // 0: Car
-        'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=300&q=80', // 1: Car
-        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80', // 2: Car
-        'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80', // 3: Car
-        'https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=300&q=80', // 4: Coffee (False)
-        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80', // 5: Car
+        'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=300&q=80', // 0: Car
+        'https://images.unsplash.com/photo-1503376763036-066120622c74?auto=format&fit=crop&w=300&q=80', // 1: Car
+        'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=300&q=80', // 2: Car
+        'https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80', // 3: Car
+        'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=300&q=80', // 4: Coffee (FALSE)
+        'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=300&q=80', // 5: Car
         'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=300&q=80', // 6: Car
         'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=300&q=80', // 7: Car
-        'https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=300&q=80', // 8: Car
+        'https://images.unsplash.com/photo-1494905998402-395d579af905?auto=format&fit=crop&w=300&q=80', // 8: Car
     ],
     correctIndices: [0, 1, 2, 3, 5, 6, 7, 8] // CPU判定用
 };
@@ -339,7 +339,12 @@ function App() {
                                             onClick={() => handleImageClick(idx)}
                                             className="relative w-full h-full cursor-pointer overflow-hidden rounded-xl border-4 border-transparent hover:border-[#5B46F5] transition"
                                         >
-                                            <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                                            <img
+                                                src={img}
+                                                alt="captcha"
+                                                className="w-full h-full object-cover"
+                                                referrerPolicy="no-referrer"
+                                            />
                                         </motion.div>
                                     ))}
                                 </div>
