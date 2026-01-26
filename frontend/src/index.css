@@ -3,5 +3,7 @@
 @tailwind utilities;
 
 body {
-    background-color: #F1F3F4;
+    background-color: #09090b;
+    color: #e4e4e7;
+    font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
 }

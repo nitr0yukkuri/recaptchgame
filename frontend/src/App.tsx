@@ -3,159 +3,156 @@ import useWebSocket from 'react-use-websocket';
 import { motion } from 'framer-motion';
 import { useGameStore } from './store';
 
-// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
 function App() {
     const {
-        gameState, roomId, playerId, target, images, opponentScore,
+        gameState, roomId, playerId, target, images, opponentScore, isCpuMode,
         setGameState, setRoomInfo, startGame, updateOpponentScore, endGame, winner
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
-
-    const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
+    const { sendMessage, lastMessage } = useWebSocket(isCpuMode ? null : WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
+
+    // CPU戦のロジック
+    useEffect(() => {
+        if (gameState === 'PLAYING' && isCpuMode) {
+            const interval = setInterval(() => {
+                if (opponentScore < 5) {
+                    const newScore = opponentScore + 1;
+                    updateOpponentScore(newScore);
+                    if (newScore >= 5) endGame('CPU');
+                }
+            }, Math.random() * 2000 + 1000);
+            return () => clearInterval(interval);
+        }
+    }, [gameState, isCpuMode, opponentScore, updateOpponentScore, endGame]);
 
     useEffect(() => {
         if (lastMessage !== null) {
             try {
                 const msg = JSON.parse(lastMessage.data);
                 switch (msg.type) {
-                    case 'STATUS_UPDATE':
-                        setGameState('WAITING');
-                        break;
-                    case 'GAME_START':
-                        startGame(msg.payload.target, msg.payload.images);
-                        break;
+                    case 'STATUS_UPDATE': setGameState('WAITING'); break;
+                    case 'GAME_START': startGame(msg.payload.target, msg.payload.images); break;
                     case 'OPPONENT_PROGRESS':
-                        if (msg.payload.player_id !== playerId) {
-                            updateOpponentScore(msg.payload.correct_count);
-                        }
+                        if (msg.payload.player_id !== playerId) updateOpponentScore(msg.payload.correct_count);
                         break;
-                    case 'GAME_FINISHED':
-                        endGame(msg.payload.winner_id);
-                        break;
+                    case 'GAME_FINISHED': endGame(msg.payload.winner_id); break;
                 }
-            } catch (e) {
-                console.error("Failed to parse message:", e);
-            }
+            } catch (e) { console.error(e); }
         }
     }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId]);
 
-    const joinRoom = () => {
-        if (!inputRoom) return;
-        setRoomInfo(inputRoom, playerId);
-        sendMessage(JSON.stringify({
-            type: 'JOIN_ROOM',
-            payload: { room_id: inputRoom, player_id: playerId }
-        }));
+    const joinRoom = (mode: 'PVP' | 'CPU') => {
+        if (mode === 'PVP') {
+            if (!inputRoom) return;
+            setRoomInfo(inputRoom, playerId, false);
+            sendMessage(JSON.stringify({ type: 'JOIN_ROOM', payload: { room_id: inputRoom, player_id: playerId } }));
+        } else {
+            setRoomInfo('CPU_ROOM', playerId, true);
+            const mockImages = Array.from({ length: 9 }, (_, i) => `https://via.placeholder.com/150?text=Img+${i}`);
+            startGame('Traffic Lights', mockImages);
+        }
     };
 
     const handleImageClick = (index: number) => {
-        sendMessage(JSON.stringify({
-            type: 'SELECT_IMAGE',
-            payload: { room_id: roomId, player_id: playerId, image_index: index }
-        }));
+        if (isCpuMode) {
+            const newScore = useGameStore.getState().score + 1;
+            useGameStore.setState({ score: newScore });
+            if (newScore >= 5) endGame(playerId);
+        } else {
+            sendMessage(JSON.stringify({ type: 'SELECT_IMAGE', payload: { room_id: roomId, player_id: playerId, image_index: index } }));
+        }
     };
 
     return (
-        <div className="min-h-screen bg-google-gray flex items-center justify-center font-sans text-gray-800">
+        <div className="min-h-screen bg-[#F1F3F4] flex items-center justify-center font-sans text-gray-800">
             <div className="bg-white p-6 rounded-sm shadow-xl max-w-lg w-full border border-gray-300">
-
-                {/* Header */}
-                <div className="bg-google-blue text-white p-4 mb-4 flex justify-between items-center shadow-sm">
-                    <h1 className="text-xl font-bold">I'm not a robot</h1>
-                    <div className="flex flex-col items-end text-xs">
-                        <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" className="w-8 mb-1" alt="logo" />
-                        <span>reCAPTCHA Game</span>
+                <div className="bg-[#4285F4] text-white p-5 mb-4 flex justify-between items-center">
+                    <div>
+                        <p className="text-xs opacity-90 leading-tight">くそうざいreCAPTCHAを面白くしよう！</p>
+                        <h1 className="text-2xl font-black italic tracking-tighter">reCAPTCHA ゲーム</h1>
                     </div>
+                    <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" className="w-10 h-10" alt="logo" />
                 </div>
 
-                {/* --- LOGIN SCREEN --- */}
                 {gameState === 'LOGIN' && (
-                    <div className="space-y-4">
-                        <h2 className="text-lg">Select all images with <br /><strong className="text-2xl font-black">PLAYERS</strong></h2>
+                    <div className="space-y-6">
+                        <div className="border-l-4 border-[#4285F4] pl-4 py-1">
+                            <h2 className="text-xl font-bold">遊び方</h2>
+                            <ul className="text-sm space-y-1 mt-2 text-gray-600">
+                                <li>・指定されたお題の画像をすべて選んでください</li>
+                                <li>・誰よりも早く「人間」であることを証明しましょう</li>
+                                <li>・制限時間は60秒です</li>
+                            </ul>
+                        </div>
                         <input
-                            type="text"
-                            value={inputRoom}
-                            onChange={(e) => setInputRoom(e.target.value)}
-                            placeholder="Enter Room ID (e.g. 123)"
-                            className="w-full p-2 border border-gray-300 focus:ring-2 focus:ring-google-blue outline-none"
+                            type="text" value={inputRoom} onChange={(e) => setInputRoom(e.target.value)}
+                            placeholder="ルームIDを入力 (対人戦のみ)"
+                            className="w-full p-3 border border-gray-300 focus:ring-2 focus:ring-[#4285F4] outline-none"
                         />
-                        <button onClick={joinRoom} className="w-full bg-google-blue text-white py-2 font-bold hover:bg-blue-600 transition">
-                            VERIFY (JOIN)
-                        </button>
-                        <p className="text-xs text-gray-400 text-center">Wait for another player to join the same room ID.</p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button onClick={() => joinRoom('PVP')} className="bg-[#4285F4] text-white py-3 font-bold hover:bg-blue-600 transition shadow-md">誰かと対戦する</button>
+                            <button onClick={() => joinRoom('CPU')} className="bg-gray-700 text-white py-3 font-bold hover:bg-gray-800 transition shadow-md">CPUと対戦する</button>
+                        </div>
                     </div>
                 )}
 
-                {/* --- WAITING SCREEN --- */}
                 {gameState === 'WAITING' && (
                     <div className="text-center py-10">
-                        <div className="animate-spin h-8 w-8 border-4 border-google-blue border-t-transparent rounded-full mx-auto mb-4"></div>
-                        <p>Waiting for opponent...</p>
+                        <div className="animate-spin h-8 w-8 border-4 border-[#4285F4] border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p className="font-bold text-lg">対戦相手を探しています...</p>
                         <p className="text-xs text-gray-400 mt-2">Room ID: {roomId}</p>
                     </div>
                 )}
 
-                {/* --- GAME SCREEN --- */}
                 {gameState === 'PLAYING' && (
                     <div>
-                        <div className="bg-google-blue text-white p-4 mb-2">
-                            <p>Select all images with</p>
-                            <h2 className="text-3xl font-bold uppercase">{target}</h2>
-                            <p className="text-xs mt-1">Click verify once there are none left.</p>
+                        <div className="bg-[#4285F4] text-white p-4 mb-2">
+                            <p className="text-sm">お題：以下の画像の中から</p>
+                            <h2 className="text-3xl font-black uppercase tracking-tight">{target}</h2>
+                            <p className="text-sm mt-1">に該当するものをすべて選択してください。</p>
                         </div>
-
-                        {/* Grid */}
                         <div className="grid grid-cols-3 gap-1 mb-4">
-                            {images.map((img: string, idx: number) => (
-                                <motion.div
-                                    key={idx}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => handleImageClick(idx)}
-                                    className="relative aspect-square cursor-pointer overflow-hidden bg-gray-200 border border-white"
-                                >
-                                    <img src={img} alt="captcha" className="w-full h-full object-cover" />
+                            {images.map((img, idx) => (
+                                <motion.div key={idx} whileTap={{ scale: 0.95 }} onClick={() => handleImageClick(idx)} className="aspect-square cursor-pointer overflow-hidden bg-gray-200 border border-white">
+                                    <img src={img} className="w-full h-full object-cover" alt="captcha" />
                                 </motion.div>
                             ))}
                         </div>
-
-                        {/* Status Bar */}
-                        <div className="flex justify-between items-center text-sm font-bold text-gray-500">
-                            <div>You</div>
-                            <div className="flex-1 mx-4 h-2 bg-gray-200 rounded overflow-hidden">
-                                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 100}%` }}></div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs font-bold">
+                                <span>YOU: {isCpuMode ? useGameStore.getState().score : '...'} / 5</span>
+                                <span>{isCpuMode ? 'CPU' : 'Rival'}: {opponentScore} / 5</span>
                             </div>
-                            <div>Rival: {opponentScore}/5</div>
+                            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex">
+                                <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(useGameStore.getState().score / 5) * 50}%` }}></div>
+                                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(opponentScore / 5) * 50}%` }}></div>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* --- RESULT SCREEN --- */}
                 {gameState === 'RESULT' && (
                     <div className="text-center py-8">
                         {winner === playerId ? (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600">
-                                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                <h2 className="text-2xl font-bold">You are Human!</h2>
-                                <p className="text-sm text-gray-500 mt-2">Verification Passed.</p>
-                            </motion.div>
+                            <div className="text-green-600">
+                                <h2 className="text-4xl font-black italic">YOU ARE HUMAN!</h2>
+                                <p className="mt-2">あなたはボットではありません。</p>
+                            </div>
                         ) : (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600">
-                                <h2 className="text-4xl font-black mb-2">ROBOT DETECTED</h2>
-                                <p>Access Denied.</p>
-                            </motion.div>
+                            <div className="text-red-600">
+                                <h2 className="text-4xl font-black italic">ROBOT DETECTED</h2>
+                                <p className="mt-2">アクセスが拒否されました。</p>
+                            </div>
                         )}
-                        <button onClick={() => window.location.reload()} className="mt-8 text-google-blue underline cursor-pointer">Try Again</button>
+                        <button onClick={() => window.location.reload()} className="mt-8 bg-[#4285F4] text-white px-8 py-2 font-bold shadow-lg">もう一度遊ぶ</button>
                     </div>
                 )}
-
             </div>
         </div>
     );
