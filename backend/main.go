@@ -125,7 +125,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		scoreMu.Lock()
-		// 正誤判定: 4番（コーヒー）以外は「車」として正解扱い
 		isCorrect := p.ImageIndex != 4 
 
 		if isCorrect {
@@ -152,17 +151,17 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func startGame(roomID string) {
-	// 【修正】100%安定して表示されることが確認されている画像ID
+	// Unsplash以外の方法: Lorem Flickrを使用 (lockパラメータで画像を固定)
 	images := []string{
-		"https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=300", // 0: Car
-		"https://images.unsplash.com/photo-1503376763036-066120622c74?w=300", // 1: Car
-		"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=300", // 2: Car
-		"https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=300", // 3: Car
-		"https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=300", // 4: Coffee (TRAP)
-		"https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=300", // 5: Car
-		"https://images.unsplash.com/photo-1542362567-b07e54358753?w=300", // 6: Car
-		"https://images.unsplash.com/photo-1502877338535-766e1452684a?w=300", // 7: Car
-		"https://images.unsplash.com/photo-1494905998402-395d579af905?w=300", // 8: Car
+		"https://loremflickr.com/300/300/car?lock=1", // 0: Car
+		"https://loremflickr.com/300/300/car?lock=2", // 1: Car
+		"https://loremflickr.com/300/300/car?lock=3", // 2: Car
+		"https://loremflickr.com/300/300/car?lock=4", // 3: Car
+		"https://loremflickr.com/300/300/coffee?lock=1", // 4: Coffee (False)
+		"https://loremflickr.com/300/300/car?lock=5", // 5: Car
+		"https://loremflickr.com/300/300/car?lock=6", // 6: Car
+		"https://loremflickr.com/300/300/car?lock=7", // 7: Car
+		"https://loremflickr.com/300/300/car?lock=8", // 8: Car
 	}
 
 	targetWord := "CARS"
