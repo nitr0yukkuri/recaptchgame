@@ -10,7 +10,7 @@ interface Store {
     images: string[];
     opponentScore: number;
     opponentSelections: number[];
-    mySelections: number[]; // 追加: 自分の選択
+    mySelections: number[];
     winner: string | null;
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
@@ -19,8 +19,8 @@ interface Store {
     updateOpponentScore: (score: number) => void;
     toggleOpponentSelection: (index: number) => void;
     resetOpponentSelections: () => void;
-    toggleMySelection: (index: number) => void; // 追加
-    resetMySelections: () => void; // 追加
+    toggleMySelection: (index: number) => void;
+    resetMySelections: () => void;
     endGame: (winner: string) => void;
 }
 

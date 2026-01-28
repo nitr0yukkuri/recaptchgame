@@ -6,26 +6,17 @@ import { useGameStore } from './store';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPUモード用データ: ファイル名を新ルールに対応
-const CPU_GAME_DATA = {
-    target: 'CAR', // ターゲット
-    images: [
-        '/images/car1.jpg',
-        '/images/car2.jpg',
-        '/images/car3.jpg',
-        '/images/car4.jpg',
-        '/images/tamanegi5.png',
-        '/images/shingouki1.jpg',
-        '/images/shingouki2.jpg',
-        '/images/shingouki3.jpg',
-        '/images/car5.jpg',
-    ],
-};
+// CPUモード用: 全画像プール（タマネギ含む）
+const ALL_CPU_IMAGES = [
+    '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
+    '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
+    '/images/tamanegi5.png',
+];
 
 function App() {
     const {
         gameState, roomId, playerId, target, images, opponentScore, opponentSelections, mySelections,
-        setGameState, setRoomInfo, startGame, updateOpponentScore, toggleOpponentSelection,
+        setGameState, setRoomInfo, startGame, updatePattern, updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner
     } = useGameStore();
 
@@ -39,9 +30,18 @@ function App() {
         shouldReconnect: () => true,
     });
 
+    // ヘルパー: 新しいCPU問題を生成（ランダム）
+    const generateCpuProblem = () => {
+        const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
+        const newTarget = Math.random() > 0.5 ? 'CAR' : 'TRAFFIC LIGHT';
+        return { target: newTarget, images: shuffledImages };
+    };
+
     // ヘルパー: 正解インデックスを動的に計算する関数
     const getCorrectIndices = (imgs: string[], tgt: string) => {
-        const searchKey = tgt.toLowerCase();
+        let searchKey = tgt.toLowerCase();
+        if (searchKey === 'traffic light') searchKey = 'shingouki';
+
         return imgs
             .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
             .filter(idx => idx !== -1);
@@ -54,10 +54,7 @@ function App() {
                 const store = useGameStore.getState();
                 const currentSelections = store.opponentSelections;
 
-                // 動的に正解を計算
                 const correctIndices = getCorrectIndices(store.images, store.target);
-
-                // まだ選んでいない正解を探す
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
                 if (remaining.length > 0) {
@@ -66,7 +63,6 @@ function App() {
                         store.toggleOpponentSelection(next);
                     }
                 } else {
-                    // 全部選び終わったら確認ボタンを押す
                     if (Math.random() > 0.5) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
@@ -131,7 +127,8 @@ function App() {
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
-        startGame(CPU_GAME_DATA.target, CPU_GAME_DATA.images);
+        const prob = generateCpuProblem();
+        startGame(prob.target, prob.images);
     };
 
     const joinRandom = () => {
@@ -177,8 +174,11 @@ function App() {
             if (isCorrect) {
                 setMyScore(prev => prev + 1);
                 resetMySelections();
+                // 正解したら次の問題へランダム更新
+                const nextProb = generateCpuProblem();
+                updatePattern(nextProb.target, nextProb.images);
             } else {
-                resetMySelections();
+                // 不正解時は何もしない（選択状態維持、画像そのまま）
             }
         } else {
             sendMessage(JSON.stringify({

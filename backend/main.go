@@ -56,7 +56,7 @@ type GameResultPayload struct {
 var (
 	scores      = make(map[string]int)
 	roomImages  = make(map[string][]string)
-	roomTargets = make(map[string]string) // 追加: ルームごとのターゲット管理
+	roomTargets = make(map[string]string)
 	scoreMu     sync.Mutex
 	upgrader    = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
 	clients     = make(map[*websocket.Conn]string)
@@ -157,11 +157,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 動的判定ロジック: ファイル名にターゲット(小文字)が含まれているか
+		// 動的判定ロジック
 		searchKey := strings.ToLower(currentTarget)
+		if searchKey == "traffic light" {
+			searchKey = "shingouki"
+		}
+
 		correctIndices := []int{}
 		for i, img := range currentImages {
-			// 例: target="CAR" -> searchKey="car" -> "/images/car1.jpg" は正解
 			if strings.Contains(strings.ToLower(img), searchKey) {
 				correctIndices = append(correctIndices, i)
 			}
@@ -201,31 +204,34 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
 				sendNewPattern(p.RoomID)
 			} else {
-				sendNewPattern(p.RoomID)
+				// 不正解時は何もしない（クライアント側は選択維持）
 			}
 		}
 	}
 }
 
 func sendNewPattern(roomID string) {
-	// ファイル名を変更: car, shingouki などを含む名前にする
-	images := []string{
+	// タマネギを追加
+	allImages := []string{
 		"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
 		"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
+		"/images/tamanegi5.png",
 	}
 
-	rand.Shuffle(len(images), func(i, j int) {
-		images[i], images[j] = images[j], images[i]
+	rand.Shuffle(len(allImages), func(i, j int) {
+		allImages[i], allImages[j] = allImages[j], allImages[i]
 	})
+	selectedImages := allImages[:9]
 
-	target := "CAR" // 今回はCARをターゲットとする
+	targets := []string{"CAR", "TRAFFIC LIGHT"}
+	target := targets[rand.Intn(len(targets))]
 
 	mu.Lock()
-	roomImages[roomID] = images
-	roomTargets[roomID] = target // ターゲットを保存
+	roomImages[roomID] = selectedImages
+	roomTargets[roomID] = target
 	mu.Unlock()
 
-	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: target}
+	payload := GameStartPayload{ProblemID: "prob_" + time.Now().String(), Images: selectedImages, Target: target}
 	b, _ := json.Marshal(payload)
 	broadcastToRoom(roomID, Message{Type: "GAME_START", Payload: b})
 }
