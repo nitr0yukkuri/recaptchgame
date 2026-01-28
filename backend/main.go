@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,12 @@ type JoinRoomPayload struct {
 	PlayerID string `json:"player_id"`
 }
 
+type SelectImagePayload struct {
+	RoomID     string `json:"room_id"`
+	PlayerID   string `json:"player_id"`
+	ImageIndex int    `json:"image_index"`
+}
+
 type GameStartPayload struct {
 	ProblemID string   `json:"problem_id"`
 	Images    []string `json:"images"`
@@ -47,13 +54,14 @@ type GameResultPayload struct {
 }
 
 var (
-	scores     = make(map[string]int)
-	roomImages = make(map[string][]string)
-	scoreMu    sync.Mutex
-	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	clients    = make(map[*websocket.Conn]string)
-	rooms      = make(map[string]map[*websocket.Conn]bool)
-	mu         sync.Mutex
+	scores      = make(map[string]int)
+	roomImages  = make(map[string][]string)
+	roomTargets = make(map[string]string) // 追加: ルームごとのターゲット管理
+	scoreMu     sync.Mutex
+	upgrader    = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	clients     = make(map[*websocket.Conn]string)
+	rooms       = make(map[string]map[*websocket.Conn]bool)
+	mu          sync.Mutex
 )
 
 func init() {
@@ -83,6 +91,7 @@ func handleWebSocket(c echo.Context) error {
 				if len(conns) == 0 {
 					delete(rooms, rid)
 					delete(roomImages, rid)
+					delete(roomTargets, rid)
 				}
 			}
 		}
@@ -126,6 +135,13 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		}
 
+	case "SELECT_IMAGE":
+		var p SelectImagePayload
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return
+		}
+		broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_SELECT", Payload: msg.Payload})
+
 	case "VERIFY":
 		var p VerifyPayload
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
@@ -134,26 +150,33 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 
 		mu.Lock()
 		currentImages, ok := roomImages[p.RoomID]
+		currentTarget, okTarget := roomTargets[p.RoomID]
 		mu.Unlock()
 
-		if !ok {
+		if !ok || !okTarget {
 			return
 		}
 
-		// 検証ロジック：正解（5.png以外）がすべて選択され、かつ5.pngが含まれていないか
-		isCorrect := true
-		correctCountInPattern := 0
-		for _, img := range currentImages {
-			if img != "/images/5.png" {
-				correctCountInPattern++
+		// 動的判定ロジック: ファイル名にターゲット(小文字)が含まれているか
+		searchKey := strings.ToLower(currentTarget)
+		correctIndices := []int{}
+		for i, img := range currentImages {
+			// 例: target="CAR" -> searchKey="car" -> "/images/car1.jpg" は正解
+			if strings.Contains(strings.ToLower(img), searchKey) {
+				correctIndices = append(correctIndices, i)
 			}
 		}
 
-		if len(p.SelectedIndices) != correctCountInPattern {
+		isCorrect := true
+		if len(p.SelectedIndices) != len(correctIndices) {
 			isCorrect = false
 		} else {
+			selectionMap := make(map[int]bool)
 			for _, idx := range p.SelectedIndices {
-				if idx < 0 || idx >= len(currentImages) || currentImages[idx] == "/images/5.png" {
+				selectionMap[idx] = true
+			}
+			for _, correctIdx := range correctIndices {
+				if !selectionMap[correctIdx] {
 					isCorrect = false
 					break
 				}
@@ -163,8 +186,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		scoreMu.Lock()
 		if isCorrect {
 			scores[p.PlayerID]++
-		} else {
-			scores[p.PlayerID] = 0 // 間違えたら0にリセット
 		}
 		currentScore := scores[p.PlayerID]
 		scoreMu.Unlock()
@@ -174,30 +195,37 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			b, _ := json.Marshal(res)
 			broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
 		} else {
-			prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(currentScore), TotalNeeded: 5}
-			b, _ := json.Marshal(prog)
-			broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
-			sendNewPattern(p.RoomID) // 次のパターンへ
+			if isCorrect {
+				prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(currentScore), TotalNeeded: 5}
+				b, _ := json.Marshal(prog)
+				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
+				sendNewPattern(p.RoomID)
+			} else {
+				sendNewPattern(p.RoomID)
+			}
 		}
 	}
 }
 
 func sendNewPattern(roomID string) {
+	// ファイル名を変更: car, shingouki などを含む名前にする
 	images := []string{
-		"/images/1.jpg", "/images/2.jpg", "/images/3.jpg",
-		"/images/4.jpg", "/images/5.png", "/images/6.jpg",
-		"/images/7.jpg", "/images/8.jpg", "/images/9.jpg",
+		"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
+		"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
 	}
 
 	rand.Shuffle(len(images), func(i, j int) {
 		images[i], images[j] = images[j], images[i]
 	})
 
+	target := "CAR" // 今回はCARをターゲットとする
+
 	mu.Lock()
 	roomImages[roomID] = images
+	roomTargets[roomID] = target // ターゲットを保存
 	mu.Unlock()
 
-	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: "CARS"}
+	payload := GameStartPayload{ProblemID: "prob_001", Images: images, Target: target}
 	b, _ := json.Marshal(payload)
 	broadcastToRoom(roomID, Message{Type: "GAME_START", Payload: b})
 }

@@ -4,10 +4,12 @@ import useWebSocket from 'react-use-websocket';
 import { motion } from 'framer-motion';
 import { useGameStore } from './store';
 
-// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPU対戦用のモックデータ（バックエンドと完全に一致させる）
+// CPUモード用の正解（ファイル名依存）
+// 1,2,3,4.jpg が正解と仮定
+const CPU_CORRECT_IMAGES = ['/images/1.jpg', '/images/2.jpg', '/images/3.jpg', '/images/4.jpg'];
+
 const CPU_GAME_DATA = {
     target: 'CARS',
     images: [
@@ -21,39 +23,58 @@ const CPU_GAME_DATA = {
         '/images/8.jpg',
         '/images/9.jpg',
     ],
-    correctIndices: [0, 1, 2, 3, 5, 6, 7, 8] // CPU判定用
 };
 
 function App() {
     const {
-        gameState, roomId, playerId, target, images, opponentScore,
-        setGameState, setRoomInfo, startGame, updateOpponentScore, endGame, winner
+        gameState, roomId, playerId, target, images, opponentScore, opponentSelections, mySelections,
+        setGameState, setRoomInfo, startGame, updateOpponentScore, toggleOpponentSelection,
+        resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
-    const [myScore, setMyScore] = useState(0); // フロントエンド側での簡易スコア管理（表示用）
+    const [myScore, setMyScore] = useState(0);
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
 
-    // CPU対戦ロジック（相手の進行状況をシミュレーション）
+    // CPU対戦ロジック（行動シミュレーション）
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             const interval = setInterval(() => {
-                // CPUはランダムなタイミングで正解する
-                if (Math.random() > 0.6) {
-                    useGameStore.getState().updateOpponentScore(useGameStore.getState().opponentScore + 1);
+                const store = useGameStore.getState();
+                const currentSelections = store.opponentSelections;
+
+                // CPUの正解インデックスを計算
+                const correctIndices = CPU_GAME_DATA.images
+                    .map((img, idx) => CPU_CORRECT_IMAGES.includes(img) ? idx : -1)
+                    .filter(idx => idx !== -1);
+
+                // まだ選んでいない正解を探す
+                const remaining = correctIndices.filter(i => !currentSelections.includes(i));
+
+                if (remaining.length > 0) {
+                    if (Math.random() > 0.3) {
+                        const next = remaining[Math.floor(Math.random() * remaining.length)];
+                        store.toggleOpponentSelection(next);
+                    }
+                } else {
+                    // 全部選び終わったら確認ボタンを押す（スコアアップ & リセット）
+                    if (Math.random() > 0.5) {
+                        store.updateOpponentScore(store.opponentScore + 1);
+                        store.resetOpponentSelections();
+                    }
                 }
-            }, 1500);
+            }, 800);
             return () => clearInterval(interval);
         }
     }, [gameMode, gameState]);
 
-    // CPU/自分の勝利判定監視
+    // 勝利判定
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             if (opponentScore >= 5) {
@@ -77,14 +98,21 @@ function App() {
                         break;
                     case 'GAME_START':
                         startGame(msg.payload.target, msg.payload.images);
-                        setMyScore(0);
+                        setMyScore(0); // リセットしないと前のスコアが残る可能性あり
                         break;
                     case 'OPPONENT_PROGRESS':
                         if (msg.payload.player_id !== playerId) {
                             updateOpponentScore(msg.payload.correct_count);
+                            resetOpponentSelections();
                         } else {
-                            // 自分のスコアがサーバーから確認として返ってくる場合
+                            // 自分が正解した場合
                             setMyScore(msg.payload.correct_count);
+                            resetMySelections();
+                        }
+                        break;
+                    case 'OPPONENT_SELECT':
+                        if (msg.payload.player_id !== playerId) {
+                            toggleOpponentSelection(msg.payload.image_index);
                         }
                         break;
                     case 'GAME_FINISHED':
@@ -95,7 +123,7 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateOpponentScore, endGame, playerId, gameMode]);
+    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode]);
 
     const startCpuGame = () => {
         setGameMode('CPU');
@@ -125,16 +153,12 @@ function App() {
         }));
     };
 
+    // 画像クリック（選択のみ）
     const handleImageClick = (index: number) => {
-        if (gameMode === 'CPU') {
-            // CPUモードでのローカル判定
-            const isCorrect = CPU_GAME_DATA.correctIndices.includes(index);
-            if (isCorrect) {
-                setMyScore(prev => prev + 1);
-            }
-            // サーバーには送らない
-        } else {
-            // オンラインモード
+        toggleMySelection(index);
+
+        // オンラインの場合は相手に選択状況を見せる（リアルタイム演出）
+        if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
                 type: 'SELECT_IMAGE',
                 payload: { room_id: roomId, player_id: playerId, image_index: index }
@@ -142,13 +166,41 @@ function App() {
         }
     };
 
-    // 待機キャンセル処理
+    // 確認ボタンクリック（判定）
+    const handleVerify = () => {
+        if (gameMode === 'CPU') {
+            // ローカル判定
+            const correctIndices = images
+                .map((img, idx) => CPU_CORRECT_IMAGES.includes(img) ? idx : -1)
+                .filter(idx => idx !== -1);
+
+            const isCorrect =
+                mySelections.length === correctIndices.length &&
+                mySelections.every(idx => correctIndices.includes(idx));
+
+            if (isCorrect) {
+                setMyScore(prev => prev + 1);
+                resetMySelections();
+                // CPUモードでは画像シャッフルは簡易的に行わないか、リロードさせる
+                // ここでは簡易的に選択解除のみ
+            } else {
+                // 不正解演出（選択リセット）
+                resetMySelections();
+            }
+        } else {
+            // サーバーへ判定依頼
+            sendMessage(JSON.stringify({
+                type: 'VERIFY',
+                payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
+            }));
+        }
+    };
+
     const cancelWaiting = () => {
         setGameState('LOGIN');
         setLoginStep('SELECT');
     };
 
-    // ホームに戻る処理
     const goHome = () => {
         setGameState('LOGIN');
         setLoginStep('SELECT');
@@ -158,11 +210,10 @@ function App() {
     };
 
     return (
-        <div className="h-screen w-screen bg-white flex flex-col items-center p-4 md:p-8 font-sans text-gray-800 overflow-hidden relative">
+        <div className="h-screen w-screen bg-white flex flex-col items-center p-2 font-sans text-gray-800 overflow-hidden relative">
 
-            <div className="w-full h-full max-w-4xl flex flex-col relative">
+            <div className="w-full h-full max-w-7xl flex flex-col relative">
 
-                {/* ホームに戻るボタン */}
                 {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                     <button
                         onClick={goHome}
@@ -175,25 +226,19 @@ function App() {
                     </button>
                 )}
 
-                {/* --- HEADER --- */}
-                <div className="flex flex-col items-center mb-4 md:mb-6 shrink-0">
-                    <h1 className="text-4xl md:text-5xl font-bold flex items-center gap-3 mb-2">
+                <div className="flex flex-col items-center mb-2 shrink-0">
+                    <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-2 mb-1">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
                         <span className="text-[#BFA15F]">ゲーム</span>
                     </h1>
                 </div>
 
-                {/* --- CONTENT AREA --- */}
                 <div className="flex-1 flex flex-col w-full min-h-0 overflow-y-auto">
 
                     {gameState === 'LOGIN' && (
                         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col">
-
-                            {/* 統合されたホーム画面 */}
                             {loginStep === 'SELECT' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
-
-                                    {/* 説明とルール */}
                                     <div className="flex-1 w-full max-w-md space-y-6">
                                         <div className="text-center space-y-2">
                                             <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
@@ -207,11 +252,11 @@ function App() {
                                             <ul className="space-y-3 text-base text-gray-700 font-medium">
                                                 <li className="flex items-start gap-3">
                                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    画像選択などのチャレンジをクリア
+                                                    画像の該当部分をすべて選択
                                                 </li>
                                                 <li className="flex items-start gap-3">
                                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    正解するたびに1ポイント獲得
+                                                    「確認」ボタンを押して正解なら1点
                                                 </li>
                                                 <li className="flex items-start gap-3">
                                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
@@ -221,10 +266,8 @@ function App() {
                                         </div>
                                     </div>
 
-                                    {/* モード選択ボタン */}
                                     <div className="flex-1 w-full max-w-md space-y-4">
                                         <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
-
                                         <button
                                             onClick={startCpuGame}
                                             className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300"
@@ -270,14 +313,12 @@ function App() {
                                 </div>
                             )}
 
-                            {/* 友達対戦用ルーム入力 */}
                             {loginStep === 'FRIEND' && (
                                 <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
                                         <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
                                         <p className="text-sm text-gray-400">友達から教えてもらったIDを入力してね</p>
                                     </div>
-
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -288,7 +329,6 @@ function App() {
                                             autoFocus
                                         />
                                     </div>
-
                                     <button
                                         onClick={() => joinRoomInternal(inputRoom)}
                                         className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
@@ -300,7 +340,6 @@ function App() {
                         </div>
                     )}
 
-                    {/* --- WAITING SCREEN --- */}
                     {gameState === 'WAITING' && (
                         <div className="text-center h-full flex flex-col items-center justify-center space-y-10">
                             <div className="animate-spin h-20 w-20 border-8 border-[#5B46F5] border-t-transparent rounded-full"></div>
@@ -308,7 +347,6 @@ function App() {
                                 <p className="text-3xl font-bold text-gray-700">対戦相手を待機中...</p>
                                 <p className="text-lg text-gray-400 mt-2">Room: {roomId}</p>
                             </div>
-
                             <button
                                 onClick={cancelWaiting}
                                 className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition"
@@ -318,39 +356,90 @@ function App() {
                         </div>
                     )}
 
-                    {/* --- GAME SCREEN --- */}
                     {gameState === 'PLAYING' && (
-                        <div className="flex flex-col h-full">
-                            {/* Game Header (Styled & Smaller) */}
-                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-3 shadow-md shrink-0 text-left flex flex-col justify-center">
+                        <div className="flex flex-col h-full justify-between pb-4">
+
+                            {/* Game Header */}
+                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-2 shadow-md shrink-0 text-left flex flex-col justify-center mx-2 md:mx-auto w-full max-w-2xl">
                                 <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
                                 <h2 className="text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
                             </div>
 
-                            {/* Grid */}
-                            <div className="flex-1 min-h-0 bg-gray-100 rounded-3xl p-3 md:p-4 mb-4 overflow-hidden">
-                                <div className="grid grid-cols-3 gap-2 md:gap-4 h-full w-full">
-                                    {images.map((img: string, idx: number) => (
-                                        <motion.div
-                                            key={idx}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            whileTap={{ scale: 0.95 }}
-                                            onClick={() => handleImageClick(idx)}
-                                            className="relative w-full h-full cursor-pointer overflow-hidden rounded-xl border-4 border-transparent hover:border-[#5B46F5] transition"
-                                        >
-                                            <img
-                                                src={img}
-                                                alt="captcha"
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </motion.div>
-                                    ))}
+                            {/* Main Content: Player Grid and Rival View */}
+                            <div className="flex-1 min-h-0 flex flex-col md:flex-row items-center justify-between gap-10 md:gap-24 w-full max-w-7xl mx-auto px-4 md:px-10">
+
+                                {/* 自分のセクション */}
+                                <div className="flex flex-col items-center w-full max-w-2xl">
+                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分</h3>
+                                    <div className="bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col">
+                                        <div className="grid grid-cols-3 gap-1 w-full aspect-square">
+                                            {images.map((img: string, idx: number) => (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => handleImageClick(idx)}
+                                                    className="relative w-full h-full cursor-pointer overflow-hidden group"
+                                                >
+                                                    {/* 画像本体：選択時は縮小して枠線を見せる */}
+                                                    <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
+                                                        <img
+                                                            src={img}
+                                                            alt="captcha"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+
+                                                    {/* 選択時のチェックマーク（reCAPTCHA風） */}
+                                                    {mySelections.includes(idx) && (
+                                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-1 m-1 shadow-md z-10">
+                                                            <svg className="w-4 h-4 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {/* 確認ボタン */}
+                                        <div className="flex justify-end mt-2">
+                                            <button
+                                                onClick={handleVerify}
+                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner"
+                                            >
+                                                確認
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 相手のセクション */}
+                                <div className="w-full md:w-auto md:h-full flex flex-col justify-center items-center shrink-0">
+                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手</h3>
+                                    <div className="bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300">
+                                        <div className="flex items-center gap-2 mb-2 w-full justify-center">
+                                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                            <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-0.5 w-32 md:w-full opacity-90">
+                                            {images.map((img: string, idx: number) => (
+                                                <div
+                                                    key={`opp-${idx}`}
+                                                    className="relative aspect-square overflow-hidden bg-gray-300"
+                                                >
+                                                    <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
+                                                        <img src={img} className="w-full h-full object-cover" />
+                                                    </div>
+                                                    {opponentSelections.includes(idx) && (
+                                                        <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">
+                                                            <svg className="w-2 h-2 md:w-3 md:h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Status Bar */}
-                            <div className="shrink-0 flex justify-between items-center text-base md:text-lg font-bold text-gray-600 px-2 pb-2">
+                            <div className="shrink-0 flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 px-4 mt-2 w-full max-w-5xl mx-auto">
                                 <div className="flex items-center gap-3">
                                     <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
                                     You: {myScore}/5
@@ -369,7 +458,6 @@ function App() {
                         </div>
                     )}
 
-                    {/* --- RESULT SCREEN --- */}
                     {gameState === 'RESULT' && (
                         <div className="flex flex-col items-center justify-center h-full text-center space-y-10">
                             {winner === playerId || (winner === 'human' && gameMode === 'CPU') ? (
