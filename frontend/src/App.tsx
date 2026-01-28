@@ -6,22 +6,19 @@ import { useGameStore } from './store';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPUモード用の正解（ファイル名依存）
-// 1,2,3,4.jpg が正解と仮定
-const CPU_CORRECT_IMAGES = ['/images/1.jpg', '/images/2.jpg', '/images/3.jpg', '/images/4.jpg'];
-
+// CPUモード用データ: ファイル名を新ルールに対応
 const CPU_GAME_DATA = {
-    target: 'CARS',
+    target: 'CAR', // ターゲット
     images: [
-        '/images/1.jpg',
-        '/images/2.jpg',
-        '/images/3.jpg',
-        '/images/4.jpg',
-        '/images/5.png',
-        '/images/6.jpg',
-        '/images/7.jpg',
-        '/images/8.jpg',
-        '/images/9.jpg',
+        '/images/car1.jpg',
+        '/images/car2.jpg',
+        '/images/car3.jpg',
+        '/images/car4.jpg',
+        '/images/tamanegi5.png',
+        '/images/shingouki1.jpg',
+        '/images/shingouki2.jpg',
+        '/images/shingouki3.jpg',
+        '/images/car5.jpg',
     ],
 };
 
@@ -42,6 +39,14 @@ function App() {
         shouldReconnect: () => true,
     });
 
+    // ヘルパー: 正解インデックスを動的に計算する関数
+    const getCorrectIndices = (imgs: string[], tgt: string) => {
+        const searchKey = tgt.toLowerCase();
+        return imgs
+            .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
+            .filter(idx => idx !== -1);
+    };
+
     // CPU対戦ロジック（行動シミュレーション）
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
@@ -49,10 +54,8 @@ function App() {
                 const store = useGameStore.getState();
                 const currentSelections = store.opponentSelections;
 
-                // CPUの正解インデックスを計算
-                const correctIndices = CPU_GAME_DATA.images
-                    .map((img, idx) => CPU_CORRECT_IMAGES.includes(img) ? idx : -1)
-                    .filter(idx => idx !== -1);
+                // 動的に正解を計算
+                const correctIndices = getCorrectIndices(store.images, store.target);
 
                 // まだ選んでいない正解を探す
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
@@ -63,7 +66,7 @@ function App() {
                         store.toggleOpponentSelection(next);
                     }
                 } else {
-                    // 全部選び終わったら確認ボタンを押す（スコアアップ & リセット）
+                    // 全部選び終わったら確認ボタンを押す
                     if (Math.random() > 0.5) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
@@ -98,14 +101,13 @@ function App() {
                         break;
                     case 'GAME_START':
                         startGame(msg.payload.target, msg.payload.images);
-                        setMyScore(0); // リセットしないと前のスコアが残る可能性あり
+                        setMyScore(0);
                         break;
                     case 'OPPONENT_PROGRESS':
                         if (msg.payload.player_id !== playerId) {
                             updateOpponentScore(msg.payload.correct_count);
                             resetOpponentSelections();
                         } else {
-                            // 自分が正解した場合
                             setMyScore(msg.payload.correct_count);
                             resetMySelections();
                         }
@@ -153,11 +155,8 @@ function App() {
         }));
     };
 
-    // 画像クリック（選択のみ）
     const handleImageClick = (index: number) => {
         toggleMySelection(index);
-
-        // オンラインの場合は相手に選択状況を見せる（リアルタイム演出）
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
                 type: 'SELECT_IMAGE',
@@ -166,13 +165,10 @@ function App() {
         }
     };
 
-    // 確認ボタンクリック（判定）
     const handleVerify = () => {
         if (gameMode === 'CPU') {
-            // ローカル判定
-            const correctIndices = images
-                .map((img, idx) => CPU_CORRECT_IMAGES.includes(img) ? idx : -1)
-                .filter(idx => idx !== -1);
+            // ローカル動的判定
+            const correctIndices = getCorrectIndices(images, target);
 
             const isCorrect =
                 mySelections.length === correctIndices.length &&
@@ -181,14 +177,10 @@ function App() {
             if (isCorrect) {
                 setMyScore(prev => prev + 1);
                 resetMySelections();
-                // CPUモードでは画像シャッフルは簡易的に行わないか、リロードさせる
-                // ここでは簡易的に選択解除のみ
             } else {
-                // 不正解演出（選択リセット）
                 resetMySelections();
             }
         } else {
-            // サーバーへ判定依頼
             sendMessage(JSON.stringify({
                 type: 'VERIFY',
                 payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
@@ -379,7 +371,6 @@ function App() {
                                                     onClick={() => handleImageClick(idx)}
                                                     className="relative w-full h-full cursor-pointer overflow-hidden group"
                                                 >
-                                                    {/* 画像本体：選択時は縮小して枠線を見せる */}
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
                                                         <img
                                                             src={img}
@@ -388,7 +379,6 @@ function App() {
                                                         />
                                                     </div>
 
-                                                    {/* 選択時のチェックマーク（reCAPTCHA風） */}
                                                     {mySelections.includes(idx) && (
                                                         <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-1 m-1 shadow-md z-10">
                                                             <svg className="w-4 h-4 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
