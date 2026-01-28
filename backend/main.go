@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,15 +54,23 @@ type GameResultPayload struct {
 	Message  string `json:"message"`
 }
 
+// 追加: 部屋割り当て通知用
+type RoomAssignedPayload struct {
+	RoomID   string `json:"room_id"`
+	PlayerID string `json:"player_id"`
+}
+
 var (
-	scores      = make(map[string]int)
-	roomImages  = make(map[string][]string)
-	roomTargets = make(map[string]string)
-	scoreMu     sync.Mutex
-	upgrader    = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	clients     = make(map[*websocket.Conn]string)
-	rooms       = make(map[string]map[*websocket.Conn]bool)
-	mu          sync.Mutex
+	scores        = make(map[string]int)
+	roomImages    = make(map[string][]string)
+	roomTargets   = make(map[string]string)
+	scoreMu       sync.Mutex
+	upgrader      = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	clients       = make(map[*websocket.Conn]string)
+	rooms         = make(map[string]map[*websocket.Conn]bool)
+	mu            sync.Mutex
+	waitingRoomID string     // 追加: ランダムマッチ待機中の部屋ID
+	matchMu       sync.Mutex // 追加: マッチング制御用ロック
 )
 
 func init() {
@@ -92,6 +101,13 @@ func handleWebSocket(c echo.Context) error {
 					delete(rooms, rid)
 					delete(roomImages, rid)
 					delete(roomTargets, rid)
+					
+					// もし待機中の部屋から人がいなくなったら待機IDもクリア
+					matchMu.Lock()
+					if waitingRoomID == rid {
+						waitingRoomID = ""
+					}
+					matchMu.Unlock()
 				}
 			}
 		}
@@ -115,22 +131,50 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return
 		}
+
+		actualRoomID := p.RoomID
+
+		// ランダムマッチのロジック
+		if p.RoomID == "RANDOM" {
+			matchMu.Lock()
+			if waitingRoomID == "" {
+				// 待機部屋がない場合、新しく作る
+				waitingRoomID = "ROOM_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+			}
+			actualRoomID = waitingRoomID
+			matchMu.Unlock()
+		}
+
 		mu.Lock()
 		clients[ws] = p.PlayerID
-		if rooms[p.RoomID] == nil {
-			rooms[p.RoomID] = make(map[*websocket.Conn]bool)
+		if rooms[actualRoomID] == nil {
+			rooms[actualRoomID] = make(map[*websocket.Conn]bool)
 		}
-		rooms[p.RoomID][ws] = true
-		roomSize := len(rooms[p.RoomID])
+		rooms[actualRoomID][ws] = true
+		roomSize := len(rooms[actualRoomID])
 		mu.Unlock()
 
+		// クライアントに確定した部屋IDを通知
+		assigned := RoomAssignedPayload{RoomID: actualRoomID, PlayerID: p.PlayerID}
+		b, _ := json.Marshal(assigned)
+		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
+
 		if roomSize == 2 {
+			// 2人揃ったらランダムマッチの待機部屋をクリア（次のペアのために）
+			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
+				matchMu.Lock()
+				if waitingRoomID == actualRoomID {
+					waitingRoomID = ""
+				}
+				matchMu.Unlock()
+			}
+
 			scoreMu.Lock()
 			for _, pid := range clients {
-				scores[pid] = 0
+				scores[pid] = 0 // スコア初期化
 			}
 			scoreMu.Unlock()
-			sendNewPattern(p.RoomID)
+			sendNewPattern(actualRoomID)
 		} else {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		}
@@ -157,7 +201,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 動的判定ロジック
 		searchKey := strings.ToLower(currentTarget)
 		if searchKey == "traffic light" {
 			searchKey = "shingouki"
@@ -203,15 +246,12 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				b, _ := json.Marshal(prog)
 				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
 				sendNewPattern(p.RoomID)
-			} else {
-				// 不正解時は何もしない（クライアント側は選択維持）
 			}
 		}
 	}
 }
 
 func sendNewPattern(roomID string) {
-	// タマネギを追加
 	allImages := []string{
 		"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
 		"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",

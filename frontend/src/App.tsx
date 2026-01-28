@@ -92,6 +92,13 @@ function App() {
             try {
                 const msg = JSON.parse(lastMessage.data);
                 switch (msg.type) {
+                    // 追加: サーバーから確定した部屋IDを受け取る
+                    case 'ROOM_ASSIGNED':
+                        setRoomInfo(msg.payload.room_id, playerId);
+                        if (gameState === 'LOGIN') {
+                            setGameState('WAITING');
+                        }
+                        break;
                     case 'STATUS_UPDATE':
                         setGameState('WAITING');
                         break;
@@ -121,7 +128,7 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode]);
+    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo]);
 
     const startCpuGame = () => {
         setGameMode('CPU');
@@ -133,9 +140,11 @@ function App() {
 
     const joinRandom = () => {
         setGameMode('ONLINE');
-        const randomRoom = 'PUB_' + Math.floor(Math.random() * 5);
-        setInputRoom(randomRoom);
-        joinRoomInternal(randomRoom);
+        // RANDOM という特別なIDを送り、サーバー側で空き部屋に割り振ってもらう
+        sendMessage(JSON.stringify({
+            type: 'JOIN_ROOM',
+            payload: { room_id: "RANDOM", player_id: playerId }
+        }));
     };
 
     const joinFriend = () => {
@@ -164,7 +173,6 @@ function App() {
 
     const handleVerify = () => {
         if (gameMode === 'CPU') {
-            // ローカル動的判定
             const correctIndices = getCorrectIndices(images, target);
 
             const isCorrect =
@@ -174,11 +182,10 @@ function App() {
             if (isCorrect) {
                 setMyScore(prev => prev + 1);
                 resetMySelections();
-                // 正解したら次の問題へランダム更新
                 const nextProb = generateCpuProblem();
                 updatePattern(nextProb.target, nextProb.images);
             } else {
-                // 不正解時は何もしない（選択状態維持、画像そのまま）
+                // 不正解時は何もしない
             }
         } else {
             sendMessage(JSON.stringify({
