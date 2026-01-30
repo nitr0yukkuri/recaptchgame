@@ -429,13 +429,14 @@ function App() {
                                                 <div
                                                     key={idx}
                                                     onClick={() => handleImageClick(idx)}
-                                                    className="relative w-full h-full cursor-pointer overflow-hidden group"
+                                                    className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100" // bg-gray-100を追加し、画像ロード前も枠が見えるように
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
+                                                        {/* 変更: object-cover と w-full h-full でサイズ統一を強制 */}
                                                         <img
                                                             src={img}
                                                             alt="captcha"
-                                                            className="w-full h-full object-cover"
+                                                            className="w-full h-full object-cover block"
                                                         />
                                                     </div>
 
@@ -474,7 +475,8 @@ function App() {
                                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
-                                                        <img src={img} className="w-full h-full object-cover" />
+                                                        {/* 変更: 相手側の画像も object-cover で統一 */}
+                                                        <img src={img} className="w-full h-full object-cover block" />
                                                     </div>
                                                     {opponentSelections.includes(idx) && (
                                                         <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">
