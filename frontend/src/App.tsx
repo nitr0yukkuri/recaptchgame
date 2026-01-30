@@ -7,28 +7,55 @@ import { useGameStore, ObstructionType } from './store';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPUモード用: 全画像プール（追加分を含む）
+// CPUモード用: 全画像プール
 const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
     '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
-    '/images/kaidan0.jpg', '/images/kaidan1.jpg', '/images/kaidan2.jpg', // 追加
-    '/images/shoukasen0.jpg', '/images/shoukasen1.jpg', '/images/shoukasen2.jpg', // 追加
+    '/images/kaidan0.jpg', '/images/kaidan1.jpg', '/images/kaidan2.jpg',
+    '/images/shoukasen0.jpg', '/images/shoukasen1.jpg', '/images/shoukasen2.jpg',
     '/images/tamanegi5.png',
 ];
 
 // ヘルパー: 新しいCPU問題を生成（ランダム）
 const generateCpuProblem = () => {
-    const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
-    // ターゲットにお題を追加
+    // お題をランダムに決定
     const targets = ['車', '信号機', '階段', '消火栓'];
     const newTarget = targets[Math.floor(Math.random() * targets.length)];
-    return { target: newTarget, images: shuffledImages };
+
+    let searchKey = '';
+    if (newTarget === '車') searchKey = 'car';
+    else if (newTarget === '信号機') searchKey = 'shingouki';
+    else if (newTarget === '階段') searchKey = 'kaidan';
+    else if (newTarget === '消火栓') searchKey = 'shoukasen';
+
+    // 画像を正解とそれ以外に分類
+    const corrects = ALL_CPU_IMAGES.filter(img => img.toLowerCase().includes(searchKey));
+    const others = ALL_CPU_IMAGES.filter(img => !img.toLowerCase().includes(searchKey));
+
+    // シャッフル
+    const shuffledCorrects = [...corrects].sort(() => Math.random() - 0.5);
+    const shuffledOthers = [...others].sort(() => Math.random() - 0.5);
+
+    // 最低3枚の正解画像を選ぶ
+    const count = Math.min(3, shuffledCorrects.length);
+    const selected = shuffledCorrects.slice(0, count);
+
+    // 残りを埋める候補（選ばれなかった正解画像 + 不正解画像）
+    const remainingCandidates = [...shuffledOthers, ...shuffledCorrects.slice(count)].sort(() => Math.random() - 0.5);
+
+    // 9枚になるまで追加
+    const finalImages = [...selected, ...remainingCandidates.slice(0, 9 - selected.length)];
+
+    return {
+        target: newTarget,
+        // 最後に配置をランダムにする
+        images: finalImages.sort(() => Math.random() - 0.5)
+    };
 };
 
 // ヘルパー: 正解インデックスを動的に計算
 const getCorrectIndices = (imgs: string[], tgt: string) => {
     let searchKey = '';
-    // お題に対応するファイル名の一部をマッピング
     if (tgt === '車') searchKey = 'car';
     else if (tgt === '信号機') searchKey = 'shingouki';
     else if (tgt === '階段') searchKey = 'kaidan';

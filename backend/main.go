@@ -88,16 +88,16 @@ var (
 	matchMu       sync.Mutex
 )
 
-// 画像プール（追加分を含む）
+// 画像プール
 var allImages = []string{
 	"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
 	"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
-	"/images/kaidan0.jpg", "/images/kaidan1.jpg", "/images/kaidan2.jpg", // 追加
-	"/images/shoukasen0.jpg", "/images/shoukasen1.jpg", "/images/shoukasen2.jpg", // 追加
+	"/images/kaidan0.jpg", "/images/kaidan1.jpg", "/images/kaidan2.jpg",
+	"/images/shoukasen0.jpg", "/images/shoukasen1.jpg", "/images/shoukasen2.jpg",
 	"/images/tamanegi5.png",
 }
 
-// ターゲット（追加分を含む）
+// ターゲット
 var targets = []string{"車", "信号機", "階段", "消火栓"}
 var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT"}
 
@@ -235,7 +235,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 正解判定ロジック（追加分対応）
+		// 正解判定ロジック
 		searchKey := ""
 		switch state.Target {
 		case "車":
@@ -321,12 +321,59 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func generateProblem() (string, []string) {
-	rand.Shuffle(len(allImages), func(i, j int) {
-		allImages[i], allImages[j] = allImages[j], allImages[i]
-	})
-	selected := make([]string, 9)
-	copy(selected, allImages[:9])
+	// お題を先に決定
 	target := targets[rand.Intn(len(targets))]
+	searchKey := ""
+	switch target {
+	case "車":
+		searchKey = "car"
+	case "信号機":
+		searchKey = "shingouki"
+	case "階段":
+		searchKey = "kaidan"
+	case "消火栓":
+		searchKey = "shoukasen"
+	}
+
+	var corrects []string
+	var others []string
+
+	// 画像を正解とそれ以外に分類
+	for _, img := range allImages {
+		if strings.Contains(strings.ToLower(img), searchKey) {
+			corrects = append(corrects, img)
+		} else {
+			others = append(others, img)
+		}
+	}
+
+	rand.Shuffle(len(corrects), func(i, j int) { corrects[i], corrects[j] = corrects[j], corrects[i] })
+	rand.Shuffle(len(others), func(i, j int) { others[i], others[j] = others[j], others[i] })
+
+	selected := []string{}
+	
+	// 最低3枚の正解画像を選ぶ（正解画像が3枚未満の場合はあるだけ選ぶ）
+	correctCount := 3
+	if len(corrects) < 3 {
+		correctCount = len(corrects)
+	}
+	selected = append(selected, corrects[:correctCount]...)
+
+	// 残りの枠を埋める候補（残った正解画像 + 不正解画像）
+	remaining := append(others, corrects[correctCount:]...)
+	rand.Shuffle(len(remaining), func(i, j int) { remaining[i], remaining[j] = remaining[j], remaining[i] })
+
+	// 9枚になるまで補充
+	needed := 9 - len(selected)
+	if len(remaining) < needed {
+		selected = append(selected, remaining...)
+	} else {
+		selected = append(selected, remaining[:needed]...)
+	}
+
+	// 最後にシャッフルして配置をランダムに
+	rand.Shuffle(len(selected), func(i, j int) { selected[i], selected[j] = selected[j], selected[i] })
+
 	return target, selected
 }
 
