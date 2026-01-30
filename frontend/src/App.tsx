@@ -155,32 +155,26 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
-                        // 自分のお題と画像、相手の初期画像を受け取る
                         startGame(msg.payload.target, msg.payload.images);
-                        // 相手の画像は cpuImages として管理 (RIVAL VIEW用)
                         if (msg.payload.opponent_images) {
                             updateCpuPattern("", msg.payload.opponent_images);
                         }
                         setMyScore(0);
                         break;
 
-                    // 自分が正解したとき（新しい問題が来る）
                     case 'UPDATE_PATTERN':
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
-                        // 正解演出
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
                         setTimeout(() => setFeedback(null), 1000);
                         break;
 
-                    // 相手が正解したとき（相手の画像とスコアが更新される）
                     case 'OPPONENT_UPDATE':
                         updateCpuPattern("", msg.payload.images);
                         updateOpponentScore(msg.payload.score);
                         resetOpponentSelections();
                         break;
 
-                    // 相手から妨害されたとき
                     case 'OBSTRUCTION':
                         setPlayerEffect(msg.payload.effect as ObstructionType);
                         break;
@@ -260,7 +254,6 @@ function App() {
                 setFeedback('CORRECT');
                 setTimeout(() => setFeedback(null), 1000);
 
-                // コンボ計算と妨害発動
                 const newCombo = playerCombo + 1;
                 setPlayerCombo(newCombo);
                 if (newCombo >= 2) {
@@ -273,11 +266,9 @@ function App() {
             } else {
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
-                // 間違えたらコンボリセット
                 setPlayerCombo(0);
             }
         } else {
-            // オンラインの場合、選択情報を送るだけ（判定はサーバー）
             sendMessage(JSON.stringify({
                 type: 'VERIFY',
                 payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
@@ -298,7 +289,7 @@ function App() {
         setMyScore(0);
     };
 
-    const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages; // オンラインもcpuImages(相手画像)を使用
+    const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
     // Framer Motion アニメーション定義
     const obstructionVariants: Variants = {
@@ -521,10 +512,11 @@ function App() {
                                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
+                                                        {/* 画像のサイズ統一: object-cover と aspect-square で強制的に正方形にトリミング */}
                                                         <img
                                                             src={img}
                                                             alt="captcha"
-                                                            className="w-full h-full object-cover block"
+                                                            className="w-full h-full object-cover aspect-square block"
                                                         />
                                                     </div>
 
@@ -569,7 +561,8 @@ function App() {
                                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
-                                                        <img src={img} className="w-full h-full object-cover block" />
+                                                        {/* 相手の画像もサイズ統一: object-cover と aspect-square */}
+                                                        <img src={img} className="w-full h-full object-cover aspect-square block" />
                                                     </div>
                                                     {opponentSelections.includes(idx) && (
                                                         <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">
