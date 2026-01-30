@@ -7,25 +7,32 @@ import { useGameStore, ObstructionType } from './store';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPUモード用: 全画像プール
+// CPUモード用: 全画像プール（追加分を含む）
 const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
     '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
+    '/images/kaidan0.jpg', '/images/kaidan1.jpg', '/images/kaidan2.jpg', // 追加
+    '/images/shoukasen0.jpg', '/images/shoukasen1.jpg', '/images/shoukasen2.jpg', // 追加
     '/images/tamanegi5.png',
 ];
 
 // ヘルパー: 新しいCPU問題を生成（ランダム）
 const generateCpuProblem = () => {
     const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
-    const newTarget = Math.random() > 0.5 ? '車' : '信号機';
+    // ターゲットにお題を追加
+    const targets = ['車', '信号機', '階段', '消火栓'];
+    const newTarget = targets[Math.floor(Math.random() * targets.length)];
     return { target: newTarget, images: shuffledImages };
 };
 
 // ヘルパー: 正解インデックスを動的に計算
 const getCorrectIndices = (imgs: string[], tgt: string) => {
     let searchKey = '';
+    // お題に対応するファイル名の一部をマッピング
     if (tgt === '車') searchKey = 'car';
     else if (tgt === '信号機') searchKey = 'shingouki';
+    else if (tgt === '階段') searchKey = 'kaidan';
+    else if (tgt === '消火栓') searchKey = 'shoukasen';
     else if (tgt === 'TRAFFIC LIGHT') searchKey = 'shingouki';
     else searchKey = tgt.toLowerCase();
 

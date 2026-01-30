@@ -88,14 +88,17 @@ var (
 	matchMu       sync.Mutex
 )
 
-// 画像プール
+// 画像プール（追加分を含む）
 var allImages = []string{
 	"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
 	"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
+	"/images/kaidan0.jpg", "/images/kaidan1.jpg", "/images/kaidan2.jpg", // 追加
+	"/images/shoukasen0.jpg", "/images/shoukasen1.jpg", "/images/shoukasen2.jpg", // 追加
 	"/images/tamanegi5.png",
 }
 
-var targets = []string{"車", "信号機"}
+// ターゲット（追加分を含む）
+var targets = []string{"車", "信号機", "階段", "消火栓"}
 var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT"}
 
 func init() {
@@ -125,7 +128,7 @@ func handleWebSocket(c echo.Context) error {
 		for rid, conns := range rooms {
 			if _, ok := conns[ws]; ok {
 				delete(conns, ws)
-				// プレイヤー状態も削除（必要なら）
+				// プレイヤー状態も削除
 				if states, okState := roomStates[rid]; okState && exists {
 					delete(states, playerID)
 				}
@@ -181,7 +184,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 		rooms[actualRoomID][ws] = true
 		
-		// プレイヤー状態初期化
 		roomStates[actualRoomID][p.PlayerID] = &PlayerState{
 			Score: 0,
 			Combo: 0,
@@ -202,7 +204,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				}
 				matchMu.Unlock()
 			}
-			// ゲーム開始：全員にそれぞれの問題を配る
 			startGame(actualRoomID)
 		} else {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
@@ -234,12 +235,17 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 正解判定
+		// 正解判定ロジック（追加分対応）
 		searchKey := ""
-		if state.Target == "車" {
+		switch state.Target {
+		case "車":
 			searchKey = "car"
-		} else if state.Target == "信号機" {
+		case "信号機":
 			searchKey = "shingouki"
+		case "階段":
+			searchKey = "kaidan"
+		case "消火栓":
+			searchKey = "shoukasen"
 		}
 
 		correctIndices := []int{}
@@ -273,7 +279,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			currentCombo := state.Combo
 			mu.Unlock()
 
-			// 勝利判定
 			if currentScore >= 5 {
 				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
 				b, _ := json.Marshal(res)
@@ -281,27 +286,23 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				return
 			}
 
-			// 新しい問題を生成
 			newTarget, newImages := generateProblem()
 			mu.Lock()
 			state.Target = newTarget
 			state.Images = newImages
 			mu.Unlock()
 
-			// 1. 自分に新しい画像を通知
 			updateMy := UpdatePatternPayload{Target: newTarget, Images: newImages}
 			bMy, _ := json.Marshal(updateMy)
 			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
 
-			// 2. 相手に「敵の画像更新＆スコア更新」を通知
 			updateOpp := OpponentUpdatePayload{Images: newImages, Score: currentScore}
 			bOpp, _ := json.Marshal(updateOpp)
 			broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 
-			// 3. コンボ判定（2連以上）なら相手に妨害送信
 			if currentCombo >= 2 {
 				mu.Lock()
-				state.Combo = 0 // コンボ消費
+				state.Combo = 0
 				mu.Unlock()
 
 				effect := effects[rand.Intn(len(effects))]
@@ -311,9 +312,8 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			}
 
 		} else {
-			// 不正解
 			mu.Lock()
-			state.Combo = 0 // コンボリセット
+			state.Combo = 0
 			mu.Unlock()
 			ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 		}
@@ -337,23 +337,19 @@ func startGame(roomID string) {
 	conns := rooms[roomID]
 	states := roomStates[roomID]
 	
-	// 各プレイヤーの問題を生成
 	for pid, state := range states {
 		t, i := generateProblem()
 		state.Target = t
 		state.Images = i
 		state.Score = 0
 		state.Combo = 0
-		// マップ内のポインタは更新済みだが念のため
 		states[pid] = state
 	}
 
-	// 各クライアントに「自分の問題」と「相手の初期画像」を送る
 	for ws := range conns {
 		myID := clients[ws]
 		myState := states[myID]
 		
-		// 相手を探す
 		var opponentImages []string
 		for pid, s := range states {
 			if pid != myID {
@@ -382,7 +378,6 @@ func broadcastToRoom(roomID string, msg Message) {
 	}
 }
 
-// 自分以外のプレイヤーに送る
 func broadcastToOpponent(roomID string, myPlayerID string, msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
