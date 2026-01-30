@@ -99,7 +99,9 @@ var allImages = []string{
 
 // ターゲット
 var targets = []string{"車", "信号機", "階段", "消火栓"}
-var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT"}
+
+// 変更点: ONION_RAIN を追加
+var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT", "ONION_RAIN"}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -321,7 +323,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 func generateProblem() (string, []string) {
-	// お題を先に決定
 	target := targets[rand.Intn(len(targets))]
 	searchKey := ""
 	switch target {
@@ -338,7 +339,6 @@ func generateProblem() (string, []string) {
 	var corrects []string
 	var others []string
 
-	// 画像を正解とそれ以外に分類
 	for _, img := range allImages {
 		if strings.Contains(strings.ToLower(img), searchKey) {
 			corrects = append(corrects, img)
@@ -352,18 +352,15 @@ func generateProblem() (string, []string) {
 
 	selected := []string{}
 	
-	// 最低3枚の正解画像を選ぶ（正解画像が3枚未満の場合はあるだけ選ぶ）
 	correctCount := 3
 	if len(corrects) < 3 {
 		correctCount = len(corrects)
 	}
 	selected = append(selected, corrects[:correctCount]...)
 
-	// 残りの枠を埋める候補（残った正解画像 + 不正解画像）
 	remaining := append(others, corrects[correctCount:]...)
 	rand.Shuffle(len(remaining), func(i, j int) { remaining[i], remaining[j] = remaining[j], remaining[i] })
 
-	// 9枚になるまで補充
 	needed := 9 - len(selected)
 	if len(remaining) < needed {
 		selected = append(selected, remaining...)
@@ -371,7 +368,6 @@ func generateProblem() (string, []string) {
 		selected = append(selected, remaining[:needed]...)
 	}
 
-	// 最後にシャッフルして配置をランダムに
 	rand.Shuffle(len(selected), func(i, j int) { selected[i], selected[j] = selected[j], selected[i] })
 
 	return target, selected

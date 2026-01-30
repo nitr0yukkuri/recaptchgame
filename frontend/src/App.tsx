@@ -16,6 +16,46 @@ const ALL_CPU_IMAGES = [
     '/images/tamanegi5.png',
 ];
 
+// タマネギ画像のパス
+const ONION_IMAGE = '/images/tamanegi5.png';
+
+// タマネギ降下エフェクトコンポーネント（強化版）
+const OnionRain = () => {
+    // 変更: 数を100個に増やし、サイズと速度を強化
+    const onions = Array.from({ length: 100 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100, // %
+        delay: Math.random() * 2, // 秒
+        duration: 0.5 + Math.random() * 1.5, // 秒 (高速化)
+        size: 30 + Math.random() * 100, // px (30px〜130pxのランダムサイズ)
+    }));
+
+    return (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-50 rounded-sm">
+            {onions.map((o) => (
+                <motion.img
+                    key={o.id}
+                    src={ONION_IMAGE}
+                    initial={{ y: -150, opacity: 1, rotate: 0 }} // 初期位置を画面外上部に
+                    animate={{ y: 800, rotate: 720 }} // 落下距離を伸ばし、回転を激しく(720度)
+                    transition={{
+                        duration: o.duration,
+                        repeat: Infinity,
+                        delay: o.delay,
+                        ease: "linear"
+                    }}
+                    className="absolute object-contain opacity-100" // 変更: 不透明にして視界を遮る
+                    style={{
+                        left: `${o.left}%`,
+                        width: `${o.size}px`,
+                        height: `${o.size}px`
+                    }}
+                />
+            ))}
+        </div>
+    );
+};
+
 // ヘルパー: 新しいCPU問題を生成（ランダム）
 const generateCpuProblem = () => {
     // お題をランダムに決定
@@ -70,7 +110,7 @@ const getCorrectIndices = (imgs: string[], tgt: string) => {
 
 // ヘルパー: ランダムなお邪魔エフェクトを選択
 const getRandomObstruction = (): ObstructionType => {
-    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT'];
+    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN'];
     return effects[Math.floor(Math.random() * effects.length)];
 };
 
@@ -536,8 +576,11 @@ function App() {
                                     <motion.div
                                         variants={obstructionVariants}
                                         animate={playerEffect === 'SHAKE' || playerEffect === 'SPIN' ? playerEffect : 'NORMAL'}
-                                        className={`bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
+                                        className={`relative overflow-hidden bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
                                     >
+                                        {/* タマネギの雨エフェクト */}
+                                        {playerEffect === 'ONION_RAIN' && <OnionRain />}
+
                                         <div className="grid grid-cols-3 gap-1 w-full aspect-square">
                                             {images.map((img: string, idx: number) => (
                                                 <div
@@ -566,7 +609,7 @@ function App() {
                                         <div className="flex justify-center mt-2">
                                             <button
                                                 onClick={handleVerify}
-                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner"
+                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative"
                                             >
                                                 確認
                                             </button>
@@ -582,8 +625,12 @@ function App() {
                                     <motion.div
                                         variants={obstructionVariants}
                                         animate={opponentEffect === 'SHAKE' || opponentEffect === 'SPIN' ? opponentEffect : 'NORMAL'}
-                                        className={`bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
+                                        // 変更点: relative と overflow-hidden を追加
+                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
                                     >
+                                        {/* 相手側のタマネギの雨エフェクト */}
+                                        {opponentEffect === 'ONION_RAIN' && <OnionRain />}
+
                                         <div className="flex items-center gap-2 mb-2 w-full justify-center">
                                             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                             <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
