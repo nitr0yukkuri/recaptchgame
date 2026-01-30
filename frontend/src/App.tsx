@@ -7,17 +7,38 @@ import { useGameStore } from './store';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// CPUモード用: 全画像プール（タマネギ含む）
+// CPUモード用: 全画像プール
 const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
     '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
     '/images/tamanegi5.png',
 ];
 
+// ヘルパー: 新しいCPU問題を生成（ランダム）
+const generateCpuProblem = () => {
+    const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
+    const newTarget = Math.random() > 0.5 ? 'CAR' : 'TRAFFIC LIGHT';
+    return { target: newTarget, images: shuffledImages };
+};
+
+// ヘルパー: 正解インデックスを動的に計算
+const getCorrectIndices = (imgs: string[], tgt: string) => {
+    let searchKey = tgt.toLowerCase();
+    if (searchKey === 'traffic light') searchKey = 'shingouki';
+
+    return imgs
+        .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
+        .filter(idx => idx !== -1);
+};
+
 function App() {
     const {
-        gameState, roomId, playerId, target, images, opponentScore, opponentSelections, mySelections,
-        setGameState, setRoomInfo, startGame, updatePattern, updateOpponentScore, toggleOpponentSelection,
+        gameState, roomId, playerId, target, images,
+        cpuTarget, cpuImages, // 追加
+        opponentScore, opponentSelections, mySelections,
+        setGameState, setRoomInfo, startGame, updatePattern,
+        updateCpuPattern, updatePlayerPattern, // 追加
+        updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
         feedback, setFeedback
     } = useGameStore();
@@ -32,23 +53,6 @@ function App() {
         shouldReconnect: () => true,
     });
 
-    // ヘルパー: 新しいCPU問題を生成（ランダム）
-    const generateCpuProblem = () => {
-        const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
-        const newTarget = Math.random() > 0.5 ? 'CAR' : 'TRAFFIC LIGHT';
-        return { target: newTarget, images: shuffledImages };
-    };
-
-    // ヘルパー: 正解インデックスを動的に計算する関数
-    const getCorrectIndices = (imgs: string[], tgt: string) => {
-        let searchKey = tgt.toLowerCase();
-        if (searchKey === 'traffic light') searchKey = 'shingouki';
-
-        return imgs
-            .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
-            .filter(idx => idx !== -1);
-    };
-
     // CPU対戦ロジック（行動シミュレーション）
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
@@ -56,7 +60,8 @@ function App() {
                 const store = useGameStore.getState();
                 const currentSelections = store.opponentSelections;
 
-                const correctIndices = getCorrectIndices(store.images, store.target);
+                // 変更: CPUは自分専用の問題(cpuImages, cpuTarget)を見て考える
+                const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
                 if (remaining.length > 0) {
@@ -68,6 +73,10 @@ function App() {
                     if (Math.random() > 0.5) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
+
+                        // 変更: CPUが正解したら、CPUの問題だけを更新する
+                        const nextProb = generateCpuProblem();
+                        store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
                 }
             }, 800);
@@ -94,7 +103,6 @@ function App() {
             try {
                 const msg = JSON.parse(lastMessage.data);
                 switch (msg.type) {
-                    // 追加: サーバーから確定した部屋IDを受け取る
                     case 'ROOM_ASSIGNED':
                         setRoomInfo(msg.payload.room_id, playerId);
                         if (gameState === 'LOGIN') {
@@ -128,7 +136,6 @@ function App() {
                     case 'GAME_FINISHED':
                         endGame(msg.payload.winner_id);
                         break;
-                    // 不正解演出
                     case 'VERIFY_FAILED':
                         setFeedback('WRONG');
                         setTimeout(() => setFeedback(null), 1000);
@@ -144,13 +151,19 @@ function App() {
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
-        const prob = generateCpuProblem();
-        startGame(prob.target, prob.images);
+
+        // 自分用の問題
+        const myProb = generateCpuProblem();
+        // CPU用の問題
+        const cpuProb = generateCpuProblem();
+
+        // 両方をセットして開始
+        startGame(myProb.target, myProb.images);
+        updateCpuPattern(cpuProb.target, cpuProb.images);
     };
 
     const joinRandom = () => {
         setGameMode('ONLINE');
-        // RANDOM という特別なIDを送り、サーバー側で空き部屋に割り振ってもらう
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
             payload: { room_id: "RANDOM", player_id: playerId }
@@ -194,8 +207,10 @@ function App() {
                 resetMySelections();
                 setFeedback('CORRECT');
                 setTimeout(() => setFeedback(null), 1000);
+
+                // 変更: 自分が正解したら、自分の問題だけを更新する（CPUはそのまま）
                 const nextProb = generateCpuProblem();
-                updatePattern(nextProb.target, nextProb.images);
+                updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
@@ -220,6 +235,9 @@ function App() {
         setInputRoom('');
         setMyScore(0);
     };
+
+    // 画面表示用の変数を準備（CPUモードならCPU用の画像を、オンラインなら共通画像を）
+    const rivalImages = gameMode === 'CPU' ? cpuImages : images;
 
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center p-2 font-sans text-gray-800 overflow-hidden relative">
@@ -450,7 +468,8 @@ function App() {
                                             <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
                                         </div>
                                         <div className="grid grid-cols-3 gap-0.5 w-32 md:w-full opacity-90">
-                                            {images.map((img: string, idx: number) => (
+                                            {/* 変更: rivalImages変数を表示 */}
+                                            {rivalImages.map((img: string, idx: number) => (
                                                 <div
                                                     key={`opp-${idx}`}
                                                     className="relative aspect-square overflow-hidden bg-gray-300"
