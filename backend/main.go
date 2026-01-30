@@ -246,6 +246,9 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				b, _ := json.Marshal(prog)
 				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
 				sendNewPattern(p.RoomID)
+			} else {
+				// 不正解の場合、送信者に失敗通知を送る
+				ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 			}
 		}
 	}

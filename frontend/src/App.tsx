@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from './store';
 
+// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
 // CPUモード用: 全画像プール（タマネギ含む）
@@ -17,7 +18,8 @@ function App() {
     const {
         gameState, roomId, playerId, target, images, opponentScore, opponentSelections, mySelections,
         setGameState, setRoomInfo, startGame, updatePattern, updateOpponentScore, toggleOpponentSelection,
-        resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner
+        resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
+        feedback, setFeedback
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
@@ -113,6 +115,9 @@ function App() {
                         } else {
                             setMyScore(msg.payload.correct_count);
                             resetMySelections();
+                            // 正解演出
+                            setFeedback('CORRECT');
+                            setTimeout(() => setFeedback(null), 1000);
                         }
                         break;
                     case 'OPPONENT_SELECT':
@@ -123,12 +128,17 @@ function App() {
                     case 'GAME_FINISHED':
                         endGame(msg.payload.winner_id);
                         break;
+                    // 不正解演出
+                    case 'VERIFY_FAILED':
+                        setFeedback('WRONG');
+                        setTimeout(() => setFeedback(null), 1000);
+                        break;
                 }
             } catch (e) {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo]);
+    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback]);
 
     const startCpuGame = () => {
         setGameMode('CPU');
@@ -182,10 +192,13 @@ function App() {
             if (isCorrect) {
                 setMyScore(prev => prev + 1);
                 resetMySelections();
+                setFeedback('CORRECT');
+                setTimeout(() => setFeedback(null), 1000);
                 const nextProb = generateCpuProblem();
                 updatePattern(nextProb.target, nextProb.images);
             } else {
-                // 不正解時は何もしない
+                setFeedback('WRONG');
+                setTimeout(() => setFeedback(null), 1000);
             }
         } else {
             sendMessage(JSON.stringify({
@@ -212,6 +225,28 @@ function App() {
         <div className="h-screen w-screen bg-white flex flex-col items-center p-2 font-sans text-gray-800 overflow-hidden relative">
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
+
+                {/* 正解・失敗演出のポップアップ */}
+                <AnimatePresence>
+                    {feedback && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+                        >
+                            {feedback === 'CORRECT' ? (
+                                <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
+                                    <svg className="w-40 h-40 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                </div>
+                            ) : (
+                                <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
+                                    <svg className="w-40 h-40 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                     <button

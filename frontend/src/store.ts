@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 export type GameState = 'LOGIN' | 'WAITING' | 'PLAYING' | 'RESULT';
+export type FeedbackType = 'CORRECT' | 'WRONG' | null;
 
 interface Store {
     gameState: GameState;
@@ -12,6 +13,7 @@ interface Store {
     opponentSelections: number[];
     mySelections: number[];
     winner: string | null;
+    feedback: FeedbackType;
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
     startGame: (target: string, images: string[]) => void;
@@ -22,6 +24,7 @@ interface Store {
     toggleMySelection: (index: number) => void;
     resetMySelections: () => void;
     endGame: (winner: string) => void;
+    setFeedback: (feedback: FeedbackType) => void;
 }
 
 export const useGameStore = create<Store>((set) => ({
@@ -34,6 +37,7 @@ export const useGameStore = create<Store>((set) => ({
     opponentSelections: [],
     mySelections: [],
     winner: null,
+    feedback: null,
     setGameState: (state) => set({ gameState: state }),
     setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),
     startGame: (target, images) => set({
@@ -43,7 +47,8 @@ export const useGameStore = create<Store>((set) => ({
         opponentScore: 0,
         opponentSelections: [],
         mySelections: [],
-        winner: null
+        winner: null,
+        feedback: null
     }),
     updatePattern: (target, images) => set({ target, images, opponentSelections: [], mySelections: [] }),
     updateOpponentScore: (score) => set({ opponentScore: score }),
@@ -62,4 +67,5 @@ export const useGameStore = create<Store>((set) => ({
     }),
     resetMySelections: () => set({ mySelections: [] }),
     endGame: (winner) => set({ gameState: 'RESULT', winner }),
+    setFeedback: (feedback) => set({ feedback }),
 }));
