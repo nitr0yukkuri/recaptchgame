@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useGameStore } from './store';
+import { motion, AnimatePresence, Variants } from 'framer-motion'; // Variants追加
+import { useGameStore, ObstructionType } from './store'; // ObstructionType追加
 
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -17,18 +17,27 @@ const ALL_CPU_IMAGES = [
 // ヘルパー: 新しいCPU問題を生成（ランダム）
 const generateCpuProblem = () => {
     const shuffledImages = [...ALL_CPU_IMAGES].sort(() => Math.random() - 0.5).slice(0, 9);
-    const newTarget = Math.random() > 0.5 ? 'CAR' : 'TRAFFIC LIGHT';
+    const newTarget = Math.random() > 0.5 ? '車' : '信号機';
     return { target: newTarget, images: shuffledImages };
 };
 
 // ヘルパー: 正解インデックスを動的に計算
 const getCorrectIndices = (imgs: string[], tgt: string) => {
-    let searchKey = tgt.toLowerCase();
-    if (searchKey === 'traffic light') searchKey = 'shingouki';
+    let searchKey = '';
+    if (tgt === '車') searchKey = 'car';
+    else if (tgt === '信号機') searchKey = 'shingouki';
+    else if (tgt === 'TRAFFIC LIGHT') searchKey = 'shingouki';
+    else searchKey = tgt.toLowerCase();
 
     return imgs
         .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
         .filter(idx => idx !== -1);
+};
+
+// ヘルパー: ランダムなお邪魔エフェクトを選択
+const getRandomObstruction = (): ObstructionType => {
+    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT'];
+    return effects[Math.floor(Math.random() * effects.length)];
 };
 
 function App() {
@@ -40,7 +49,10 @@ function App() {
         updateCpuPattern, updatePlayerPattern,
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
-        feedback, setFeedback
+        feedback, setFeedback,
+        // 追加: コンボとお邪魔関連
+        playerCombo, opponentCombo, playerEffect, opponentEffect,
+        setPlayerCombo, setOpponentCombo, setPlayerEffect, setOpponentEffect
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
@@ -53,14 +65,34 @@ function App() {
         shouldReconnect: () => true,
     });
 
+    // お邪魔エフェクトの自動解除タイマー
+    useEffect(() => {
+        if (playerEffect) {
+            const timer = setTimeout(() => setPlayerEffect(null), 3000); // 3秒で解除
+            return () => clearTimeout(timer);
+        }
+    }, [playerEffect, setPlayerEffect]);
+
+    useEffect(() => {
+        if (opponentEffect) {
+            const timer = setTimeout(() => setOpponentEffect(null), 3000); // 3秒で解除
+            return () => clearTimeout(timer);
+        }
+    }, [opponentEffect, setOpponentEffect]);
+
+
     // CPU対戦ロジック（行動シミュレーション）
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             const interval = setInterval(() => {
                 const store = useGameStore.getState();
-                const currentSelections = store.opponentSelections;
 
-                // CPUは自分専用の問題(cpuImages, cpuTarget)を見て考える
+                // 妨害を受けている場合、50%の確率でCPUが行動不能（フリーズ）になる
+                if (store.opponentEffect) {
+                    if (Math.random() > 0.5) return;
+                }
+
+                const currentSelections = store.opponentSelections;
                 const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
@@ -74,7 +106,16 @@ function App() {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
 
-                        // CPUが正解したら、CPUの問題だけを更新する
+                        // コンボ計算
+                        const newCombo = store.opponentCombo + 1;
+                        store.setOpponentCombo(newCombo);
+
+                        // 2連続正解でプレイヤーにお邪魔攻撃
+                        if (newCombo >= 2) {
+                            store.setOpponentCombo(0);
+                            store.setPlayerEffect(getRandomObstruction());
+                        }
+
                         const nextProb = generateCpuProblem();
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
@@ -113,7 +154,10 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
-                        startGame(msg.payload.target, msg.payload.images);
+                        let displayTarget = msg.payload.target;
+                        if (displayTarget === 'CAR') displayTarget = '車';
+                        if (displayTarget === 'TRAFFIC LIGHT') displayTarget = '信号機';
+                        startGame(displayTarget, msg.payload.images);
                         setMyScore(0);
                         break;
                     case 'OPPONENT_PROGRESS':
@@ -123,7 +167,6 @@ function App() {
                         } else {
                             setMyScore(msg.payload.correct_count);
                             resetMySelections();
-                            // 正解演出
                             setFeedback('CORRECT');
                             setTimeout(() => setFeedback(null), 1000);
                         }
@@ -151,13 +194,8 @@ function App() {
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
-
-        // 自分用の問題
         const myProb = generateCpuProblem();
-        // CPU用の問題
         const cpuProb = generateCpuProblem();
-
-        // 両方をセットして開始
         startGame(myProb.target, myProb.images);
         updateCpuPattern(cpuProb.target, cpuProb.images);
     };
@@ -208,12 +246,21 @@ function App() {
                 setFeedback('CORRECT');
                 setTimeout(() => setFeedback(null), 1000);
 
-                // 自分が正解したら、自分の問題だけを更新する（CPUはそのまま）
+                // コンボ計算と妨害発動
+                const newCombo = playerCombo + 1;
+                setPlayerCombo(newCombo);
+                if (newCombo >= 2) {
+                    setPlayerCombo(0);
+                    setOpponentEffect(getRandomObstruction());
+                }
+
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
+                // 間違えたらコンボリセット
+                setPlayerCombo(0);
             }
         } else {
             sendMessage(JSON.stringify({
@@ -236,15 +283,22 @@ function App() {
         setMyScore(0);
     };
 
-    // 画面表示用の変数を準備（CPUモードならCPU用の画像を、オンラインなら共通画像を）
     const rivalImages = gameMode === 'CPU' ? cpuImages : images;
+
+    // Framer Motion アニメーション定義
+    const obstructionVariants: Variants = {
+        SHAKE: { x: [-10, 10, -10, 10, 0], transition: { repeat: Infinity, duration: 0.2 } },
+        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 1, ease: "linear" } },
+        BLUR: {},
+        INVERT: {},
+        NORMAL: { x: 0, rotate: 0 }
+    };
 
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center p-2 font-sans text-gray-800 overflow-hidden relative">
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
 
-                {/* 正解・失敗演出のポップアップ */}
                 <AnimatePresence>
                     {feedback && (
                         <motion.div
@@ -262,6 +316,20 @@ function App() {
                                     <svg className="w-40 h-40 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                                 </div>
                             )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* お邪魔発生時の通知ポップアップ */}
+                <AnimatePresence>
+                    {playerEffect && (
+                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-16 z-40 bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
+                            ⚠️ 妨害を受けています！ ({playerEffect})
+                        </motion.div>
+                    )}
+                    {opponentEffect && (
+                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-16 right-0 z-40 bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
+                            ⚔️ 妨害攻撃中！ ({opponentEffect})
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -312,7 +380,7 @@ function App() {
                                                 </li>
                                                 <li className="flex items-start gap-3">
                                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    5ポイント先取で勝利！
+                                                    2連続正解で相手を妨害！
                                                 </li>
                                             </ul>
                                         </div>
@@ -422,17 +490,22 @@ function App() {
 
                                 {/* 自分のセクション */}
                                 <div className="flex flex-col items-center w-full max-w-2xl">
-                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分</h3>
-                                    <div className="bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col">
+                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
+
+                                    {/* プレイヤーへの妨害エフェクト適用コンテナ */}
+                                    <motion.div
+                                        variants={obstructionVariants}
+                                        animate={playerEffect === 'SHAKE' || playerEffect === 'SPIN' ? playerEffect : 'NORMAL'}
+                                        className={`bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col transition-all duration-300 ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
+                                    >
                                         <div className="grid grid-cols-3 gap-1 w-full aspect-square">
                                             {images.map((img: string, idx: number) => (
                                                 <div
                                                     key={idx}
                                                     onClick={() => handleImageClick(idx)}
-                                                    className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100" // bg-gray-100を追加し、画像ロード前も枠が見えるように
+                                                    className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
-                                                        {/* 変更: object-cover と w-full h-full でサイズ統一を強制 */}
                                                         <img
                                                             src={img}
                                                             alt="captcha"
@@ -457,13 +530,19 @@ function App() {
                                                 確認
                                             </button>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 </div>
 
                                 {/* 相手のセクション */}
                                 <div className="w-full md:w-auto md:h-full flex flex-col justify-center items-center shrink-0">
-                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手</h3>
-                                    <div className="bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300">
+                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
+
+                                    {/* 相手への妨害エフェクト適用コンテナ */}
+                                    <motion.div
+                                        variants={obstructionVariants}
+                                        animate={opponentEffect === 'SHAKE' || opponentEffect === 'SPIN' ? opponentEffect : 'NORMAL'}
+                                        className={`bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 transition-all duration-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
+                                    >
                                         <div className="flex items-center gap-2 mb-2 w-full justify-center">
                                             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                             <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
@@ -475,7 +554,6 @@ function App() {
                                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
-                                                        {/* 変更: 相手側の画像も object-cover で統一 */}
                                                         <img src={img} className="w-full h-full object-cover block" />
                                                     </div>
                                                     {opponentSelections.includes(idx) && (
@@ -486,7 +564,7 @@ function App() {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 </div>
                             </div>
 
@@ -499,7 +577,7 @@ function App() {
                                 <div className="flex-1 mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
                                     <div
                                         className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
-                                        style={{ width: `${(opponentScore / 5) * 100}%` }}
+                                        style={{ width: `${(myScore / 5) * 100}%` }}
                                     ></div>
                                 </div>
                                 <div className="flex items-center gap-3">

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 
 export type GameState = 'LOGIN' | 'WAITING' | 'PLAYING' | 'RESULT';
 export type FeedbackType = 'CORRECT' | 'WRONG' | null;
+// お邪魔エフェクトの種類
+export type ObstructionType = 'SHAKE' | 'SPIN' | 'BLUR' | 'INVERT' | null;
 
 interface Store {
     gameState: GameState;
@@ -9,7 +11,6 @@ interface Store {
     playerId: string;
     target: string;
     images: string[];
-    // 追加: CPUモード用の独立した問題データ
     cpuTarget: string;
     cpuImages: string[];
 
@@ -18,12 +19,18 @@ interface Store {
     mySelections: number[];
     winner: string | null;
     feedback: FeedbackType;
+
+    // 追加: コンボとお邪魔エフェクトの状態管理
+    playerCombo: number;
+    opponentCombo: number;
+    playerEffect: ObstructionType;   // プレイヤーが受けているお邪魔
+    opponentEffect: ObstructionType; // 相手(CPU)が受けているお邪魔
+
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
     startGame: (target: string, images: string[]) => void;
     updatePattern: (target: string, images: string[]) => void;
 
-    // 追加: 個別に問題を更新するアクション
     updateCpuPattern: (target: string, images: string[]) => void;
     updatePlayerPattern: (target: string, images: string[]) => void;
 
@@ -34,6 +41,12 @@ interface Store {
     resetMySelections: () => void;
     endGame: (winner: string) => void;
     setFeedback: (feedback: FeedbackType) => void;
+
+    // 追加: コンボ・エフェクト操作用アクション
+    setPlayerCombo: (count: number) => void;
+    setOpponentCombo: (count: number) => void;
+    setPlayerEffect: (effect: ObstructionType) => void;
+    setOpponentEffect: (effect: ObstructionType) => void;
 }
 
 export const useGameStore = create<Store>((set) => ({
@@ -49,6 +62,13 @@ export const useGameStore = create<Store>((set) => ({
     mySelections: [],
     winner: null,
     feedback: null,
+
+    // 追加: 初期値
+    playerCombo: 0,
+    opponentCombo: 0,
+    playerEffect: null,
+    opponentEffect: null,
+
     setGameState: (state) => set({ gameState: state }),
     setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),
     startGame: (target, images) => set({
@@ -59,15 +79,15 @@ export const useGameStore = create<Store>((set) => ({
         opponentSelections: [],
         mySelections: [],
         winner: null,
-        feedback: null
+        feedback: null,
+        // ゲーム開始時にリセット
+        playerCombo: 0,
+        opponentCombo: 0,
+        playerEffect: null,
+        opponentEffect: null,
     }),
-    // オンライン用（両方の選択をリセット）
     updatePattern: (target, images) => set({ target, images, opponentSelections: [], mySelections: [] }),
-
-    // CPU用更新：CPUのターゲットと画像を更新し、CPUの選択のみリセット
     updateCpuPattern: (target, images) => set({ cpuTarget: target, cpuImages: images, opponentSelections: [] }),
-
-    // プレイヤー用更新（CPUモード）：自分のターゲットと画像を更新し、自分の選択のみリセット（相手の進行は邪魔しない）
     updatePlayerPattern: (target, images) => set({ target, images, mySelections: [] }),
 
     updateOpponentScore: (score) => set({ opponentScore: score }),
@@ -87,4 +107,10 @@ export const useGameStore = create<Store>((set) => ({
     resetMySelections: () => set({ mySelections: [] }),
     endGame: (winner) => set({ gameState: 'RESULT', winner }),
     setFeedback: (feedback) => set({ feedback }),
+
+    // 追加: 実装
+    setPlayerCombo: (count) => set({ playerCombo: count }),
+    setOpponentCombo: (count) => set({ opponentCombo: count }),
+    setPlayerEffect: (effect) => set({ playerEffect: effect }),
+    setOpponentEffect: (effect) => set({ opponentEffect: effect }),
 }));
