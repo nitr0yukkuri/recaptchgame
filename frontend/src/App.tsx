@@ -34,10 +34,10 @@ const getCorrectIndices = (imgs: string[], tgt: string) => {
 function App() {
     const {
         gameState, roomId, playerId, target, images,
-        cpuTarget, cpuImages, // 追加
+        cpuTarget, cpuImages,
         opponentScore, opponentSelections, mySelections,
         setGameState, setRoomInfo, startGame, updatePattern,
-        updateCpuPattern, updatePlayerPattern, // 追加
+        updateCpuPattern, updatePlayerPattern,
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
         feedback, setFeedback
@@ -60,7 +60,7 @@ function App() {
                 const store = useGameStore.getState();
                 const currentSelections = store.opponentSelections;
 
-                // 変更: CPUは自分専用の問題(cpuImages, cpuTarget)を見て考える
+                // CPUは自分専用の問題(cpuImages, cpuTarget)を見て考える
                 const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
@@ -74,7 +74,7 @@ function App() {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
 
-                        // 変更: CPUが正解したら、CPUの問題だけを更新する
+                        // CPUが正解したら、CPUの問題だけを更新する
                         const nextProb = generateCpuProblem();
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
@@ -208,7 +208,7 @@ function App() {
                 setFeedback('CORRECT');
                 setTimeout(() => setFeedback(null), 1000);
 
-                // 変更: 自分が正解したら、自分の問題だけを更新する（CPUはそのまま）
+                // 自分が正解したら、自分の問題だけを更新する（CPUはそのまま）
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
@@ -448,7 +448,7 @@ function App() {
                                             ))}
                                         </div>
                                         {/* 確認ボタン */}
-                                        <div className="flex justify-end mt-2">
+                                        <div className="flex justify-center mt-2">
                                             <button
                                                 onClick={handleVerify}
                                                 className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner"
@@ -468,7 +468,6 @@ function App() {
                                             <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
                                         </div>
                                         <div className="grid grid-cols-3 gap-0.5 w-32 md:w-full opacity-90">
-                                            {/* 変更: rivalImages変数を表示 */}
                                             {rivalImages.map((img: string, idx: number) => (
                                                 <div
                                                     key={`opp-${idx}`}
