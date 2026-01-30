@@ -20,15 +20,54 @@ type Message struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+// プレイヤー個別の状態管理
+type PlayerState struct {
+	Images []string
+	Target string
+	Score  int
+	Combo  int
+}
+
+// ペイロード定義
+type JoinRoomPayload struct {
+	RoomID   string `json:"room_id"`
+	PlayerID string `json:"player_id"`
+}
+
+type RoomAssignedPayload struct {
+	RoomID   string `json:"room_id"`
+	PlayerID string `json:"player_id"`
+}
+
 type VerifyPayload struct {
 	RoomID          string `json:"room_id"`
 	PlayerID        string `json:"player_id"`
 	SelectedIndices []int  `json:"selected_indices"`
 }
 
-type JoinRoomPayload struct {
-	RoomID   string `json:"room_id"`
-	PlayerID string `json:"player_id"`
+type GameStartPayload struct {
+	Target         string   `json:"target"`
+	Images         []string `json:"images"`
+	OpponentImages []string `json:"opponent_images"`
+}
+
+type UpdatePatternPayload struct {
+	Target string   `json:"target"`
+	Images []string `json:"images"`
+}
+
+type OpponentUpdatePayload struct {
+	Images []string `json:"images"`
+	Score  int      `json:"score"`
+}
+
+type ObstructionPayload struct {
+	Effect string `json:"effect"`
+}
+
+type GameResultPayload struct {
+	WinnerID string `json:"winner_id"`
+	Message  string `json:"message"`
 }
 
 type SelectImagePayload struct {
@@ -37,41 +76,27 @@ type SelectImagePayload struct {
 	ImageIndex int    `json:"image_index"`
 }
 
-type GameStartPayload struct {
-	ProblemID string   `json:"problem_id"`
-	Images    []string `json:"images"`
-	Target    string   `json:"target"`
-}
-
-type OpponentProgressPayload struct {
-	PlayerID     string `json:"player_id"`
-	CorrectCount int    `json:"correct_count"`
-	TotalNeeded  int    `json:"total_needed"`
-}
-
-type GameResultPayload struct {
-	WinnerID string `json:"winner_id"`
-	Message  string `json:"message"`
-}
-
-// 追加: 部屋割り当て通知用
-type RoomAssignedPayload struct {
-	RoomID   string `json:"room_id"`
-	PlayerID string `json:"player_id"`
-}
-
 var (
-	scores        = make(map[string]int)
-	roomImages    = make(map[string][]string)
-	roomTargets   = make(map[string]string)
-	scoreMu       sync.Mutex
+	// RoomID -> PlayerID -> State
+	roomStates = make(map[string]map[string]*PlayerState)
+
 	upgrader      = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	clients       = make(map[*websocket.Conn]string)
-	rooms         = make(map[string]map[*websocket.Conn]bool)
+	clients       = make(map[*websocket.Conn]string)           // ws -> playerID
+	rooms         = make(map[string]map[*websocket.Conn]bool)  // roomID -> ws set
 	mu            sync.Mutex
-	waitingRoomID string     // 追加: ランダムマッチ待機中の部屋ID
-	matchMu       sync.Mutex // 追加: マッチング制御用ロック
+	waitingRoomID string
+	matchMu       sync.Mutex
 )
+
+// 画像プール
+var allImages = []string{
+	"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
+	"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
+	"/images/tamanegi5.png",
+}
+
+var targets = []string{"車", "信号機"}
+var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT"}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -93,16 +118,22 @@ func handleWebSocket(c echo.Context) error {
 
 	defer func() {
 		mu.Lock()
+		playerID, exists := clients[ws]
 		delete(clients, ws)
+		
+		// 部屋からの削除処理
 		for rid, conns := range rooms {
 			if _, ok := conns[ws]; ok {
 				delete(conns, ws)
+				// プレイヤー状態も削除（必要なら）
+				if states, okState := roomStates[rid]; okState && exists {
+					delete(states, playerID)
+				}
+				
 				if len(conns) == 0 {
 					delete(rooms, rid)
-					delete(roomImages, rid)
-					delete(roomTargets, rid)
+					delete(roomStates, rid)
 					
-					// もし待機中の部屋から人がいなくなったら待機IDもクリア
 					matchMu.Lock()
 					if waitingRoomID == rid {
 						waitingRoomID = ""
@@ -133,12 +164,9 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		actualRoomID := p.RoomID
-
-		// ランダムマッチのロジック
 		if p.RoomID == "RANDOM" {
 			matchMu.Lock()
 			if waitingRoomID == "" {
-				// 待機部屋がない場合、新しく作る
 				waitingRoomID = "ROOM_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 			}
 			actualRoomID = waitingRoomID
@@ -149,18 +177,24 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		clients[ws] = p.PlayerID
 		if rooms[actualRoomID] == nil {
 			rooms[actualRoomID] = make(map[*websocket.Conn]bool)
+			roomStates[actualRoomID] = make(map[string]*PlayerState)
 		}
 		rooms[actualRoomID][ws] = true
+		
+		// プレイヤー状態初期化
+		roomStates[actualRoomID][p.PlayerID] = &PlayerState{
+			Score: 0,
+			Combo: 0,
+		}
+
 		roomSize := len(rooms[actualRoomID])
 		mu.Unlock()
 
-		// クライアントに確定した部屋IDを通知
 		assigned := RoomAssignedPayload{RoomID: actualRoomID, PlayerID: p.PlayerID}
 		b, _ := json.Marshal(assigned)
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 		if roomSize == 2 {
-			// 2人揃ったらランダムマッチの待機部屋をクリア（次のペアのために）
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
 				if waitingRoomID == actualRoomID {
@@ -168,13 +202,8 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				}
 				matchMu.Unlock()
 			}
-
-			scoreMu.Lock()
-			for _, pid := range clients {
-				scores[pid] = 0 // スコア初期化
-			}
-			scoreMu.Unlock()
-			sendNewPattern(actualRoomID)
+			// ゲーム開始：全員にそれぞれの問題を配る
+			startGame(actualRoomID)
 		} else {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		}
@@ -193,21 +222,28 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		mu.Lock()
-		currentImages, ok := roomImages[p.RoomID]
-		currentTarget, okTarget := roomTargets[p.RoomID]
+		states, okRoom := roomStates[p.RoomID]
+		if !okRoom {
+			mu.Unlock()
+			return
+		}
+		state, okPlayer := states[p.PlayerID]
 		mu.Unlock()
 
-		if !ok || !okTarget {
+		if !okPlayer {
 			return
 		}
 
-		searchKey := strings.ToLower(currentTarget)
-		if searchKey == "traffic light" {
+		// 正解判定
+		searchKey := ""
+		if state.Target == "車" {
+			searchKey = "car"
+		} else if state.Target == "信号機" {
 			searchKey = "shingouki"
 		}
 
 		correctIndices := []int{}
-		for i, img := range currentImages {
+		for i, img := range state.Images {
 			if strings.Contains(strings.ToLower(img), searchKey) {
 				correctIndices = append(correctIndices, i)
 			}
@@ -229,54 +265,111 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			}
 		}
 
-		scoreMu.Lock()
 		if isCorrect {
-			scores[p.PlayerID]++
-		}
-		currentScore := scores[p.PlayerID]
-		scoreMu.Unlock()
+			mu.Lock()
+			state.Score++
+			state.Combo++
+			currentScore := state.Score
+			currentCombo := state.Combo
+			mu.Unlock()
 
-		if currentScore >= 5 {
-			res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
-			b, _ := json.Marshal(res)
-			broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
-		} else {
-			if isCorrect {
-				prog := OpponentProgressPayload{PlayerID: p.PlayerID, CorrectCount: int(currentScore), TotalNeeded: 5}
-				b, _ := json.Marshal(prog)
-				broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_PROGRESS", Payload: b})
-				sendNewPattern(p.RoomID)
-			} else {
-				// 不正解の場合、送信者に失敗通知を送る
-				ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
+			// 勝利判定
+			if currentScore >= 5 {
+				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
+				b, _ := json.Marshal(res)
+				broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
+				return
 			}
+
+			// 新しい問題を生成
+			newTarget, newImages := generateProblem()
+			mu.Lock()
+			state.Target = newTarget
+			state.Images = newImages
+			mu.Unlock()
+
+			// 1. 自分に新しい画像を通知
+			updateMy := UpdatePatternPayload{Target: newTarget, Images: newImages}
+			bMy, _ := json.Marshal(updateMy)
+			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
+
+			// 2. 相手に「敵の画像更新＆スコア更新」を通知
+			updateOpp := OpponentUpdatePayload{Images: newImages, Score: currentScore}
+			bOpp, _ := json.Marshal(updateOpp)
+			broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
+
+			// 3. コンボ判定（2連以上）なら相手に妨害送信
+			if currentCombo >= 2 {
+				mu.Lock()
+				state.Combo = 0 // コンボ消費
+				mu.Unlock()
+
+				effect := effects[rand.Intn(len(effects))]
+				obs := ObstructionPayload{Effect: effect}
+				bObs, _ := json.Marshal(obs)
+				broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OBSTRUCTION", Payload: bObs})
+			}
+
+		} else {
+			// 不正解
+			mu.Lock()
+			state.Combo = 0 // コンボリセット
+			mu.Unlock()
+			ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 		}
 	}
 }
 
-func sendNewPattern(roomID string) {
-	allImages := []string{
-		"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
-		"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
-		"/images/tamanegi5.png",
-	}
-
+func generateProblem() (string, []string) {
 	rand.Shuffle(len(allImages), func(i, j int) {
 		allImages[i], allImages[j] = allImages[j], allImages[i]
 	})
-	selectedImages := allImages[:9]
-
-	targets := []string{"CAR", "TRAFFIC LIGHT"}
+	selected := make([]string, 9)
+	copy(selected, allImages[:9])
 	target := targets[rand.Intn(len(targets))]
+	return target, selected
+}
 
+func startGame(roomID string) {
 	mu.Lock()
-	roomImages[roomID] = selectedImages
-	roomTargets[roomID] = target
-	mu.Unlock()
+	defer mu.Unlock()
 
-	payload := GameStartPayload{ProblemID: "prob_" + time.Now().String(), Images: selectedImages, Target: target}
-	b, _ := json.Marshal(payload)
-	broadcastToRoom(roomID, Message{Type: "GAME_START", Payload: b})
+	conns := rooms[roomID]
+	states := roomStates[roomID]
+	
+	// 各プレイヤーの問題を生成
+	for pid, state := range states {
+		t, i := generateProblem()
+		state.Target = t
+		state.Images = i
+		state.Score = 0
+		state.Combo = 0
+		// マップ内のポインタは更新済みだが念のため
+		states[pid] = state
+	}
+
+	// 各クライアントに「自分の問題」と「相手の初期画像」を送る
+	for ws := range conns {
+		myID := clients[ws]
+		myState := states[myID]
+		
+		// 相手を探す
+		var opponentImages []string
+		for pid, s := range states {
+			if pid != myID {
+				opponentImages = s.Images
+				break
+			}
+		}
+
+		payload := GameStartPayload{
+			Target:         myState.Target,
+			Images:         myState.Images,
+			OpponentImages: opponentImages,
+		}
+		b, _ := json.Marshal(payload)
+		ws.WriteJSON(Message{Type: "GAME_START", Payload: b})
+	}
 }
 
 func broadcastToRoom(roomID string, msg Message) {
@@ -285,6 +378,19 @@ func broadcastToRoom(roomID string, msg Message) {
 	if conns, ok := rooms[roomID]; ok {
 		for ws := range conns {
 			ws.WriteJSON(msg)
+		}
+	}
+}
+
+// 自分以外のプレイヤーに送る
+func broadcastToOpponent(roomID string, myPlayerID string, msg Message) {
+	mu.Lock()
+	defer mu.Unlock()
+	if conns, ok := rooms[roomID]; ok {
+		for ws := range conns {
+			if pid, ok := clients[ws]; ok && pid != myPlayerID {
+				ws.WriteJSON(msg)
+			}
 		}
 	}
 }

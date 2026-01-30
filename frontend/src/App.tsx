@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 import React, { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
-import { motion, AnimatePresence, Variants } from 'framer-motion'; // Variants追加
-import { useGameStore, ObstructionType } from './store'; // ObstructionType追加
+import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { useGameStore, ObstructionType } from './store';
 
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -50,7 +50,7 @@ function App() {
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
         feedback, setFeedback,
-        // 追加: コンボとお邪魔関連
+        // コンボとお邪魔関連
         playerCombo, opponentCombo, playerEffect, opponentEffect,
         setPlayerCombo, setOpponentCombo, setPlayerEffect, setOpponentEffect
     } = useGameStore();
@@ -137,6 +137,7 @@ function App() {
     }, [opponentScore, myScore, gameMode, gameState, endGame]);
 
 
+    // オンライン対戦用メッセージハンドリング
     useEffect(() => {
         if (gameMode === 'CPU') return;
 
@@ -154,23 +155,36 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
-                        let displayTarget = msg.payload.target;
-                        if (displayTarget === 'CAR') displayTarget = '車';
-                        if (displayTarget === 'TRAFFIC LIGHT') displayTarget = '信号機';
-                        startGame(displayTarget, msg.payload.images);
+                        // 自分のお題と画像、相手の初期画像を受け取る
+                        startGame(msg.payload.target, msg.payload.images);
+                        // 相手の画像は cpuImages として管理 (RIVAL VIEW用)
+                        if (msg.payload.opponent_images) {
+                            updateCpuPattern("", msg.payload.opponent_images);
+                        }
                         setMyScore(0);
                         break;
-                    case 'OPPONENT_PROGRESS':
-                        if (msg.payload.player_id !== playerId) {
-                            updateOpponentScore(msg.payload.correct_count);
-                            resetOpponentSelections();
-                        } else {
-                            setMyScore(msg.payload.correct_count);
-                            resetMySelections();
-                            setFeedback('CORRECT');
-                            setTimeout(() => setFeedback(null), 1000);
-                        }
+
+                    // 自分が正解したとき（新しい問題が来る）
+                    case 'UPDATE_PATTERN':
+                        updatePlayerPattern(msg.payload.target, msg.payload.images);
+                        // 正解演出
+                        setFeedback('CORRECT');
+                        setMyScore(prev => prev + 1);
+                        setTimeout(() => setFeedback(null), 1000);
                         break;
+
+                    // 相手が正解したとき（相手の画像とスコアが更新される）
+                    case 'OPPONENT_UPDATE':
+                        updateCpuPattern("", msg.payload.images);
+                        updateOpponentScore(msg.payload.score);
+                        resetOpponentSelections();
+                        break;
+
+                    // 相手から妨害されたとき
+                    case 'OBSTRUCTION':
+                        setPlayerEffect(msg.payload.effect as ObstructionType);
+                        break;
+
                     case 'OPPONENT_SELECT':
                         if (msg.payload.player_id !== playerId) {
                             toggleOpponentSelection(msg.payload.image_index);
@@ -188,7 +202,7 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect]);
 
     const startCpuGame = () => {
         setGameMode('CPU');
@@ -263,6 +277,7 @@ function App() {
                 setPlayerCombo(0);
             }
         } else {
+            // オンラインの場合、選択情報を送るだけ（判定はサーバー）
             sendMessage(JSON.stringify({
                 type: 'VERIFY',
                 payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
@@ -283,11 +298,11 @@ function App() {
         setMyScore(0);
     };
 
-    const rivalImages = gameMode === 'CPU' ? cpuImages : images;
+    const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages; // オンラインもcpuImages(相手画像)を使用
 
     // Framer Motion アニメーション定義
     const obstructionVariants: Variants = {
-        SHAKE: { x: [-10, 10, -10, 10, 0], transition: { repeat: Infinity, duration: 0.2 } },
+        SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.2 } },
         SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 1, ease: "linear" } },
         BLUR: {},
         INVERT: {},
@@ -496,7 +511,7 @@ function App() {
                                     <motion.div
                                         variants={obstructionVariants}
                                         animate={playerEffect === 'SHAKE' || playerEffect === 'SPIN' ? playerEffect : 'NORMAL'}
-                                        className={`bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col transition-all duration-300 ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
+                                        className={`bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
                                     >
                                         <div className="grid grid-cols-3 gap-1 w-full aspect-square">
                                             {images.map((img: string, idx: number) => (
@@ -541,7 +556,7 @@ function App() {
                                     <motion.div
                                         variants={obstructionVariants}
                                         animate={opponentEffect === 'SHAKE' || opponentEffect === 'SPIN' ? opponentEffect : 'NORMAL'}
-                                        className={`bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 transition-all duration-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
+                                        className={`bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
                                     >
                                         <div className="flex items-center gap-2 mb-2 w-full justify-center">
                                             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
