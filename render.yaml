@@ -4,7 +4,7 @@ services:
     name: recaptchgame-backend
     env: go
     region: singapore
-    plan: free # バックエンドはこれで無料プランを指定します
+    plan: free
     envVars:
       - key: PORT
         value: 10000
@@ -18,11 +18,13 @@ services:
   - type: web
     name: recaptchgame-web
     env: static
-    # region: singapore (削除済み: Static Siteは場所指定不可)
-    # plan: free      (削除済み: Static Siteは書かなくてもデフォルト無料。書くとエラーになる)
+    # plan: free  <-- エラーの原因になるので削除（静的サイトは自動で無料です）
+    # region: singapore <-- 静的サイトは場所指定不可なので削除
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
+      - key: NODE_VERSION # 【重要】ここでNode.jsのバージョンを指定
+        value: 20.11.0
       - key: VITE_WS_URL
         fromService:
           type: web
