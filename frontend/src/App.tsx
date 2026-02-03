@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useEffect, useState } from 'react'; // 【修正】Reactを削除
+import { useEffect, useState } from 'react'; // 【修正】Reactを削除しました
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
