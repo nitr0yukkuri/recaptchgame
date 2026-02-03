@@ -3,9 +3,9 @@ services:
   - type: web
     name: recaptchgame-backend
     env: go
-    # 日本からのアクセスを考慮しリージョンを明示（任意ですが推奨）
+    # 日本からのアクセスを考慮しリージョンを明示
     region: singapore
-    # 重要: Goのバージョンをgo.modと合わせる
+    # Goのバージョンをgo.modと合わせる
     envVars:
       - key: PORT
         value: 10000
@@ -13,11 +13,11 @@ services:
         value: 1.21
     buildCommand: cd backend && go build -o main .
     startCommand: cd backend && ./main
-    # 重要: デプロイ成功を判定するためのヘルスチェック
+    # デプロイ成功を判定するためのヘルスチェック
     healthCheckPath: /
 
   # Frontend (React + Vite)
-  - type: static
+  - type: web  # 【修正】ここを "static" から "web" に変更しました
     name: recaptchgame-web
     env: static
     region: singapore
