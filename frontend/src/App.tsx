@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'; // 【修正】Reactを削除
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
@@ -115,18 +115,19 @@ const getRandomObstruction = (): ObstructionType => {
 };
 
 function App() {
+    // 【修正】使われていない変数（cpuTarget, updatePattern, setOpponentCombo）を削除しました
     const {
         gameState, roomId, playerId, target, images,
-        cpuTarget, cpuImages,
+        cpuImages,
         opponentScore, opponentSelections, mySelections,
-        setGameState, setRoomInfo, startGame, updatePattern,
+        setGameState, setRoomInfo, startGame,
         updateCpuPattern, updatePlayerPattern,
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
         feedback, setFeedback,
         // コンボとお邪魔関連
         playerCombo, opponentCombo, playerEffect, opponentEffect,
-        setPlayerCombo, setOpponentCombo, setPlayerEffect, setOpponentEffect
+        setPlayerCombo, setPlayerEffect, setOpponentEffect
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
