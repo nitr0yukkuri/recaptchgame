@@ -3,28 +3,26 @@ services:
   - type: web
     name: recaptchgame-backend
     env: go
-    region: singapore
-    plan: free
+    region: singapore  # 推奨: 日本に近いリージョン
+    plan: free         # 明示的に指定（必要であれば）
+    buildCommand: cd backend && go build -o main .
+    startCommand: cd backend && ./main
+    healthCheckPath: /  # 追加: デプロイ成功判定用
     envVars:
       - key: PORT
         value: 10000
-      - key: GO_VERSION
+      - key: GO_VERSION # 追加: バージョン固定
         value: 1.21
-    buildCommand: cd backend && go build -o main .
-    startCommand: cd backend && ./main
-    healthCheckPath: /
+    # Redis等のコメントは省略...
 
   # Frontend (React + Vite)
-  - type: web
+  - type: static
     name: recaptchgame-web
     env: static
-    # plan: free  <-- エラーの原因になるので削除（静的サイトは自動で無料です）
-    # region: singapore <-- 静的サイトは場所指定不可なので削除
+    region: singapore  # バックエンドと同じリージョン推奨
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
-      - key: NODE_VERSION # 【重要】ここでNode.jsのバージョンを指定
-        value: 20.11.0
       - key: VITE_WS_URL
         fromService:
           type: web
