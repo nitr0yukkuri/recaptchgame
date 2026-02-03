@@ -3,19 +3,24 @@ services:
   - type: web
     name: recaptchgame-backend
     env: go
-    buildCommand: cd backend && go build -o main .
-    startCommand: cd backend && ./main
+    # 日本からのアクセスを考慮しリージョンを明示（任意ですが推奨）
+    region: singapore
+    # 重要: Goのバージョンをgo.modと合わせる
     envVars:
       - key: PORT
         value: 10000
-    # Redisを使用する場合、RenderでRedisを作成し、接続URLを設定してください
-    # - key: REDIS_URL
-    #   value: redis://...
+      - key: GO_VERSION
+        value: 1.21
+    buildCommand: cd backend && go build -o main .
+    startCommand: cd backend && ./main
+    # 重要: デプロイ成功を判定するためのヘルスチェック
+    healthCheckPath: /
 
   # Frontend (React + Vite)
   - type: static
     name: recaptchgame-web
     env: static
+    region: singapore
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
