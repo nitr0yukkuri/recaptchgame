@@ -3,29 +3,25 @@ services:
   - type: web
     name: recaptchgame-backend
     env: go
-    region: singapore  # 推奨: 日本に近いリージョン
-    plan: free         # 明示的に指定（必要であれば）
+    region: singapore
+    plan: free
     buildCommand: cd backend && go build -o main .
     startCommand: cd backend && ./main
-    healthCheckPath: /  # 追加: デプロイ成功判定用
+    healthCheckPath: /
     envVars:
       - key: PORT
         value: 10000
-      - key: GO_VERSION # 追加: バージョン固定
+      - key: GO_VERSION
         value: 1.21
-    # Redis等のコメントは省略...
 
   # Frontend (React + Vite)
   - type: static
     name: recaptchgame-web
     env: static
-    region: singapore  # バックエンドと同じリージョン推奨
+    region: singapore
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_WS_URL
-        fromService:
-          type: web
-          name: recaptchgame-backend
-          property: host
-        transform: wss://{{value}}/ws
+        # 本番環境用の公開URLを指定（Render側ではこれが優先されます）
+        value: wss://recaptchgame-backend.onrender.com/ws
