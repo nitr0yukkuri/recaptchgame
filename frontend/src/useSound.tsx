@@ -28,7 +28,7 @@ export const useSound = () => {
         };
     }, []);
 
-    // 🔴 追加: ボタンクリックでこれを呼ぶ（オーディオコンテキスト起動）
+    // 🔴 ボタンクリックでこれを呼ぶ（オーディオコンテキスト起動）
     const initAudio = async () => {
         await Tone.start();
         console.log("Audio Context Started");
@@ -52,5 +52,50 @@ export const useSound = () => {
         }
     };
 
-    return { initAudio, playError, playSuccess };
+    // 🔊 勝利音（ファンファーレ）
+    const playWin = () => {
+        if (synthRef.current) {
+            const now = Tone.now();
+            // 明るい和音を駆け上がる
+            synthRef.current.triggerAttackRelease(["C4", "E4", "G4"], "16n", now);
+            synthRef.current.triggerAttackRelease(["E4", "G4", "C5"], "16n", now + 0.15);
+            synthRef.current.triggerAttackRelease(["G4", "C5", "E5"], "2n", now + 0.3);
+        }
+    };
+
+    // 🔊 敗北音（残念なディセント）
+    const playLose = () => {
+        if (synthRef.current) {
+            const now = Tone.now();
+            // 暗い和音を下がる
+            synthRef.current.triggerAttackRelease(["G3", "B3"], "8n", now);
+            synthRef.current.triggerAttackRelease(["F#3", "A#3"], "8n", now + 0.2);
+            synthRef.current.triggerAttackRelease(["F3", "A3"], "2n", now + 0.4);
+        }
+    };
+
+    // 🔊 妨害音（何パターンかランダム）[NEW]
+    const playObstruction = () => {
+        if (synthRef.current) {
+            const now = Tone.now();
+            const pattern = Math.floor(Math.random() * 3);
+
+            switch (pattern) {
+                case 0: // ノイズっぽいグリッチ音
+                    synthRef.current.triggerAttackRelease(["C2", "C#2"], "32n", now);
+                    synthRef.current.triggerAttackRelease(["C2", "C#2"], "32n", now + 0.05);
+                    break;
+                case 1: // 不安な不協和音
+                    synthRef.current.triggerAttackRelease(["F#4", "G4"], "8n", now);
+                    break;
+                case 2: // 下降する警告音
+                    synthRef.current.triggerAttackRelease(["A4"], "32n", now);
+                    synthRef.current.triggerAttackRelease(["G#4"], "32n", now + 0.05);
+                    synthRef.current.triggerAttackRelease(["G4"], "16n", now + 0.1);
+                    break;
+            }
+        }
+    };
+
+    return { initAudio, playError, playSuccess, playWin, playLose, playObstruction };
 };

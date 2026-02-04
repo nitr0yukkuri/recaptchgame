@@ -138,21 +138,22 @@ function App() {
     // リロード中の状態管理
     const [isReloading, setIsReloading] = useState(false);
 
-    // 音源フックを使用（initAudioを呼び出して初期化する必要がある）
-    const { initAudio, playError, playSuccess } = useSound();
+    // 音源フックを使用（playObstructionを追加）
+    const { initAudio, playError, playSuccess, playWin, playLose, playObstruction } = useSound();
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
 
-    // お邪魔エフェクトの自動解除タイマー
+    // お邪魔エフェクトの自動解除タイマー & 発生時の効果音再生
     useEffect(() => {
         if (playerEffect) {
+            playObstruction(); // 🔊 妨害発生時に音を鳴らす
             const timer = setTimeout(() => setPlayerEffect(null), 3000); // 3秒で解除
             return () => clearTimeout(timer);
         }
-    }, [playerEffect, setPlayerEffect]);
+    }, [playerEffect, setPlayerEffect]); // playObstructionはdepsに含めない（ループ防止）
 
     useEffect(() => {
         if (opponentEffect) {
@@ -210,12 +211,14 @@ function App() {
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             if (opponentScore >= 5) {
+                playLose();
                 endGame('cpu');
             } else if (myScore >= 5) {
+                playWin();
                 endGame('human');
             }
         }
-    }, [opponentScore, myScore, gameMode, gameState, endGame]);
+    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose]);
 
 
     // オンライン対戦用メッセージハンドリング
@@ -244,7 +247,9 @@ function App() {
                         break;
 
                     case 'UPDATE_PATTERN':
-                        playSuccess(); // 🔊 正解音
+                        // オンラインの場合、勝利時はここを通らず GAME_FINISHED に行くため
+                        // 常に正解音を鳴らしてOK
+                        playSuccess();
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
@@ -267,10 +272,15 @@ function App() {
                         }
                         break;
                     case 'GAME_FINISHED':
+                        if (msg.payload.winner_id === playerId) {
+                            playWin();
+                        } else {
+                            playLose();
+                        }
                         endGame(msg.payload.winner_id);
                         break;
                     case 'VERIFY_FAILED':
-                        playError(); // 🔊 エラー音
+                        playError();
                         setFeedback('WRONG');
                         setTimeout(() => setFeedback(null), 1000);
                         resetMySelections();
@@ -280,10 +290,10 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose]);
 
     const startCpuGame = () => {
-        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
+        initAudio();
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -294,7 +304,7 @@ function App() {
     };
 
     const joinRandom = () => {
-        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
+        initAudio();
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
@@ -303,7 +313,7 @@ function App() {
     };
 
     const joinFriend = () => {
-        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
+        initAudio();
         setLoginStep('FRIEND');
         setGameMode('ONLINE');
     };
@@ -340,10 +350,7 @@ function App() {
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
-                // オンラインの場合はバックエンドに要求する必要があるが、現状は未実装のため何もしない、
-                // あるいはCPU同様にローカル更新だけすると同期がずれる可能性があるため、
-                // ここではCPUモードのみの機能とするか、簡易的に実装。
-                // (オンラインで同期するにはバックエンドの修正が必要)
+                // オンラインの場合はバックエンドに要求する必要があるが、現状は未実装のため何もしない
             }
             setIsReloading(false);
         }, 1000);
@@ -360,11 +367,15 @@ function App() {
                 mySelections.every(idx => correctIndices.includes(idx));
 
             if (isCorrect) {
-                playSuccess(); // 🔊 正解音
+                // 🔴 勝利(次で5点)確定時は、通常の正解演出をスキップする（リザルト画面のファンファーレに任せる）
+                if (myScore + 1 < 5) {
+                    playSuccess();
+                    setFeedback('CORRECT');
+                    setTimeout(() => setFeedback(null), 1000);
+                }
+
                 setMyScore(prev => prev + 1);
                 resetMySelections();
-                setFeedback('CORRECT');
-                setTimeout(() => setFeedback(null), 1000);
 
                 const newCombo = playerCombo + 1;
                 setPlayerCombo(newCombo);
@@ -376,7 +387,7 @@ function App() {
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
-                playError(); // 🔊 エラー音
+                playError();
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
                 setPlayerCombo(0);
