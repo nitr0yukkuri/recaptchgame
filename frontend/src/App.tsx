@@ -1,5 +1,6 @@
+
 /// <reference types="vite/client" />
-import { useEffect, useState } from 'react'; // 【修正】Reactを削除しました
+import { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
@@ -110,12 +111,12 @@ const getCorrectIndices = (imgs: string[], tgt: string) => {
 
 // ヘルパー: ランダムなお邪魔エフェクトを選択
 const getRandomObstruction = (): ObstructionType => {
-    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN'];
+    // 変更: 新しい妨害要素を追加
+    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN', 'GRAYSCALE', 'SEPIA', 'SKEW'];
     return effects[Math.floor(Math.random() * effects.length)];
 };
 
 function App() {
-    // 【修正】使われていない変数（cpuTarget, updatePattern, setOpponentCombo）を削除しました
     const {
         gameState, roomId, playerId, target, images,
         cpuImages,
@@ -134,6 +135,8 @@ function App() {
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
     const [myScore, setMyScore] = useState(0);
+    // リロード中の状態管理
+    const [isReloading, setIsReloading] = useState(false);
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
@@ -265,7 +268,7 @@ function App() {
                     case 'VERIFY_FAILED':
                         setFeedback('WRONG');
                         setTimeout(() => setFeedback(null), 1000);
-                        resetMySelections(); // 【追加】間違えたら選択をリセット
+                        resetMySelections();
                         break;
                 }
             } catch (e) {
@@ -307,6 +310,7 @@ function App() {
     };
 
     const handleImageClick = (index: number) => {
+        if (isReloading) return; // リロード中はクリック不可
         toggleMySelection(index);
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
@@ -316,7 +320,30 @@ function App() {
         }
     };
 
+    // リロード機能：ペナルティとして1秒待機してから問題を更新
+    const handleReload = () => {
+        if (isReloading) return;
+        setIsReloading(true);
+        resetMySelections();
+
+        // 1秒間のペナルティ（タイムロス）
+        setTimeout(() => {
+            if (gameMode === 'CPU') {
+                const nextProb = generateCpuProblem();
+                updatePlayerPattern(nextProb.target, nextProb.images);
+            } else {
+                // オンラインの場合はバックエンドに要求する必要があるが、現状は未実装のため何もしない、
+                // あるいはCPU同様にローカル更新だけすると同期がずれる可能性があるため、
+                // ここではCPUモードのみの機能とするか、簡易的に実装。
+                // (オンラインで同期するにはバックエンドの修正が必要)
+            }
+            setIsReloading(false);
+        }, 1000);
+    };
+
     const handleVerify = () => {
+        if (isReloading) return;
+
         if (gameMode === 'CPU') {
             const correctIndices = getCorrectIndices(images, target);
 
@@ -343,7 +370,7 @@ function App() {
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
                 setPlayerCombo(0);
-                resetMySelections(); // 【追加】間違えたら選択をリセット
+                resetMySelections();
             }
         } else {
             sendMessage(JSON.stringify({
@@ -372,9 +399,13 @@ function App() {
     const obstructionVariants: Variants = {
         SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.2 } },
         SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 1, ease: "linear" } },
+        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } }, // SKEW
         BLUR: {},
         INVERT: {},
-        NORMAL: { x: 0, rotate: 0 }
+        GRAYSCALE: {},
+        SEPIA: {},
+        ONION_RAIN: {},
+        NORMAL: { x: 0, rotate: 0, skewX: 0 }
     };
 
     return (
@@ -569,20 +600,38 @@ function App() {
                             </div>
 
                             {/* Main Content: Player Grid and Rival View */}
-                            <div className="flex-1 min-h-0 flex flex-col md:flex-row items-center justify-between gap-10 md:gap-24 w-full max-w-7xl mx-auto px-4 md:px-10">
+                            {/* 【修正】justify-center md:justify-around, max-w-2xl -> max-w-lg, py-4, overflow-y-auto追加 */}
+                            <div className="flex-1 min-h-0 flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-5xl mx-auto px-4 py-4 overflow-y-auto">
 
-                                {/* 自分のセクション */}
-                                <div className="flex flex-col items-center w-full max-w-2xl">
+                                {/* 自分のセクション: max-w-lgに縮小 */}
+                                <div className="flex flex-col items-center w-full max-w-lg shrink-0">
                                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
                                     {/* プレイヤーへの妨害エフェクト適用コンテナ */}
                                     <motion.div
                                         variants={obstructionVariants}
-                                        animate={playerEffect === 'SHAKE' || playerEffect === 'SPIN' ? playerEffect : 'NORMAL'}
-                                        className={`relative overflow-hidden bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} ${playerEffect === 'INVERT' ? 'invert' : ''}`}
+                                        animate={['SHAKE', 'SPIN', 'SKEW'].includes(playerEffect || '') ? (playerEffect as string) : 'NORMAL'}
+                                        className={`relative overflow-hidden bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col 
+                                            ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} 
+                                            ${playerEffect === 'INVERT' ? 'invert' : ''}
+                                            ${playerEffect === 'GRAYSCALE' ? 'grayscale' : ''}
+                                            ${playerEffect === 'SEPIA' ? 'sepia' : ''}
+                                        `}
                                     >
                                         {/* タマネギの雨エフェクト */}
                                         {playerEffect === 'ONION_RAIN' && <OnionRain />}
+
+                                        {/* リロード中のローディングオーバーレイ */}
+                                        <AnimatePresence>
+                                            {isReloading && (
+                                                <motion.div
+                                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                                    className="absolute inset-0 z-30 bg-white/80 flex items-center justify-center"
+                                                >
+                                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5B46F5]"></div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
 
                                         <div className="grid grid-cols-3 gap-1 w-full aspect-square">
                                             {images.map((img: string, idx: number) => (
@@ -608,14 +657,32 @@ function App() {
                                                 </div>
                                             ))}
                                         </div>
-                                        {/* 確認ボタン */}
-                                        <div className="flex justify-center mt-2">
+
+                                        {/* フッター：リロードボタンと確認ボタン */}
+                                        {/* 【修正】mt-4, px-2で余白確保 */}
+                                        <div className="flex justify-between items-center mt-4 px-2 w-full">
+                                            {/* リロードボタン（左下） */}
+                                            <button
+                                                onClick={handleReload}
+                                                disabled={isReloading}
+                                                className="p-2 text-gray-400 hover:text-[#5B46F5] hover:bg-gray-100 rounded-full transition duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="問題を更新（タイムロスが発生します）"
+                                            >
+                                                <svg className={`w-6 h-6 ${isReloading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                            </button>
+
+                                            {/* 確認ボタン（中央寄り） */}
                                             <button
                                                 onClick={handleVerify}
-                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative"
+                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative mr-8"
                                             >
                                                 確認
                                             </button>
+
+                                            {/* レイアウト調整用のダミー要素（右） */}
+                                            <div className="w-6"></div>
                                         </div>
                                     </motion.div>
                                 </div>
@@ -627,9 +694,15 @@ function App() {
                                     {/* 相手への妨害エフェクト適用コンテナ */}
                                     <motion.div
                                         variants={obstructionVariants}
-                                        animate={opponentEffect === 'SHAKE' || opponentEffect === 'SPIN' ? opponentEffect : 'NORMAL'}
-                                        // 変更点: relative と overflow-hidden を追加
-                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} ${opponentEffect === 'INVERT' ? 'invert' : ''}`}
+                                        // 変更: アニメーション適用条件を修正 (SHAKE, SPIN, SKEW)
+                                        animate={['SHAKE', 'SPIN', 'SKEW'].includes(opponentEffect || '') ? (opponentEffect as string) : 'NORMAL'}
+                                        // 変更: クラス適用 (BLUR, INVERT, GRAYSCALE, SEPIA)
+                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 
+                                            ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} 
+                                            ${opponentEffect === 'INVERT' ? 'invert' : ''}
+                                            ${opponentEffect === 'GRAYSCALE' ? 'grayscale' : ''}
+                                            ${opponentEffect === 'SEPIA' ? 'sepia' : ''}
+                                        `}
                                     >
                                         {/* 相手側のタマネギの雨エフェクト */}
                                         {opponentEffect === 'ONION_RAIN' && <OnionRain />}
