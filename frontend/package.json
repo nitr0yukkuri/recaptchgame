@@ -15,6 +15,7 @@
         "react-dom": "^18.2.0",
         "react-use-websocket": "^4.5.0",
         "tailwind-merge": "^2.0.0",
+        "tone": "^15.1.22",
         "zustand": "^4.4.6"
     },
     "devDependencies": {

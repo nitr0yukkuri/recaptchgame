@@ -1,9 +1,9 @@
-
 /// <reference types="vite/client" />
 import { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
+import { useSound } from './useSound';
 
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -138,6 +138,9 @@ function App() {
     // リロード中の状態管理
     const [isReloading, setIsReloading] = useState(false);
 
+    // 音源フックを使用
+    const { playError, playSuccess } = useSound();
+
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
@@ -241,6 +244,7 @@ function App() {
                         break;
 
                     case 'UPDATE_PATTERN':
+                        playSuccess(); // 🔊 正解音
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
@@ -266,6 +270,7 @@ function App() {
                         endGame(msg.payload.winner_id);
                         break;
                     case 'VERIFY_FAILED':
+                        playError(); // 🔊 エラー音
                         setFeedback('WRONG');
                         setTimeout(() => setFeedback(null), 1000);
                         resetMySelections();
@@ -275,7 +280,7 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess]);
 
     const startCpuGame = () => {
         setGameMode('CPU');
@@ -352,6 +357,7 @@ function App() {
                 mySelections.every(idx => correctIndices.includes(idx));
 
             if (isCorrect) {
+                playSuccess(); // 🔊 正解音
                 setMyScore(prev => prev + 1);
                 resetMySelections();
                 setFeedback('CORRECT');
@@ -367,6 +373,7 @@ function App() {
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
+                playError(); // 🔊 エラー音
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
                 setPlayerCombo(0);
