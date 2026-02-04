@@ -125,9 +125,11 @@ function App() {
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
     const [myScore, setMyScore] = useState(0);
     const [isReloading, setIsReloading] = useState(false);
+    // 試合開始ポップアップの管理
+    const [startPopup, setStartPopup] = useState(false);
 
-    // 音源フックを使用（playObstruction追加）
-    const { initAudio, playError, playSuccess, playWin, playLose, playObstruction } = useSound();
+    // 音源フック（playStart追加）
+    const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
@@ -141,7 +143,7 @@ function App() {
             const timer = setTimeout(() => setPlayerEffect(null), 3000);
             return () => clearTimeout(timer);
         }
-    }, [playerEffect, setPlayerEffect]); // playObstructionはdepsから除外
+    }, [playerEffect, setPlayerEffect]);
 
     useEffect(() => {
         if (opponentEffect) {
@@ -208,7 +210,7 @@ function App() {
 
     // メッセージハンドリング
     useEffect(() => {
-        if (gameMode === 'CPU') return;
+        if (gameMode !== 'ONLINE') return;
 
         if (lastMessage !== null) {
             try {
@@ -224,6 +226,11 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
+                        // 試合開始演出
+                        setStartPopup(true);
+                        playStart(); // 🔊 スタート音
+                        setTimeout(() => setStartPopup(false), 2000);
+
                         startGame(msg.payload.target, msg.payload.images);
                         if (msg.payload.opponent_images) {
                             updateCpuPattern("", msg.payload.opponent_images);
@@ -273,10 +280,16 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart]);
 
     const startCpuGame = () => {
         initAudio();
+
+        // 試合開始演出 (CPU)
+        setStartPopup(true);
+        playStart(); // 🔊 スタート音
+        setTimeout(() => setStartPopup(false), 2000);
+
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -342,7 +355,6 @@ function App() {
             const isCorrect = mySelections.length === correctIndices.length && mySelections.every(idx => correctIndices.includes(idx));
 
             if (isCorrect) {
-                // 🔴 勝利(次で5点)確定時は、通常の正解演出をスキップする
                 if (myScore + 1 < 5) {
                     playSuccess();
                     setFeedback('CORRECT');
@@ -379,6 +391,9 @@ function App() {
     const cancelWaiting = () => {
         setGameState('LOGIN');
         setLoginStep('SELECT');
+        setGameMode(null);
+        setInputRoom('');
+        setMyScore(0);
     };
 
     const goHome = () => {
@@ -406,7 +421,7 @@ function App() {
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
 
-            {/* 通知: Fixed配置で被り防止 & 最前面 */}
+            {/* 通知 */}
             <AnimatePresence>
                 {playerEffect && (
                     <motion.div
@@ -434,7 +449,24 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* 正解/不正解フィードバック (最前面) */}
+            {/* 試合開始ポップアップ [NEW] */}
+            <AnimatePresence>
+                {startPopup && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 1.5 }}
+                        className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/40 pointer-events-none"
+                    >
+                        <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center border-4 border-[#5B46F5]">
+                            <h2 className="text-6xl font-black text-[#5B46F5] tracking-widest uppercase">Start!</h2>
+                            <p className="text-xl font-bold text-gray-600 mt-2">試合開始</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 正解/不正解フィードバック */}
             <AnimatePresence>
                 {feedback && (
                     <motion.div
@@ -456,11 +488,11 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* ホームボタン: Absolute配置で調整 */}
+            {/* ホームボタン */}
             {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                 <button
                     onClick={goHome}
-                    className="absolute top-2 left-2 z-50 flex items-center gap-1 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition bg-white/80 backdrop-blur-sm shadow-sm"
+                    className="absolute top-2 left-2 z-[100] flex items-center gap-1 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition bg-white/80 backdrop-blur-sm shadow-sm cursor-pointer pointer-events-auto"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -470,19 +502,17 @@ function App() {
             )}
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
-                {/* ヘッダー: 固定高さ */}
-                <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40">
-                    <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
+                {/* ヘッダー */}
+                <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40 pointer-events-none">
+                    <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 pointer-events-auto">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
                         <span className="text-[#BFA15F]">ゲーム</span>
                     </h1>
                 </div>
 
-                {/* メインコンテンツエリア: スクロール可能 */}
                 <div className="flex-1 min-h-0 overflow-y-auto w-full">
 
                     {gameState === 'LOGIN' && (
-                        /* ... LOGIN SCREEN (変更なし) ... */
                         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
                             {loginStep === 'SELECT' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
@@ -585,7 +615,7 @@ function App() {
                             </div>
                             <button
                                 onClick={cancelWaiting}
-                                className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition"
+                                className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition cursor-pointer z-50 pointer-events-auto"
                             >
                                 キャンセル
                             </button>
@@ -601,8 +631,8 @@ function App() {
                                 <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
                             </div>
 
-                            {/* メイングリッドエリア */}
-                            <div className="flex flex-col md:flex-row items-center md:items-start justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
+                            {/* メイングリッドエリア (中央揃え) */}
+                            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
 
                                 {/* 自分のセクション (メイン) */}
                                 <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
@@ -719,7 +749,7 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* ステータスバー (スコア) - 最下部固定風に配置するか、フローの下に置く */}
+                            {/* ステータスバー (スコア) */}
                             <div className="w-full max-w-4xl mx-auto px-4 mt-8">
                                 <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
                                     <div className="flex items-center gap-3">

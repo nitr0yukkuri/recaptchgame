@@ -97,5 +97,15 @@ export const useSound = () => {
         }
     };
 
-    return { initAudio, playError, playSuccess, playWin, playLose, playObstruction };
+    // 🔊 試合開始音（ピッ、ピッ、ピー！）[NEW]
+    const playStart = () => {
+        if (synthRef.current) {
+            const now = Tone.now();
+            synthRef.current.triggerAttackRelease("C4", "16n", now);      // ピッ
+            synthRef.current.triggerAttackRelease("C4", "16n", now + 0.5); // ピッ
+            synthRef.current.triggerAttackRelease("C5", "4n", now + 1.0);  // ピー！
+        }
+    };
+
+    return { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart };
 };
