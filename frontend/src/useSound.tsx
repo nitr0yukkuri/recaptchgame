@@ -74,21 +74,21 @@ export const useSound = () => {
         }
     };
 
-    // 🔊 妨害音（何パターンかランダム）[NEW]
+    // 🔊 妨害音（ランダムパターン）
     const playObstruction = () => {
         if (synthRef.current) {
             const now = Tone.now();
             const pattern = Math.floor(Math.random() * 3);
 
             switch (pattern) {
-                case 0: // ノイズっぽいグリッチ音
+                case 0: // ノイズ
                     synthRef.current.triggerAttackRelease(["C2", "C#2"], "32n", now);
                     synthRef.current.triggerAttackRelease(["C2", "C#2"], "32n", now + 0.05);
                     break;
                 case 1: // 不安な不協和音
                     synthRef.current.triggerAttackRelease(["F#4", "G4"], "8n", now);
                     break;
-                case 2: // 下降する警告音
+                case 2: // 下降音
                     synthRef.current.triggerAttackRelease(["A4"], "32n", now);
                     synthRef.current.triggerAttackRelease(["G#4"], "32n", now + 0.05);
                     synthRef.current.triggerAttackRelease(["G4"], "16n", now + 0.1);

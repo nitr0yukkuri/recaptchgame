@@ -20,15 +20,14 @@ const ALL_CPU_IMAGES = [
 // タマネギ画像のパス
 const ONION_IMAGE = '/images/tamanegi5.png';
 
-// タマネギ降下エフェクトコンポーネント（強化版）
+// タマネギ降下エフェクトコンポーネント
 const OnionRain = () => {
-    // 変更: 数を100個に増やし、サイズと速度を強化
     const onions = Array.from({ length: 100 }).map((_, i) => ({
         id: i,
         left: Math.random() * 100, // %
         delay: Math.random() * 2, // 秒
-        duration: 0.5 + Math.random() * 1.5, // 秒 (高速化)
-        size: 30 + Math.random() * 100, // px (30px〜130pxのランダムサイズ)
+        duration: 0.5 + Math.random() * 1.5, // 秒
+        size: 30 + Math.random() * 100, // px
     }));
 
     return (
@@ -37,15 +36,15 @@ const OnionRain = () => {
                 <motion.img
                     key={o.id}
                     src={ONION_IMAGE}
-                    initial={{ y: -150, opacity: 1, rotate: 0 }} // 初期位置を画面外上部に
-                    animate={{ y: 800, rotate: 720 }} // 落下距離を伸ばし、回転を激しく(720度)
+                    initial={{ y: -150, opacity: 1, rotate: 0 }}
+                    animate={{ y: 800, rotate: 720 }}
                     transition={{
                         duration: o.duration,
                         repeat: Infinity,
                         delay: o.delay,
                         ease: "linear"
                     }}
-                    className="absolute object-contain opacity-100" // 変更: 不透明にして視界を遮る
+                    className="absolute object-contain opacity-100"
                     style={{
                         left: `${o.left}%`,
                         width: `${o.size}px`,
@@ -57,9 +56,8 @@ const OnionRain = () => {
     );
 };
 
-// ヘルパー: 新しいCPU問題を生成（ランダム）
+// ヘルパー: 新しいCPU問題を生成
 const generateCpuProblem = () => {
-    // お題をランダムに決定
     const targets = ['車', '信号機', '階段', '消火栓'];
     const newTarget = targets[Math.floor(Math.random() * targets.length)];
 
@@ -69,32 +67,24 @@ const generateCpuProblem = () => {
     else if (newTarget === '階段') searchKey = 'kaidan';
     else if (newTarget === '消火栓') searchKey = 'shoukasen';
 
-    // 画像を正解とそれ以外に分類
     const corrects = ALL_CPU_IMAGES.filter(img => img.toLowerCase().includes(searchKey));
     const others = ALL_CPU_IMAGES.filter(img => !img.toLowerCase().includes(searchKey));
 
-    // シャッフル
     const shuffledCorrects = [...corrects].sort(() => Math.random() - 0.5);
     const shuffledOthers = [...others].sort(() => Math.random() - 0.5);
 
-    // 最低3枚の正解画像を選ぶ
     const count = Math.min(3, shuffledCorrects.length);
     const selected = shuffledCorrects.slice(0, count);
-
-    // 残りを埋める候補（選ばれなかった正解画像 + 不正解画像）
     const remainingCandidates = [...shuffledOthers, ...shuffledCorrects.slice(count)].sort(() => Math.random() - 0.5);
-
-    // 9枚になるまで追加
     const finalImages = [...selected, ...remainingCandidates.slice(0, 9 - selected.length)];
 
     return {
         target: newTarget,
-        // 最後に配置をランダムにする
         images: finalImages.sort(() => Math.random() - 0.5)
     };
 };
 
-// ヘルパー: 正解インデックスを動的に計算
+// ヘルパー: 正解インデックス計算
 const getCorrectIndices = (imgs: string[], tgt: string) => {
     let searchKey = '';
     if (tgt === '車') searchKey = 'car';
@@ -109,9 +99,8 @@ const getCorrectIndices = (imgs: string[], tgt: string) => {
         .filter(idx => idx !== -1);
 };
 
-// ヘルパー: ランダムなお邪魔エフェクトを選択
+// ヘルパー: ランダムなお邪魔エフェクト
 const getRandomObstruction = (): ObstructionType => {
-    // 変更: 新しい妨害要素を追加
     const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN', 'GRAYSCALE', 'SEPIA', 'SKEW'];
     return effects[Math.floor(Math.random() * effects.length)];
 };
@@ -135,10 +124,9 @@ function App() {
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
     const [myScore, setMyScore] = useState(0);
-    // リロード中の状態管理
     const [isReloading, setIsReloading] = useState(false);
 
-    // 音源フックを使用（playObstructionを追加）
+    // 音源フックを使用（playObstruction追加）
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction } = useSound();
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
@@ -146,30 +134,29 @@ function App() {
         shouldReconnect: () => true,
     });
 
-    // お邪魔エフェクトの自動解除タイマー & 発生時の効果音再生
+    // お邪魔エフェクト & サウンド
     useEffect(() => {
         if (playerEffect) {
-            playObstruction(); // 🔊 妨害発生時に音を鳴らす
-            const timer = setTimeout(() => setPlayerEffect(null), 3000); // 3秒で解除
+            playObstruction(); // 🔊 妨害音
+            const timer = setTimeout(() => setPlayerEffect(null), 3000);
             return () => clearTimeout(timer);
         }
-    }, [playerEffect, setPlayerEffect]); // playObstructionはdepsに含めない（ループ防止）
+    }, [playerEffect, setPlayerEffect]); // playObstructionはdepsから除外
 
     useEffect(() => {
         if (opponentEffect) {
-            const timer = setTimeout(() => setOpponentEffect(null), 3000); // 3秒で解除
+            const timer = setTimeout(() => setOpponentEffect(null), 3000);
             return () => clearTimeout(timer);
         }
     }, [opponentEffect, setOpponentEffect]);
 
 
-    // CPU対戦ロジック（行動シミュレーション）
+    // CPU対戦ロジック
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             const interval = setInterval(() => {
                 const store = useGameStore.getState();
 
-                // 妨害を受けている場合、50%の確率でCPUが行動不能（フリーズ）になる
                 if (store.opponentEffect) {
                     if (Math.random() > 0.5) return;
                 }
@@ -188,11 +175,9 @@ function App() {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
 
-                        // コンボ計算
                         const newCombo = store.opponentCombo + 1;
                         store.setOpponentCombo(newCombo);
 
-                        // 2連続正解でプレイヤーにお邪魔攻撃
                         if (newCombo >= 2) {
                             store.setOpponentCombo(0);
                             store.setPlayerEffect(getRandomObstruction());
@@ -221,7 +206,7 @@ function App() {
     }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose]);
 
 
-    // オンライン対戦用メッセージハンドリング
+    // メッセージハンドリング
     useEffect(() => {
         if (gameMode === 'CPU') return;
 
@@ -247,8 +232,6 @@ function App() {
                         break;
 
                     case 'UPDATE_PATTERN':
-                        // オンラインの場合、勝利時はここを通らず GAME_FINISHED に行くため
-                        // 常に正解音を鳴らしてOK
                         playSuccess();
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
@@ -328,7 +311,7 @@ function App() {
     };
 
     const handleImageClick = (index: number) => {
-        if (isReloading) return; // リロード中はクリック不可
+        if (isReloading) return;
         toggleMySelection(index);
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
@@ -338,19 +321,14 @@ function App() {
         }
     };
 
-    // リロード機能：ペナルティとして1秒待機してから問題を更新
     const handleReload = () => {
         if (isReloading) return;
         setIsReloading(true);
         resetMySelections();
-
-        // 1秒間のペナルティ（タイムロス）
         setTimeout(() => {
             if (gameMode === 'CPU') {
                 const nextProb = generateCpuProblem();
                 updatePlayerPattern(nextProb.target, nextProb.images);
-            } else {
-                // オンラインの場合はバックエンドに要求する必要があるが、現状は未実装のため何もしない
             }
             setIsReloading(false);
         }, 1000);
@@ -361,13 +339,10 @@ function App() {
 
         if (gameMode === 'CPU') {
             const correctIndices = getCorrectIndices(images, target);
-
-            const isCorrect =
-                mySelections.length === correctIndices.length &&
-                mySelections.every(idx => correctIndices.includes(idx));
+            const isCorrect = mySelections.length === correctIndices.length && mySelections.every(idx => correctIndices.includes(idx));
 
             if (isCorrect) {
-                // 🔴 勝利(次で5点)確定時は、通常の正解演出をスキップする（リザルト画面のファンファーレに任せる）
+                // 🔴 勝利(次で5点)確定時は、通常の正解演出をスキップする
                 if (myScore + 1 < 5) {
                     playSuccess();
                     setFeedback('CORRECT');
@@ -416,11 +391,10 @@ function App() {
 
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
-    // Framer Motion アニメーション定義
     const obstructionVariants: Variants = {
         SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.2 } },
         SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 1, ease: "linear" } },
-        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } }, // SKEW
+        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } },
         BLUR: {},
         INVERT: {},
         GRAYSCALE: {},
@@ -430,68 +404,86 @@ function App() {
     };
 
     return (
-        <div className="h-screen w-screen bg-white flex flex-col items-center p-2 font-sans text-gray-800 overflow-hidden relative">
+        <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
+
+            {/* 通知: Fixed配置で被り防止 & 最前面 */}
+            <AnimatePresence>
+                {playerEffect && (
+                    <motion.div
+                        initial={{ y: -50, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -50, opacity: 0 }}
+                        className="fixed top-24 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+                    >
+                        <div className="bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-red-200">
+                            ⚠️ 妨害: {playerEffect}
+                        </div>
+                    </motion.div>
+                )}
+                {opponentEffect && (
+                    <motion.div
+                        initial={{ y: -50, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -50, opacity: 0 }}
+                        className="fixed top-36 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+                    >
+                        <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
+                            ⚔️ 攻撃中: {opponentEffect}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 正解/不正解フィードバック (最前面) */}
+            <AnimatePresence>
+                {feedback && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.5 }}
+                        className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
+                    >
+                        {feedback === 'CORRECT' ? (
+                            <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
+                                <svg className="w-40 h-40 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            </div>
+                        ) : (
+                            <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
+                                <svg className="w-40 h-40 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ホームボタン: Absolute配置で調整 */}
+            {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
+                <button
+                    onClick={goHome}
+                    className="absolute top-2 left-2 z-50 flex items-center gap-1 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition bg-white/80 backdrop-blur-sm shadow-sm"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span className="hidden md:inline font-bold">ホーム</span>
+                </button>
+            )}
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
-
-                <AnimatePresence>
-                    {feedback && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.5 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.5 }}
-                            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-                        >
-                            {feedback === 'CORRECT' ? (
-                                <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
-                                    <svg className="w-40 h-40 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                </div>
-                            ) : (
-                                <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
-                                    <svg className="w-40 h-40 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </div>
-                            )}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* お邪魔発生時の通知ポップアップ */}
-                <AnimatePresence>
-                    {playerEffect && (
-                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-16 z-40 bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
-                            ⚠️ 妨害を受けています！ ({playerEffect})
-                        </motion.div>
-                    )}
-                    {opponentEffect && (
-                        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }} className="absolute top-16 right-0 z-40 bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
-                            ⚔️ 妨害攻撃中！ ({opponentEffect})
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
-                    <button
-                        onClick={goHome}
-                        className="absolute top-0 left-0 flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition z-20 font-bold"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        <span>ホームに戻る</span>
-                    </button>
-                )}
-
-                <div className="flex flex-col items-center mb-2 shrink-0">
-                    <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-2 mb-1">
+                {/* ヘッダー: 固定高さ */}
+                <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40">
+                    <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
                         <span className="text-[#BFA15F]">ゲーム</span>
                     </h1>
                 </div>
 
-                <div className="flex-1 flex flex-col w-full min-h-0 overflow-y-auto">
+                {/* メインコンテンツエリア: スクロール可能 */}
+                <div className="flex-1 min-h-0 overflow-y-auto w-full">
 
                     {gameState === 'LOGIN' && (
-                        <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col">
+                        /* ... LOGIN SCREEN (変更なし) ... */
+                        <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
                             {loginStep === 'SELECT' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
                                     <div className="flex-1 w-full max-w-md space-y-6">
@@ -521,12 +513,9 @@ function App() {
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 w-full max-w-md space-y-4">
+                                    <div className="flex-1 w-full max-w-md space-y-4 pb-10">
                                         <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
-                                        <button
-                                            onClick={startCpuGame}
-                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300"
-                                        >
+                                        <button onClick={startCpuGame} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
                                             <div className="flex items-center gap-4">
                                                 <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🤖</span>
                                                 <div className="text-left">
@@ -536,11 +525,7 @@ function App() {
                                             </div>
                                             <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                         </button>
-
-                                        <button
-                                            onClick={joinRandom}
-                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300"
-                                        >
+                                        <button onClick={joinRandom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300">
                                             <div className="flex items-center gap-4">
                                                 <span className="text-3xl bg-pink-50 p-3 rounded-xl group-hover:scale-110 transition">🌍</span>
                                                 <div className="text-left">
@@ -550,11 +535,7 @@ function App() {
                                             </div>
                                             <svg className="w-6 h-6 text-gray-300 group-hover:text-pink-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                         </button>
-
-                                        <button
-                                            onClick={joinFriend}
-                                            className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300"
-                                        >
+                                        <button onClick={joinFriend} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
                                             <div className="flex items-center gap-4">
                                                 <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🤝</span>
                                                 <div className="text-left">
@@ -612,23 +593,21 @@ function App() {
                     )}
 
                     {gameState === 'PLAYING' && (
-                        <div className="flex flex-col h-full justify-between pb-4">
+                        <div className="flex flex-col h-full justify-start pb-20"> {/* pb-20で下部余白確保 */}
 
-                            {/* Game Header */}
-                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-2 shadow-md shrink-0 text-left flex flex-col justify-center mx-2 md:mx-auto w-full max-w-2xl">
+                            {/* お題ヘッダー */}
+                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl">
                                 <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
-                                <h2 className="text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
+                                <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
                             </div>
 
-                            {/* Main Content: Player Grid and Rival View */}
-                            {/* 【修正】justify-center md:justify-around, max-w-2xl -> max-w-lg, py-4, overflow-y-auto追加 */}
-                            <div className="flex-1 min-h-0 flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-5xl mx-auto px-4 py-4 overflow-y-auto">
+                            {/* メイングリッドエリア */}
+                            <div className="flex flex-col md:flex-row items-center md:items-start justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
 
-                                {/* 自分のセクション: max-w-lgに縮小 */}
-                                <div className="flex flex-col items-center w-full max-w-lg shrink-0">
+                                {/* 自分のセクション (メイン) */}
+                                <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
                                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
-                                    {/* プレイヤーへの妨害エフェクト適用コンテナ */}
                                     <motion.div
                                         variants={obstructionVariants}
                                         animate={['SHAKE', 'SPIN', 'SKEW'].includes(playerEffect || '') ? (playerEffect as string) : 'NORMAL'}
@@ -642,7 +621,6 @@ function App() {
                                         {/* タマネギの雨エフェクト */}
                                         {playerEffect === 'ONION_RAIN' && <OnionRain />}
 
-                                        {/* リロード中のローディングオーバーレイ */}
                                         <AnimatePresence>
                                             {isReloading && (
                                                 <motion.div
@@ -662,7 +640,6 @@ function App() {
                                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
-                                                        {/* 画像のサイズ統一: object-cover と aspect-square で強制的に正方形にトリミング */}
                                                         <img
                                                             src={img}
                                                             alt="captcha"
@@ -679,67 +656,55 @@ function App() {
                                             ))}
                                         </div>
 
-                                        {/* フッター：リロードボタンと確認ボタン */}
-                                        {/* 【修正】mt-4, px-2で余白確保 */}
                                         <div className="flex justify-between items-center mt-4 px-2 w-full">
-                                            {/* リロードボタン（左下） */}
                                             <button
                                                 onClick={handleReload}
                                                 disabled={isReloading}
                                                 className="p-2 text-gray-400 hover:text-[#5B46F5] hover:bg-gray-100 rounded-full transition duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title="問題を更新（タイムロスが発生します）"
                                             >
                                                 <svg className={`w-6 h-6 ${isReloading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                                 </svg>
                                             </button>
 
-                                            {/* 確認ボタン（中央寄り） */}
                                             <button
                                                 onClick={handleVerify}
                                                 className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative mr-8"
                                             >
                                                 確認
                                             </button>
-
-                                            {/* レイアウト調整用のダミー要素（右） */}
                                             <div className="w-6"></div>
                                         </div>
                                     </motion.div>
                                 </div>
 
                                 {/* 相手のセクション */}
-                                <div className="w-full md:w-auto md:h-full flex flex-col justify-center items-center shrink-0">
+                                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto">
                                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
 
-                                    {/* 相手への妨害エフェクト適用コンテナ */}
                                     <motion.div
                                         variants={obstructionVariants}
-                                        // 変更: アニメーション適用条件を修正 (SHAKE, SPIN, SKEW)
                                         animate={['SHAKE', 'SPIN', 'SKEW'].includes(opponentEffect || '') ? (opponentEffect as string) : 'NORMAL'}
-                                        // 変更: クラス適用 (BLUR, INVERT, GRAYSCALE, SEPIA)
-                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner md:w-48 border border-gray-300 
+                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner w-[200px] md:w-48 border border-gray-300 
                                             ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} 
                                             ${opponentEffect === 'INVERT' ? 'invert' : ''}
                                             ${opponentEffect === 'GRAYSCALE' ? 'grayscale' : ''}
                                             ${opponentEffect === 'SEPIA' ? 'sepia' : ''}
                                         `}
                                     >
-                                        {/* 相手側のタマネギの雨エフェクト */}
                                         {opponentEffect === 'ONION_RAIN' && <OnionRain />}
 
                                         <div className="flex items-center gap-2 mb-2 w-full justify-center">
                                             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                             <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
                                         </div>
-                                        <div className="grid grid-cols-3 gap-0.5 w-32 md:w-full opacity-90">
+                                        <div className="grid grid-cols-3 gap-0.5 w-full opacity-90">
                                             {rivalImages.map((img: string, idx: number) => (
                                                 <div
                                                     key={`opp-${idx}`}
                                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                                 >
                                                     <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
-                                                        {/* 相手の画像もサイズ統一: object-cover と aspect-square */}
                                                         <img src={img} className="w-full h-full object-cover aspect-square block" />
                                                     </div>
                                                     {opponentSelections.includes(idx) && (
@@ -754,23 +719,26 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* Status Bar */}
-                            <div className="shrink-0 flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 px-4 mt-2 w-full max-w-5xl mx-auto">
-                                <div className="flex items-center gap-3">
-                                    <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
-                                    You: {myScore}/5
-                                </div>
-                                <div className="flex-1 mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
-                                    <div
-                                        className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
-                                        style={{ width: `${(myScore / 5) * 100}%` }}
-                                    ></div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
-                                    <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
+                            {/* ステータスバー (スコア) - 最下部固定風に配置するか、フローの下に置く */}
+                            <div className="w-full max-w-4xl mx-auto px-4 mt-8">
+                                <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
+                                        You: {myScore}/5
+                                    </div>
+                                    <div className="flex-1 mx-4 md:mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
+                                        <div
+                                            className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
+                                            style={{ width: `${(myScore / 5) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
+                                        <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
+                                    </div>
                                 </div>
                             </div>
+
                         </div>
                     )}
 
