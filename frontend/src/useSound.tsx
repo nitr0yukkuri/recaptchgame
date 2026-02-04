@@ -28,27 +28,29 @@ export const useSound = () => {
         };
     }, []);
 
-    // 🔊 不正解音（デデン！）
-    const playError = async () => {
+    // 🔴 追加: ボタンクリックでこれを呼ぶ（オーディオコンテキスト起動）
+    const initAudio = async () => {
         await Tone.start();
+        console.log("Audio Context Started");
+    };
+
+    // 🔊 不正解音（デデン！）
+    const playError = () => {
         if (synthRef.current) {
             const now = Tone.now();
-            // 不協和音気味に低音を2回鳴らす
             synthRef.current.triggerAttackRelease(["C2", "F#2"], "16n", now);
             synthRef.current.triggerAttackRelease(["C2", "F#2"], "8n", now + 0.1);
         }
     };
 
     // 🔊 正解音（ピンポン！）
-    const playSuccess = async () => {
-        await Tone.start();
+    const playSuccess = () => {
         if (synthRef.current) {
             const now = Tone.now();
-            // 明るい高音
             synthRef.current.triggerAttackRelease("C5", "16n", now);
             synthRef.current.triggerAttackRelease("E5", "4n", now + 0.1);
         }
     };
 
-    return { playError, playSuccess };
+    return { initAudio, playError, playSuccess };
 };

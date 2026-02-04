@@ -138,8 +138,8 @@ function App() {
     // リロード中の状態管理
     const [isReloading, setIsReloading] = useState(false);
 
-    // 音源フックを使用
-    const { playError, playSuccess } = useSound();
+    // 音源フックを使用（initAudioを呼び出して初期化する必要がある）
+    const { initAudio, playError, playSuccess } = useSound();
 
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
@@ -283,6 +283,7 @@ function App() {
     }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess]);
 
     const startCpuGame = () => {
+        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -293,6 +294,7 @@ function App() {
     };
 
     const joinRandom = () => {
+        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
@@ -301,6 +303,7 @@ function App() {
     };
 
     const joinFriend = () => {
+        initAudio(); // 🔊 ユーザーアクションでオーディオ初期化
         setLoginStep('FRIEND');
         setGameMode('ONLINE');
     };
