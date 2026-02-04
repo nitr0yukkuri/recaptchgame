@@ -229,13 +229,16 @@ function App() {
                         // 試合開始演出
                         setStartPopup(true);
                         playStart(); // 🔊 スタート音
-                        setTimeout(() => setStartPopup(false), 2000);
 
-                        startGame(msg.payload.target, msg.payload.images);
-                        if (msg.payload.opponent_images) {
-                            updateCpuPattern("", msg.payload.opponent_images);
-                        }
-                        setMyScore(0);
+                        // 2秒後にゲーム開始（待機画面から遷移）
+                        setTimeout(() => {
+                            startGame(msg.payload.target, msg.payload.images);
+                            if (msg.payload.opponent_images) {
+                                updateCpuPattern("", msg.payload.opponent_images);
+                            }
+                            setMyScore(0);
+                            setStartPopup(false);
+                        }, 2000);
                         break;
 
                     case 'UPDATE_PATTERN':
@@ -288,15 +291,18 @@ function App() {
         // 試合開始演出 (CPU)
         setStartPopup(true);
         playStart(); // 🔊 スタート音
-        setTimeout(() => setStartPopup(false), 2000);
 
-        setGameMode('CPU');
-        setRoomInfo('LOCAL_CPU', playerId);
-        setMyScore(0);
-        const myProb = generateCpuProblem();
-        const cpuProb = generateCpuProblem();
-        startGame(myProb.target, myProb.images);
-        updateCpuPattern(cpuProb.target, cpuProb.images);
+        // 2秒後にゲーム開始
+        setTimeout(() => {
+            setGameMode('CPU');
+            setRoomInfo('LOCAL_CPU', playerId);
+            setMyScore(0);
+            const myProb = generateCpuProblem();
+            const cpuProb = generateCpuProblem();
+            startGame(myProb.target, myProb.images);
+            updateCpuPattern(cpuProb.target, cpuProb.images);
+            setStartPopup(false);
+        }, 2000);
     };
 
     const joinRandom = () => {
@@ -388,6 +394,7 @@ function App() {
         }
     };
 
+    // キャンセル処理: gameModeをnullにしてメッセージ受信を遮断
     const cancelWaiting = () => {
         setGameState('LOGIN');
         setLoginStep('SELECT');
@@ -449,7 +456,7 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* 試合開始ポップアップ [NEW] */}
+            {/* 試合開始ポップアップ */}
             <AnimatePresence>
                 {startPopup && (
                     <motion.div
@@ -488,7 +495,7 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* ホームボタン */}
+            {/* ホームボタン: z-indexを高くし、クリック可能に */}
             {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                 <button
                     onClick={goHome}
@@ -502,7 +509,7 @@ function App() {
             )}
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
-                {/* ヘッダー */}
+                {/* ヘッダー: pointer-events-noneで背面の要素をクリック可能に */}
                 <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40 pointer-events-none">
                     <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 pointer-events-auto">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
@@ -623,7 +630,7 @@ function App() {
                     )}
 
                     {gameState === 'PLAYING' && (
-                        <div className="flex flex-col h-full justify-start pb-20"> {/* pb-20で下部余白確保 */}
+                        <div className="flex flex-col h-full justify-start pt-12 pb-20"> {/* pt-12を追加し、タイトルロゴとの距離を確保 */}
 
                             {/* お題ヘッダー */}
                             <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl">

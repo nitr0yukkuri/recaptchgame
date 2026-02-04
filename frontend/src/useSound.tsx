@@ -97,15 +97,22 @@ export const useSound = () => {
         }
     };
 
-    // 🔊 試合開始音（ピッ、ピッ、ピー！）[NEW]
-    const playStart = () => {
+    // 🔊 カウントダウン音（ピッ）[NEW]
+    const playTick = () => {
         if (synthRef.current) {
-            const now = Tone.now();
-            synthRef.current.triggerAttackRelease("C4", "16n", now);      // ピッ
-            synthRef.current.triggerAttackRelease("C4", "16n", now + 0.5); // ピッ
-            synthRef.current.triggerAttackRelease("C5", "4n", now + 1.0);  // ピー！
+            synthRef.current.triggerAttackRelease("E5", "32n", Tone.now());
         }
     };
 
-    return { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart };
+    // 🔊 試合開始音（ピー！）
+    const playStart = () => {
+        if (synthRef.current) {
+            const now = Tone.now();
+            // ホイッスル風
+            synthRef.current.triggerAttackRelease("C5", "4n", now);
+            synthRef.current.triggerAttackRelease("E5", "4n", now);
+        }
+    };
+
+    return { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart, playTick };
 };
