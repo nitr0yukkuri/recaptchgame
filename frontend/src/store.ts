@@ -2,8 +2,8 @@ import { create } from 'zustand';
 
 export type GameState = 'LOGIN' | 'WAITING' | 'PLAYING' | 'RESULT';
 export type FeedbackType = 'CORRECT' | 'WRONG' | null;
-// 変更点: ONION_RAINを追加
-export type ObstructionType = 'SHAKE' | 'SPIN' | 'BLUR' | 'INVERT' | 'ONION_RAIN' | null;
+// 妨害要素に GRAYSCALE, SEPIA, SKEW を追加
+export type ObstructionType = 'SHAKE' | 'SPIN' | 'BLUR' | 'INVERT' | 'ONION_RAIN' | 'GRAYSCALE' | 'SEPIA' | 'SKEW' | null;
 
 interface Store {
     gameState: GameState;

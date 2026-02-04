@@ -265,6 +265,7 @@ function App() {
                     case 'VERIFY_FAILED':
                         setFeedback('WRONG');
                         setTimeout(() => setFeedback(null), 1000);
+                        resetMySelections(); // 【追加】間違えたら選択をリセット
                         break;
                 }
             } catch (e) {
@@ -342,6 +343,7 @@ function App() {
                 setFeedback('WRONG');
                 setTimeout(() => setFeedback(null), 1000);
                 setPlayerCombo(0);
+                resetMySelections(); // 【追加】間違えたら選択をリセット
             }
         } else {
             sendMessage(JSON.stringify({
