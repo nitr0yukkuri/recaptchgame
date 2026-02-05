@@ -117,19 +117,24 @@ func getEnv(key, fallback string) string {
 // クライアントの切断・退出処理を共通化
 func cleanupClient(ws *websocket.Conn) {
 	mu.Lock()
-	defer mu.Unlock()
-
 	playerID, exists := clients[ws]
 	if !exists {
-		return // 既に削除済み
+		mu.Unlock()
+		return
 	}
 	delete(clients, ws)
+
+	// 通知を送るべき相手とメッセージを一時保存するリスト
+	type notification struct {
+		conn *websocket.Conn
+		msg  Message
+	}
+	var notifications []notification
 
 	// 部屋からの削除処理
 	for rid, conns := range rooms {
 		if _, ok := conns[ws]; ok {
-			delete(conns, ws) // 退出したプレイヤーを削除
-
+			delete(conns, ws)
 			// プレイヤー状態も削除
 			if states, okState := roomStates[rid]; okState && exists {
 				delete(states, playerID)
@@ -137,17 +142,18 @@ func cleanupClient(ws *websocket.Conn) {
 
 			// 重要: 部屋にまだプレイヤーが残っている場合（対戦相手が残された場合）
 			if len(conns) > 0 {
-				// 残っているプレイヤーを勝者として通知する
 				for remainingWs := range conns {
 					if remainingPID, ok := clients[remainingWs]; ok {
-						// 勝利通知を送信
+						// 勝利通知を準備
 						res := GameResultPayload{
 							WinnerID: remainingPID,
 							Message:  "Opponent Disconnected",
 						}
 						b, _ := json.Marshal(res)
-						// ロック中だが、別コネクションへの書き込みなので簡易的にここで実行
-						remainingWs.WriteJSON(Message{Type: "GAME_FINISHED", Payload: b})
+						notifications = append(notifications, notification{
+							conn: remainingWs,
+							msg:  Message{Type: "GAME_FINISHED", Payload: b},
+						})
 					}
 				}
 			}
@@ -165,6 +171,12 @@ func cleanupClient(ws *websocket.Conn) {
 				matchMu.Unlock()
 			}
 		}
+	}
+	mu.Unlock() // ここでロック解除
+
+	// ロックの外でメッセージ送信（デッドロック防止）
+	for _, n := range notifications {
+		n.conn.WriteJSON(n.msg)
 	}
 }
 
@@ -206,7 +218,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			actualRoomID = waitingRoomID
 			matchMu.Unlock()
 		}
-		// RANDOM以外の場合は指定されたID(p.RoomID)をそのまま使用して部屋を作成/入室
 
 		mu.Lock()
 		clients[ws] = p.PlayerID
@@ -229,7 +240,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 		if roomSize == 2 {
-			// 2人揃ったらゲーム開始
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
 				if waitingRoomID == actualRoomID {

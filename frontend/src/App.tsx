@@ -432,7 +432,7 @@ function App() {
         }
     };
 
-    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & FRIEND画面(2つのボタン)に戻る
+    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & 適切な画面に戻る
     const cancelWaiting = () => {
         // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
@@ -442,7 +442,10 @@ function App() {
             }));
         }
         setGameState('LOGIN');
-        setLoginStep('FRIEND'); // 前回修正箇所
+
+        // 修正: 誰かと対戦(SELECT)からはホームへ、友達対戦(FRIEND/INPUT)からは友達メニューへ
+        setLoginStep(prev => prev === 'SELECT' ? 'SELECT' : 'FRIEND');
+
         setGameMode(null);
         setInputRoom('');
         setMyScore(0);
