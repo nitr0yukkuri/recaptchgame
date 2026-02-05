@@ -128,6 +128,8 @@ function App() {
     const [isReloading, setIsReloading] = useState(false);
     // 試合開始ポップアップの管理
     const [startPopup, setStartPopup] = useState(false);
+    // 部屋作成者かどうかのフラグ
+    const [isCreator, setIsCreator] = useState(false);
 
     // 音源フック（playStart追加）
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
@@ -341,16 +343,17 @@ function App() {
         setGameMode('ONLINE');
     };
 
-    // 部屋作成（ランダムIDで即入室）
+    // 部屋作成（ID決定画面へ）
     const createRoom = () => {
         playStart();
-        const randomId = Math.floor(1000 + Math.random() * 9000).toString();
-        joinRoomInternal(randomId);
+        setIsCreator(true);
+        setLoginStep('FRIEND_INPUT');
     };
 
     // 部屋入室（ID入力画面へ）
     const enterRoomFlow = () => {
         playStart();
+        setIsCreator(false);
         setLoginStep('FRIEND_INPUT');
     };
 
@@ -428,7 +431,7 @@ function App() {
         }
     };
 
-    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除
+    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & FRIEND画面(2つのボタン)に戻る
     const cancelWaiting = () => {
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
@@ -437,13 +440,19 @@ function App() {
             }));
         }
         setGameState('LOGIN');
-        setLoginStep('SELECT');
+        setLoginStep('FRIEND'); // 変更箇所: SELECTではなくFRIENDに戻す
         setGameMode(null);
         setInputRoom('');
         setMyScore(0);
     };
 
     const goHome = () => {
+        if (gameMode === 'ONLINE') {
+            sendMessage(JSON.stringify({
+                type: 'LEAVE_ROOM',
+                payload: { room_id: roomId, player_id: playerId }
+            }));
+        }
         setGameState('LOGIN');
         setLoginStep('SELECT');
         setGameMode(null);
@@ -664,8 +673,8 @@ function App() {
                             {loginStep === 'FRIEND_INPUT' && (
                                 <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
-                                        <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
-                                        <p className="text-sm text-gray-400">友達から教えてもらったIDを入力してね</p>
+                                        <h2 className="text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
+                                        <p className="text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
                                     </div>
                                     <div className="relative">
                                         <input
@@ -681,7 +690,7 @@ function App() {
                                         onClick={() => joinRoomInternal(inputRoom)}
                                         className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
                                     >
-                                        入室する
+                                        {isCreator ? "部屋を作る" : "入室する"}
                                     </button>
                                 </div>
                             )}
