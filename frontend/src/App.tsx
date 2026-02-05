@@ -122,8 +122,8 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
-    // LOGIN STEPに 'DIFFICULTY' を追加
-    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING' | 'DIFFICULTY'>('SELECT');
+    // LOGIN STEPに階層を追加: FRIEND(メニュー) -> FRIEND_INPUT(入力)
+    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState(0);
     const [isReloading, setIsReloading] = useState(false);
     // 試合開始ポップアップの管理
@@ -339,6 +339,19 @@ function App() {
         initAudio();
         setLoginStep('FRIEND');
         setGameMode('ONLINE');
+    };
+
+    // 部屋作成（ランダムIDで即入室）
+    const createRoom = () => {
+        playStart();
+        const randomId = Math.floor(1000 + Math.random() * 9000).toString();
+        joinRoomInternal(randomId);
+    };
+
+    // 部屋入室（ID入力画面へ）
+    const enterRoomFlow = () => {
+        playStart();
+        setLoginStep('FRIEND_INPUT');
     };
 
     const joinRoomInternal = (room: string) => {
@@ -598,12 +611,72 @@ function App() {
                                                 <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🤝</span>
                                                 <div className="text-left">
                                                     <p className="text-xl font-bold text-gray-800 group-hover:text-teal-600 transition">友達と対戦</p>
-                                                    <p className="text-sm text-gray-400 font-medium">ルームID指定</p>
+                                                    <p className="text-sm text-gray-400 font-medium">部屋を作る・入る</p>
                                                 </div>
                                             </div>
                                             <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                         </button>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* 友達と対戦：メニュー画面 (部屋を作る or 入る) */}
+                            {loginStep === 'FRIEND' && (
+                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
+                                    <div className="text-center space-y-2">
+                                        <h2 className="text-3xl font-black text-gray-800">友達と対戦</h2>
+                                        <p className="text-gray-500 font-medium">どうやって対戦する？</p>
+                                    </div>
+
+                                    <div className="w-full max-w-md space-y-4">
+                                        <button
+                                            onClick={createRoom}
+                                            className="w-full group bg-white border-2 border-indigo-200 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
+                                        >
+                                            <div className="bg-indigo-100 text-indigo-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">🏠</div>
+                                            <div className="text-left">
+                                                <p className="text-xl font-bold text-indigo-600">部屋を作成</p>
+                                                <p className="text-sm text-gray-400">新しい部屋を作って待機</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={enterRoomFlow}
+                                            className="w-full group bg-white border-2 border-purple-200 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
+                                        >
+                                            <div className="bg-purple-100 text-purple-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">🚪</div>
+                                            <div className="text-left">
+                                                <p className="text-xl font-bold text-purple-600">部屋に入室</p>
+                                                <p className="text-sm text-gray-400">IDを入力して参加</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 友達と対戦：ID入力画面 (旧FRIEND画面) */}
+                            {loginStep === 'FRIEND_INPUT' && (
+                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
+                                    <div className="space-y-2">
+                                        <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
+                                        <p className="text-sm text-gray-400">友達から教えてもらったIDを入力してね</p>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={inputRoom}
+                                            onChange={(e) => setInputRoom(e.target.value)}
+                                            placeholder="1234"
+                                            className="w-full text-3xl font-bold text-center py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => joinRoomInternal(inputRoom)}
+                                        className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
+                                    >
+                                        入室する
+                                    </button>
                                 </div>
                             )}
 
@@ -649,31 +722,6 @@ function App() {
                                             </div>
                                         </button>
                                     </div>
-                                </div>
-                            )}
-
-                            {loginStep === 'FRIEND' && (
-                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
-                                    <div className="space-y-2">
-                                        <h2 className="text-xl font-bold text-gray-700">ルームIDを入力</h2>
-                                        <p className="text-sm text-gray-400">友達から教えてもらったIDを入力してね</p>
-                                    </div>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={inputRoom}
-                                            onChange={(e) => setInputRoom(e.target.value)}
-                                            placeholder="1234"
-                                            className="w-full text-3xl font-bold text-center py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => joinRoomInternal(inputRoom)}
-                                        className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
-                                    >
-                                        入室する
-                                    </button>
                                 </div>
                             )}
                         </div>
