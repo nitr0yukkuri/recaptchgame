@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
@@ -19,6 +19,9 @@ const ALL_CPU_IMAGES = [
 
 // タマネギ画像のパス
 const ONION_IMAGE = '/images/tamanegi5.png';
+
+// 待機時間を制御するヘルパー関数
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // タマネギ降下エフェクトコンポーネント
 const OnionRain = () => {
@@ -132,6 +135,9 @@ function App() {
     const [startMessage, setStartMessage] = useState('Start!');
     // 部屋作成者かどうかのフラグ
     const [isCreator, setIsCreator] = useState(false);
+
+    // 変更: マッチング中かどうかのフラグ (キャンセル時にカウントダウンなどを止めるため)
+    const isMatchingRef = useRef(false);
 
     // 音源フック（playStart追加）
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
@@ -253,18 +259,34 @@ function App() {
                         break;
                     case 'GAME_START':
                         // 試合開始演出 (カウントダウン)
-                        setStartPopup(true);
-                        setStartMessage("マッチングしました！");
-                        playStart(); // 🔊 スタート音
+                        // 直列実行に変更し、途中でキャンセルされたら止める
+                        (async () => {
+                            isMatchingRef.current = true; // マッチング開始フラグON
 
-                        // カウントダウンシーケンス
-                        // 時間を延長し、文字の切り替わりをゆっくりにする
-                        setTimeout(() => setStartMessage("3"), 1500); // 1.5秒待機
-                        setTimeout(() => setStartMessage("2"), 2500);
-                        setTimeout(() => setStartMessage("1"), 3500);
-                        setTimeout(() => {
+                            setStartPopup(true);
+                            setStartMessage("マッチングしました！");
+                            playStart(); // 🔊 スタート音
+
+                            await sleep(1500); // 1.5秒待つ
+                            if (!isMatchingRef.current) return; // キャンセルされていたら終了
+
+                            setStartMessage("3");
+                            await sleep(1000); // 1秒待つ
+                            if (!isMatchingRef.current) return;
+
+                            setStartMessage("2");
+                            await sleep(1000); // 1秒待つ
+                            if (!isMatchingRef.current) return;
+
+                            setStartMessage("1");
+                            await sleep(1000); // 1秒待つ
+                            if (!isMatchingRef.current) return;
+
                             setStartMessage("START!");
-                            // ゲーム開始ロジック
+                            await sleep(1000); // 1秒待つ
+                            if (!isMatchingRef.current) return;
+
+                            // ゲームデータのセット
                             startGame(msg.payload.target, msg.payload.images);
                             if (msg.payload.opponent_images) {
                                 updateCpuPattern("", msg.payload.opponent_images);
@@ -273,7 +295,7 @@ function App() {
 
                             // 少し遅らせてポップアップを消す
                             setTimeout(() => setStartPopup(false), 1000);
-                        }, 4500);
+                        })();
                         break;
 
                     case 'UPDATE_PATTERN':
@@ -445,6 +467,9 @@ function App() {
 
     // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & 適切な画面に戻る
     const cancelWaiting = () => {
+        // キャンセルされたのでフラグを下ろす
+        isMatchingRef.current = false;
+
         // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
@@ -463,6 +488,9 @@ function App() {
     };
 
     const goHome = () => {
+        // ホームへ戻るのでフラグを下ろす
+        isMatchingRef.current = false;
+
         // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
