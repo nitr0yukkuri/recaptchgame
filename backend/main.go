@@ -100,7 +100,7 @@ var allImages = []string{
 // ターゲット
 var targets = []string{"車", "信号機", "階段", "消火栓"}
 
-// 変更点: ONION_RAIN を追加
+// お邪魔エフェクト定義
 var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT", "ONION_RAIN"}
 
 func init() {
@@ -114,6 +114,42 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// クライアントの切断・退出処理を共通化
+func cleanupClient(ws *websocket.Conn) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	playerID, exists := clients[ws]
+	if !exists {
+		return // 既に削除済み
+	}
+	delete(clients, ws)
+
+	// 部屋からの削除処理
+	for rid, conns := range rooms {
+		if _, ok := conns[ws]; ok {
+			delete(conns, ws)
+			// プレイヤー状態も削除
+			if states, okState := roomStates[rid]; okState && exists {
+				delete(states, playerID)
+			}
+
+			// 部屋が空になったら削除
+			if len(conns) == 0 {
+				delete(rooms, rid)
+				delete(roomStates, rid)
+
+				// 待機中の部屋だった場合は待機IDをクリア
+				matchMu.Lock()
+				if waitingRoomID == rid {
+					waitingRoomID = ""
+				}
+				matchMu.Unlock()
+			}
+		}
+	}
+}
+
 func handleWebSocket(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
@@ -121,34 +157,8 @@ func handleWebSocket(c echo.Context) error {
 	}
 	defer ws.Close()
 
-	defer func() {
-		mu.Lock()
-		playerID, exists := clients[ws]
-		delete(clients, ws)
-		
-		// 部屋からの削除処理
-		for rid, conns := range rooms {
-			if _, ok := conns[ws]; ok {
-				delete(conns, ws)
-				// プレイヤー状態も削除
-				if states, okState := roomStates[rid]; okState && exists {
-					delete(states, playerID)
-				}
-				
-				if len(conns) == 0 {
-					delete(rooms, rid)
-					delete(roomStates, rid)
-					
-					matchMu.Lock()
-					if waitingRoomID == rid {
-						waitingRoomID = ""
-					}
-					matchMu.Unlock()
-				}
-			}
-		}
-		mu.Unlock()
-	}()
+	// 切断時にクリーンアップを実行
+	defer cleanupClient(ws)
 
 	for {
 		var msg Message
@@ -169,6 +179,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		actualRoomID := p.RoomID
+		// RANDOMの場合は自動マッチングロジック
 		if p.RoomID == "RANDOM" {
 			matchMu.Lock()
 			if waitingRoomID == "" {
@@ -177,6 +188,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			actualRoomID = waitingRoomID
 			matchMu.Unlock()
 		}
+		// RANDOM以外の場合は指定されたID(p.RoomID)をそのまま使用して部屋を作成/入室
 
 		mu.Lock()
 		clients[ws] = p.PlayerID
@@ -185,7 +197,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			roomStates[actualRoomID] = make(map[string]*PlayerState)
 		}
 		rooms[actualRoomID][ws] = true
-		
+
 		roomStates[actualRoomID][p.PlayerID] = &PlayerState{
 			Score: 0,
 			Combo: 0,
@@ -199,6 +211,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 		if roomSize == 2 {
+			// 2人揃ったらゲーム開始
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
 				if waitingRoomID == actualRoomID {
@@ -210,6 +223,10 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		} else {
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		}
+
+	case "LEAVE_ROOM":
+		// フロントエンドからキャンセルなどで退出要求があった場合
+		cleanupClient(ws)
 
 	case "SELECT_IMAGE":
 		var p SelectImagePayload
@@ -351,7 +368,7 @@ func generateProblem() (string, []string) {
 	rand.Shuffle(len(others), func(i, j int) { others[i], others[j] = others[j], others[i] })
 
 	selected := []string{}
-	
+
 	correctCount := 3
 	if len(corrects) < 3 {
 		correctCount = len(corrects)
@@ -379,7 +396,7 @@ func startGame(roomID string) {
 
 	conns := rooms[roomID]
 	states := roomStates[roomID]
-	
+
 	for pid, state := range states {
 		t, i := generateProblem()
 		state.Target = t
@@ -392,7 +409,7 @@ func startGame(roomID string) {
 	for ws := range conns {
 		myID := clients[ws]
 		myState := states[myID]
-		
+
 		var opponentImages []string
 		for pid, s := range states {
 			if pid != myID {

@@ -428,8 +428,14 @@ function App() {
         }
     };
 
-    // キャンセル処理: gameModeをnullにしてメッセージ受信を遮断
+    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除
     const cancelWaiting = () => {
+        if (gameMode === 'ONLINE') {
+            sendMessage(JSON.stringify({
+                type: 'LEAVE_ROOM',
+                payload: { room_id: roomId, player_id: playerId }
+            }));
+        }
         setGameState('LOGIN');
         setLoginStep('SELECT');
         setGameMode(null);
