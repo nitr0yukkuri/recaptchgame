@@ -359,6 +359,7 @@ function App() {
 
     const joinRoomInternal = (room: string) => {
         if (!room) return;
+        setGameMode('ONLINE');
         setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
@@ -433,21 +434,23 @@ function App() {
 
     // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & FRIEND画面(2つのボタン)に戻る
     const cancelWaiting = () => {
-        if (gameMode === 'ONLINE') {
+        // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
+        if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
                 type: 'LEAVE_ROOM',
                 payload: { room_id: roomId, player_id: playerId }
             }));
         }
         setGameState('LOGIN');
-        setLoginStep('FRIEND'); // 変更箇所: SELECTではなくFRIENDに戻す
+        setLoginStep('FRIEND'); // 前回修正箇所
         setGameMode(null);
         setInputRoom('');
         setMyScore(0);
     };
 
     const goHome = () => {
-        if (gameMode === 'ONLINE') {
+        // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
+        if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
                 type: 'LEAVE_ROOM',
                 payload: { room_id: roomId, player_id: playerId }

@@ -188,7 +188,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			actualRoomID = waitingRoomID
 			matchMu.Unlock()
 		}
-		// RANDOM以外の場合は指定されたID(p.RoomID)をそのまま使用して部屋を作成/入室
 
 		mu.Lock()
 		clients[ws] = p.PlayerID
@@ -211,7 +210,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 		if roomSize == 2 {
-			// 2人揃ったらゲーム開始
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
 				if waitingRoomID == actualRoomID {
