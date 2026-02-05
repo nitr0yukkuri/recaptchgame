@@ -288,21 +288,16 @@ function App() {
     const startCpuGame = () => {
         initAudio();
 
-        // 試合開始演出 (CPU)
-        setStartPopup(true);
+        // 試合開始演出 (CPU) はスキップして即時開始
         playStart(); // 🔊 スタート音
 
-        // 2秒後にゲーム開始
-        setTimeout(() => {
-            setGameMode('CPU');
-            setRoomInfo('LOCAL_CPU', playerId);
-            setMyScore(0);
-            const myProb = generateCpuProblem();
-            const cpuProb = generateCpuProblem();
-            startGame(myProb.target, myProb.images);
-            updateCpuPattern(cpuProb.target, cpuProb.images);
-            setStartPopup(false);
-        }, 2000);
+        setGameMode('CPU');
+        setRoomInfo('LOCAL_CPU', playerId);
+        setMyScore(0);
+        const myProb = generateCpuProblem();
+        const cpuProb = generateCpuProblem();
+        startGame(myProb.target, myProb.images);
+        updateCpuPattern(cpuProb.target, cpuProb.images);
     };
 
     const joinRandom = () => {
@@ -414,9 +409,9 @@ function App() {
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
     const obstructionVariants: Variants = {
-        SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.2 } },
-        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 1, ease: "linear" } },
-        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } },
+        SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.5 } },
+        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 5, ease: "linear" } },
+        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 2.0, ease: "easeInOut" } },
         BLUR: {},
         INVERT: {},
         GRAYSCALE: {},
