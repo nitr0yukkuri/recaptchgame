@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, useRef } from 'react';
-import useWebSocket from 'react-use-websocket';
+import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
 import { useSound } from './useSound';
@@ -142,7 +142,7 @@ function App() {
     // 音源フック（playStart追加）
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
 
-    const { sendMessage, lastMessage } = useWebSocket(WS_URL, {
+    const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, {
         onOpen: () => console.log('Connected to Server'),
         shouldReconnect: () => true,
     });
@@ -260,31 +260,32 @@ function App() {
                     case 'GAME_START':
                         // 試合開始演出 (カウントダウン)
                         // 直列実行に変更し、途中でキャンセルされたら止める
-                        (async () => {
-                            isMatchingRef.current = true; // マッチング開始フラグON
+                        if (isMatchingRef.current) return; // すでに開始処理中なら無視
+                        isMatchingRef.current = true; // マッチング開始フラグON
 
+                        (async () => {
                             setStartPopup(true);
                             setStartMessage("マッチングしました！");
                             playStart(); // 🔊 スタート音
 
                             await sleep(1500); // 1.5秒待つ
-                            if (!isMatchingRef.current) return; // キャンセルされていたら終了
+                            if (!isMatchingRef.current) { setStartPopup(false); return; } // キャンセルされていたら終了
 
                             setStartMessage("3");
                             await sleep(1000); // 1秒待つ
-                            if (!isMatchingRef.current) return;
+                            if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("2");
                             await sleep(1000); // 1秒待つ
-                            if (!isMatchingRef.current) return;
+                            if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("1");
                             await sleep(1000); // 1秒待つ
-                            if (!isMatchingRef.current) return;
+                            if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("START!");
                             await sleep(1000); // 1秒待つ
-                            if (!isMatchingRef.current) return;
+                            if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             // ゲームデータのセット
                             startGame(msg.payload.target, msg.payload.images);
@@ -469,6 +470,7 @@ function App() {
     const cancelWaiting = () => {
         // キャンセルされたのでフラグを下ろす
         isMatchingRef.current = false;
+        setStartPopup(false); // ポップアップを強制的に閉じる
 
         // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
@@ -490,6 +492,7 @@ function App() {
     const goHome = () => {
         // ホームへ戻るのでフラグを下ろす
         isMatchingRef.current = false;
+        setStartPopup(false); // ポップアップを強制的に閉じる
 
         // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
@@ -504,6 +507,18 @@ function App() {
         setInputRoom('');
         setMyScore(0);
     };
+
+    // 再接続検知: WebSocketが切断→再接続（OPEN）された場合、サーバー側の状態と不整合が起きるためリセットする
+    useEffect(() => {
+        if (readyState === ReadyState.OPEN) {
+            const store = useGameStore.getState();
+            // オンライン対戦中（または待機中）に再接続された場合
+            if ((store.gameState === 'PLAYING' || store.gameState === 'WAITING') && store.roomId !== 'LOCAL_CPU') {
+                goHome();
+                alert("通信が切断されたため、ホームに戻ります。");
+            }
+        }
+    }, [readyState]);
 
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
