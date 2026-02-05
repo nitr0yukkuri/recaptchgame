@@ -8,6 +8,12 @@ import { useSound } from './useSound';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
+// WebSocketのオプションをコンポーネント外に定義して固定化
+const STATIC_WS_OPTIONS = {
+    onOpen: () => console.log('Connected to Server'),
+    shouldReconnect: () => true,
+};
+
 // CPUモード用: 全画像プール
 const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
@@ -124,6 +130,7 @@ function App() {
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
+    const [loginError, setLoginError] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState(0);
@@ -140,12 +147,12 @@ function App() {
     // キャンセル時にカウントダウンなどを止めるフラグ
     const isMatchingRef = useRef(false);
 
+    // メッセージの重複処理防止用
+    const prevMessageRef = useRef<MessageEvent<any> | null>(null);
+
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
 
-    const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, {
-        onOpen: () => console.log('Connected to Server'),
-        shouldReconnect: () => true,
-    });
+    const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
     // お邪魔エフェクト
     useEffect(() => {
@@ -238,6 +245,10 @@ function App() {
         if (gameMode !== 'ONLINE') return;
 
         if (lastMessage !== null) {
+            // 重複メッセージ防止
+            if (lastMessage === prevMessageRef.current) return;
+            prevMessageRef.current = lastMessage;
+
             try {
                 const msg = JSON.parse(lastMessage.data);
                 switch (msg.type) {
@@ -259,7 +270,7 @@ function App() {
                             updateCpuPattern("", msg.payload.opponent_images);
                         }
                         setMyScore(0);
-                        setIsVerifying(false); // 初期化
+                        setIsVerifying(false);
 
                         (async () => {
                             setStartPopup(true);
@@ -290,7 +301,7 @@ function App() {
                         break;
 
                     case 'UPDATE_PATTERN':
-                        setIsVerifying(false); // ロック解除
+                        setIsVerifying(false);
                         playSuccess();
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
@@ -314,7 +325,7 @@ function App() {
                         }
                         break;
                     case 'GAME_FINISHED':
-                        setIsVerifying(false); // ロック解除
+                        setIsVerifying(false);
                         if (msg.payload.winner_id === playerId) {
                             playWin();
                         } else {
@@ -323,8 +334,7 @@ function App() {
                         endGame(msg.payload.winner_id);
                         break;
                     case 'VERIFY_FAILED':
-                        setIsVerifying(false); // ロック解除
-                        // 既にフィードバックが出ている場合は無視して無限ループ防止
+                        setIsVerifying(false);
                         if (feedback !== 'WRONG') {
                             playError();
                             setFeedback('WRONG');
@@ -368,23 +378,27 @@ function App() {
     const joinFriend = () => {
         initAudio();
         setLoginStep('FRIEND');
-        setGameMode('ONLINE');
     };
 
     const createRoom = () => {
         playStart();
         setIsCreator(true);
+        setLoginError('');
         setLoginStep('FRIEND_INPUT');
     };
 
     const enterRoomFlow = () => {
         playStart();
         setIsCreator(false);
+        setLoginError('');
         setLoginStep('FRIEND_INPUT');
     };
 
     const joinRoomInternal = (room: string) => {
-        if (!room) return;
+        if (!room) {
+            setLoginError("IDを入力してね");
+            return;
+        }
         setGameMode('ONLINE');
         setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({
@@ -394,7 +408,7 @@ function App() {
     };
 
     const handleImageClick = (index: number) => {
-        if (isReloading || isVerifying) return; // 判定中も操作禁止
+        if (isReloading || isVerifying) return;
         toggleMySelection(index);
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
@@ -405,7 +419,7 @@ function App() {
     };
 
     const handleReload = () => {
-        if (isReloading || isVerifying) return; // 判定中はリロード禁止
+        if (isReloading || isVerifying) return;
         setIsReloading(true);
         resetMySelections();
         setTimeout(() => {
@@ -418,7 +432,7 @@ function App() {
     };
 
     const handleVerify = () => {
-        if (isReloading || isVerifying) return; // 連打防止
+        if (isReloading || isVerifying) return;
 
         if (gameMode === 'CPU') {
             const correctIndices = getCorrectIndices(images, target);
@@ -451,14 +465,12 @@ function App() {
                 resetMySelections();
             }
         } else {
-            // オンラインの場合、応答があるまでロックする
             setIsVerifying(true);
             sendMessage(JSON.stringify({
                 type: 'VERIFY',
                 payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
             }));
 
-            // タイムアウト設定 (5秒応答がなければロック解除)
             setTimeout(() => {
                 setIsVerifying(prev => {
                     if (prev) return false;
@@ -483,6 +495,7 @@ function App() {
         setLoginStep(prev => prev === 'SELECT' ? 'SELECT' : 'FRIEND');
         setGameMode(null);
         setInputRoom('');
+        setLoginError('');
         setMyScore(0);
     };
 
@@ -501,6 +514,7 @@ function App() {
         setLoginStep('SELECT');
         setGameMode(null);
         setInputRoom('');
+        setLoginError('');
         setMyScore(0);
     };
 
@@ -510,7 +524,6 @@ function App() {
             const store = useGameStore.getState();
             if ((store.gameState === 'PLAYING' || store.gameState === 'WAITING') && store.roomId !== 'LOCAL_CPU') {
                 goHome();
-                // alert("通信が切断されたため、ホームに戻ります。"); // 必要に応じて
             }
         }
     }, [readyState]);
@@ -729,10 +742,15 @@ function App() {
                                         <p className="text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
                                     </div>
                                     <div className="relative">
+                                        {/* 修正箇所: エラーメッセージを上に移動し、アニメーションを削除 */}
+                                        {loginError && <p className="text-red-500 font-bold text-sm mb-2">{loginError}</p>}
                                         <input
                                             type="text"
                                             value={inputRoom}
-                                            onChange={(e) => setInputRoom(e.target.value)}
+                                            onChange={(e) => {
+                                                setInputRoom(e.target.value);
+                                                if (loginError) setLoginError('');
+                                            }}
                                             placeholder="1234"
                                             className="w-full text-3xl font-bold text-center py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
                                             autoFocus
