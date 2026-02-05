@@ -269,6 +269,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
+		// 修正: ロック範囲を拡大して競合状態を防ぐ
 		mu.Lock()
 		states, okRoom := roomStates[p.RoomID]
 		if !okRoom {
@@ -276,9 +277,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 		state, okPlayer := states[p.PlayerID]
-		mu.Unlock()
-
 		if !okPlayer {
+			mu.Unlock()
+			return
+		}
+
+		// 既に終了している場合は無視
+		if state.Score >= 5 {
+			mu.Unlock()
 			return
 		}
 
@@ -319,14 +325,13 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		if isCorrect {
-			mu.Lock()
 			state.Score++
 			state.Combo++
 			currentScore := state.Score
 			currentCombo := state.Combo
-			mu.Unlock()
 
 			if currentScore >= 5 {
+				mu.Unlock()
 				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
 				b, _ := json.Marshal(res)
 				broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
@@ -334,24 +339,30 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			}
 
 			newTarget, newImages := generateProblem()
-			mu.Lock()
 			state.Target = newTarget
 			state.Images = newImages
-			mu.Unlock()
 
-			updateMy := UpdatePatternPayload{Target: newTarget, Images: newImages}
+			// 送信データを確保
+			targetToSend := newTarget
+			imagesToSend := newImages
+
+			sendObstruction := false
+			if currentCombo >= 2 {
+				state.Combo = 0
+				sendObstruction = true
+			}
+
+			mu.Unlock() // 状態更新後にロック解除
+
+			updateMy := UpdatePatternPayload{Target: targetToSend, Images: imagesToSend}
 			bMy, _ := json.Marshal(updateMy)
 			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
 
-			updateOpp := OpponentUpdatePayload{Images: newImages, Score: currentScore}
+			updateOpp := OpponentUpdatePayload{Images: imagesToSend, Score: currentScore}
 			bOpp, _ := json.Marshal(updateOpp)
 			broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 
-			if currentCombo >= 2 {
-				mu.Lock()
-				state.Combo = 0
-				mu.Unlock()
-
+			if sendObstruction {
 				effect := effects[rand.Intn(len(effects))]
 				obs := ObstructionPayload{Effect: effect}
 				bObs, _ := json.Marshal(obs)
@@ -359,9 +370,8 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			}
 
 		} else {
-			mu.Lock()
 			state.Combo = 0
-			mu.Unlock()
+			mu.Unlock() // ロック解除
 			ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 		}
 	}

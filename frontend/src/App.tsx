@@ -125,21 +125,21 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
-    // LOGIN STEPに階層を追加: FRIEND(メニュー) -> FRIEND_INPUT(入力)
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState(0);
     const [isReloading, setIsReloading] = useState(false);
+
+    // 連打防止のためのフラグ
+    const [isVerifying, setIsVerifying] = useState(false);
+
     // 試合開始ポップアップの管理
     const [startPopup, setStartPopup] = useState(false);
-    // カウントダウンメッセージ
     const [startMessage, setStartMessage] = useState('Start!');
-    // 部屋作成者かどうかのフラグ
     const [isCreator, setIsCreator] = useState(false);
 
-    // 変更: マッチング中かどうかのフラグ (キャンセル時にカウントダウンなどを止めるため)
+    // キャンセル時にカウントダウンなどを止めるフラグ
     const isMatchingRef = useRef(false);
 
-    // 音源フック（playStart追加）
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
 
     const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, {
@@ -147,10 +147,10 @@ function App() {
         shouldReconnect: () => true,
     });
 
-    // お邪魔エフェクト & サウンド
+    // お邪魔エフェクト
     useEffect(() => {
         if (playerEffect) {
-            playObstruction(); // 🔊 妨害音
+            playObstruction();
             const timer = setTimeout(() => setPlayerEffect(null), 3000);
             return () => clearTimeout(timer);
         }
@@ -164,26 +164,21 @@ function App() {
     }, [opponentEffect, setOpponentEffect]);
 
 
-    // CPU対戦ロジック (難易度対応)
+    // CPU対戦ロジック
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
-            // 難易度パラメータ調整
-            // よわい (1): 遅い (1200ms), 慎重 (確率50%で選択, 30%で提出)
-            // ふつう (2): 普通 (800ms), バランス (確率70%で選択, 50%で提出)
-            // つよい (3): 速い (700ms), 積極的 (確率80%で選択, 55%で提出) ※緩和設定を維持
-
             let intervalTime = 800;
-            let actionProb = 0.3; // 選択をスキップする確率 (低いほど正確に選ぶ)
-            let submitProb = 0.5; // 揃ってない時に提出する確率 (低いほど溜める)
+            let actionProb = 0.3;
+            let submitProb = 0.5;
 
             if (cpuDifficulty === 1) { // よわい
                 intervalTime = 1200;
                 actionProb = 0.5;
                 submitProb = 0.3;
             } else if (cpuDifficulty === 3) { // つよい
-                intervalTime = 700; // 緩和版を維持
-                actionProb = 0.2;   // 緩和版を維持
-                submitProb = 0.55;  // 緩和版を維持
+                intervalTime = 700;
+                actionProb = 0.2;
+                submitProb = 0.55;
             }
 
             const interval = setInterval(() => {
@@ -198,13 +193,11 @@ function App() {
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
                 if (remaining.length > 0) {
-                    // まだ選ぶべき画像がある
                     if (Math.random() > actionProb) {
                         const next = remaining[Math.floor(Math.random() * remaining.length)];
                         store.toggleOpponentSelection(next);
                     }
                 } else {
-                    // もう選ぶものがない -> 提出するかどうか
                     if (Math.random() > (1 - submitProb)) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
@@ -258,48 +251,46 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
-                        // 試合開始演出 (カウントダウン)
-                        // 直列実行に変更し、途中でキャンセルされたら止める
-                        if (isMatchingRef.current) return; // すでに開始処理中なら無視
-                        isMatchingRef.current = true; // マッチング開始フラグON
+                        if (isMatchingRef.current) return;
+                        isMatchingRef.current = true;
+
+                        startGame(msg.payload.target, msg.payload.images);
+                        if (msg.payload.opponent_images) {
+                            updateCpuPattern("", msg.payload.opponent_images);
+                        }
+                        setMyScore(0);
+                        setIsVerifying(false); // 初期化
 
                         (async () => {
                             setStartPopup(true);
                             setStartMessage("マッチングしました！");
-                            playStart(); // 🔊 スタート音
+                            playStart();
 
-                            await sleep(1500); // 1.5秒待つ
-                            if (!isMatchingRef.current) { setStartPopup(false); return; } // キャンセルされていたら終了
+                            await sleep(1500);
+                            if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("3");
-                            await sleep(1000); // 1秒待つ
+                            await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("2");
-                            await sleep(1000); // 1秒待つ
+                            await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("1");
-                            await sleep(1000); // 1秒待つ
+                            await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
 
                             setStartMessage("START!");
-                            await sleep(1000); // 1秒待つ
+                            await sleep(500);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
 
-                            // ゲームデータのセット
-                            startGame(msg.payload.target, msg.payload.images);
-                            if (msg.payload.opponent_images) {
-                                updateCpuPattern("", msg.payload.opponent_images);
-                            }
-                            setMyScore(0);
-
-                            // 少し遅らせてポップアップを消す
-                            setTimeout(() => setStartPopup(false), 1000);
+                            setTimeout(() => setStartPopup(false), 500);
                         })();
                         break;
 
                     case 'UPDATE_PATTERN':
+                        setIsVerifying(false); // ロック解除
                         playSuccess();
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
@@ -323,6 +314,7 @@ function App() {
                         }
                         break;
                     case 'GAME_FINISHED':
+                        setIsVerifying(false); // ロック解除
                         if (msg.payload.winner_id === playerId) {
                             playWin();
                         } else {
@@ -331,27 +323,29 @@ function App() {
                         endGame(msg.payload.winner_id);
                         break;
                     case 'VERIFY_FAILED':
-                        playError();
-                        setFeedback('WRONG');
-                        setTimeout(() => setFeedback(null), 1000);
-                        resetMySelections();
+                        setIsVerifying(false); // ロック解除
+                        // 既にフィードバックが出ている場合は無視して無限ループ防止
+                        if (feedback !== 'WRONG') {
+                            playError();
+                            setFeedback('WRONG');
+                            setTimeout(() => setFeedback(null), 1000);
+                            resetMySelections();
+                        }
                         break;
                 }
             } catch (e) {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart, feedback]);
 
-    // 難易度選択画面へ遷移
     const startCpuFlow = () => {
         initAudio();
         setLoginStep('DIFFICULTY');
     };
 
-    // 難易度決定＆ゲーム開始
     const confirmDifficulty = (level: number) => {
-        playStart(); // 🔊 スタート音
+        playStart();
         setCpuDifficulty(level);
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
@@ -377,14 +371,12 @@ function App() {
         setGameMode('ONLINE');
     };
 
-    // 部屋作成（ID決定画面へ）
     const createRoom = () => {
         playStart();
         setIsCreator(true);
         setLoginStep('FRIEND_INPUT');
     };
 
-    // 部屋入室（ID入力画面へ）
     const enterRoomFlow = () => {
         playStart();
         setIsCreator(false);
@@ -402,7 +394,7 @@ function App() {
     };
 
     const handleImageClick = (index: number) => {
-        if (isReloading) return;
+        if (isReloading || isVerifying) return; // 判定中も操作禁止
         toggleMySelection(index);
         if (gameMode === 'ONLINE') {
             sendMessage(JSON.stringify({
@@ -413,7 +405,7 @@ function App() {
     };
 
     const handleReload = () => {
-        if (isReloading) return;
+        if (isReloading || isVerifying) return; // 判定中はリロード禁止
         setIsReloading(true);
         resetMySelections();
         setTimeout(() => {
@@ -426,7 +418,7 @@ function App() {
     };
 
     const handleVerify = () => {
-        if (isReloading) return;
+        if (isReloading || isVerifying) return; // 連打防止
 
         if (gameMode === 'CPU') {
             const correctIndices = getCorrectIndices(images, target);
@@ -459,20 +451,28 @@ function App() {
                 resetMySelections();
             }
         } else {
+            // オンラインの場合、応答があるまでロックする
+            setIsVerifying(true);
             sendMessage(JSON.stringify({
                 type: 'VERIFY',
                 payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
             }));
+
+            // タイムアウト設定 (5秒応答がなければロック解除)
+            setTimeout(() => {
+                setIsVerifying(prev => {
+                    if (prev) return false;
+                    return prev;
+                });
+            }, 5000);
         }
     };
 
-    // キャンセル処理: LEAVE_ROOMを送信して部屋を削除 & 適切な画面に戻る
     const cancelWaiting = () => {
-        // キャンセルされたのでフラグを下ろす
         isMatchingRef.current = false;
-        setStartPopup(false); // ポップアップを強制的に閉じる
+        setStartPopup(false);
+        setIsVerifying(false);
 
-        // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
                 type: 'LEAVE_ROOM',
@@ -480,21 +480,17 @@ function App() {
             }));
         }
         setGameState('LOGIN');
-
-        // 修正: 誰かと対戦(SELECT)からはホームへ、友達対戦(FRIEND/INPUT)からは友達メニューへ
         setLoginStep(prev => prev === 'SELECT' ? 'SELECT' : 'FRIEND');
-
         setGameMode(null);
         setInputRoom('');
         setMyScore(0);
     };
 
     const goHome = () => {
-        // ホームへ戻るのでフラグを下ろす
         isMatchingRef.current = false;
-        setStartPopup(false); // ポップアップを強制的に閉じる
+        setStartPopup(false);
+        setIsVerifying(false);
 
-        // ONLINEモード、または部屋IDがありCPUモードでない場合は退出メッセージを送る
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
                 type: 'LEAVE_ROOM',
@@ -508,14 +504,13 @@ function App() {
         setMyScore(0);
     };
 
-    // 再接続検知: WebSocketが切断→再接続（OPEN）された場合、サーバー側の状態と不整合が起きるためリセットする
+    // 再接続時のバグ防止
     useEffect(() => {
         if (readyState === ReadyState.OPEN) {
             const store = useGameStore.getState();
-            // オンライン対戦中（または待機中）に再接続された場合
             if ((store.gameState === 'PLAYING' || store.gameState === 'WAITING') && store.roomId !== 'LOCAL_CPU') {
                 goHome();
-                alert("通信が切断されたため、ホームに戻ります。");
+                // alert("通信が切断されたため、ホームに戻ります。"); // 必要に応じて
             }
         }
     }, [readyState]);
@@ -537,7 +532,6 @@ function App() {
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
 
-            {/* 通知 */}
             <AnimatePresence>
                 {playerEffect && (
                     <motion.div
@@ -565,17 +559,15 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* 試合開始ポップアップ */}
             <AnimatePresence>
                 {startPopup && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.5 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 1.5 }}
-                        className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/40 pointer-events-none"
+                        className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/40 pointer-events-auto"
                     >
                         <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center border-4 border-[#5B46F5] pointer-events-auto">
-                            {/* 変更箇所: 文字数の閾値を8に変更し、START!が大きく表示されるように調整 */}
                             <h2 className={`${startMessage.length > 8 ? 'text-4xl' : 'text-6xl'} font-black text-[#5B46F5] tracking-widest uppercase`}>
                                 {startMessage}
                             </h2>
@@ -587,7 +579,6 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* 正解/不正解フィードバック */}
             <AnimatePresence>
                 {feedback && (
                     <motion.div
@@ -609,7 +600,6 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* ホームボタン: z-indexを高くし、クリック可能に */}
             {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
                 <button
                     onClick={goHome}
@@ -623,7 +613,6 @@ function App() {
             )}
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
-                {/* ヘッダー: pointer-events-noneで背面の要素をクリック可能に */}
                 <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40 pointer-events-none">
                     <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 pointer-events-auto">
                         <span className="text-[#4A90E2]">reCAPTCHA</span>
@@ -700,7 +689,6 @@ function App() {
                                 </div>
                             )}
 
-                            {/* 友達と対戦：メニュー画面 (部屋を作る or 入る) */}
                             {loginStep === 'FRIEND' && (
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
                                     <div className="text-center space-y-2">
@@ -734,7 +722,6 @@ function App() {
                                 </div>
                             )}
 
-                            {/* 友達と対戦：ID入力画面 (旧FRIEND画面) */}
                             {loginStep === 'FRIEND_INPUT' && (
                                 <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
@@ -824,18 +811,15 @@ function App() {
                     )}
 
                     {gameState === 'PLAYING' && (
-                        <div className="flex flex-col h-full justify-start pt-12 pb-20"> {/* pt-12を追加し、タイトルロゴとの距離を確保 */}
+                        <div className="flex flex-col h-full justify-start pt-12 pb-20">
 
-                            {/* お題ヘッダー */}
                             <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl">
                                 <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
                                 <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
                             </div>
 
-                            {/* メイングリッドエリア (中央揃え) */}
                             <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
 
-                                {/* 自分のセクション (メイン) */}
                                 <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
                                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
@@ -849,11 +833,10 @@ function App() {
                                             ${playerEffect === 'SEPIA' ? 'sepia' : ''}
                                         `}
                                     >
-                                        {/* タマネギの雨エフェクト */}
                                         {playerEffect === 'ONION_RAIN' && <OnionRain />}
 
                                         <AnimatePresence>
-                                            {isReloading && (
+                                            {(isReloading || isVerifying) && (
                                                 <motion.div
                                                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                                     className="absolute inset-0 z-30 bg-white/80 flex items-center justify-center"
@@ -890,7 +873,7 @@ function App() {
                                         <div className="flex justify-between items-center mt-4 px-2 w-full">
                                             <button
                                                 onClick={handleReload}
-                                                disabled={isReloading}
+                                                disabled={isReloading || isVerifying}
                                                 className="p-2 text-gray-400 hover:text-[#5B46F5] hover:bg-gray-100 rounded-full transition duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                                             >
                                                 <svg className={`w-6 h-6 ${isReloading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -900,16 +883,16 @@ function App() {
 
                                             <button
                                                 onClick={handleVerify}
-                                                className="bg-[#4285F4] hover:bg-[#3367D6] text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative mr-8"
+                                                disabled={isReloading || isVerifying}
+                                                className="bg-[#4285F4] hover:bg-[#3367D6] disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative mr-8"
                                             >
-                                                確認
+                                                {isVerifying ? '判定中...' : '確認'}
                                             </button>
                                             <div className="w-6"></div>
                                         </div>
                                     </motion.div>
                                 </div>
 
-                                {/* 相手のセクション */}
                                 <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto">
                                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
 
@@ -950,7 +933,6 @@ function App() {
                                 </div>
                             </div>
 
-                            {/* ステータスバー (スコア) */}
                             <div className="w-full max-w-4xl mx-auto px-4 mt-8">
                                 <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
                                     <div className="flex items-center gap-3">
