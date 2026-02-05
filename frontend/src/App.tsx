@@ -128,6 +128,8 @@ function App() {
     const [isReloading, setIsReloading] = useState(false);
     // 試合開始ポップアップの管理
     const [startPopup, setStartPopup] = useState(false);
+    // カウントダウンメッセージ
+    const [startMessage, setStartMessage] = useState('Start!');
     // 部屋作成者かどうかのフラグ
     const [isCreator, setIsCreator] = useState(false);
 
@@ -250,19 +252,28 @@ function App() {
                         setGameState('WAITING');
                         break;
                     case 'GAME_START':
-                        // 試合開始演出
+                        // 試合開始演出 (カウントダウン)
                         setStartPopup(true);
+                        setStartMessage("マッチングしました！");
                         playStart(); // 🔊 スタート音
 
-                        // 2秒後にゲーム開始（待機画面から遷移）
+                        // カウントダウンシーケンス
+                        // 時間を延長し、文字の切り替わりをゆっくりにする
+                        setTimeout(() => setStartMessage("3"), 1500); // 1.5秒待機
+                        setTimeout(() => setStartMessage("2"), 2500);
+                        setTimeout(() => setStartMessage("1"), 3500);
                         setTimeout(() => {
+                            setStartMessage("START!");
+                            // ゲーム開始ロジック
                             startGame(msg.payload.target, msg.payload.images);
                             if (msg.payload.opponent_images) {
                                 updateCpuPattern("", msg.payload.opponent_images);
                             }
                             setMyScore(0);
-                            setStartPopup(false);
-                        }, 2000);
+
+                            // 少し遅らせてポップアップを消す
+                            setTimeout(() => setStartPopup(false), 1000);
+                        }, 4500);
                         break;
 
                     case 'UPDATE_PATTERN':
@@ -520,9 +531,14 @@ function App() {
                         exit={{ opacity: 0, scale: 1.5 }}
                         className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/40 pointer-events-none"
                     >
-                        <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center border-4 border-[#5B46F5]">
-                            <h2 className="text-6xl font-black text-[#5B46F5] tracking-widest uppercase">Start!</h2>
-                            <p className="text-xl font-bold text-gray-600 mt-2">試合開始</p>
+                        <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center border-4 border-[#5B46F5] pointer-events-auto">
+                            {/* 変更箇所: 文字数の閾値を8に変更し、START!が大きく表示されるように調整 */}
+                            <h2 className={`${startMessage.length > 8 ? 'text-4xl' : 'text-6xl'} font-black text-[#5B46F5] tracking-widest uppercase`}>
+                                {startMessage}
+                            </h2>
+                            <p className="text-xl font-bold text-gray-600 mt-2">
+                                {startMessage === 'START!' ? 'Go!' : '準備完了'}
+                            </p>
                         </div>
                     </motion.div>
                 )}
