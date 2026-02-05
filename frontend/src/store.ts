@@ -13,7 +13,7 @@ interface Store {
     images: string[];
     cpuTarget: string;
     cpuImages: string[];
-    // 追加: CPU難易度 (1: Junior, 2: Senior, 3: Maintainer)
+    // 追加: CPU難易度 (1: よわい, 2: ふつう, 3: つよい)
     cpuDifficulty: number;
 
     opponentScore: number;
@@ -60,7 +60,7 @@ export const useGameStore = create<Store>((set) => ({
     images: [],
     cpuTarget: '',
     cpuImages: [],
-    cpuDifficulty: 2, // デフォルトはSenior(普通)
+    cpuDifficulty: 2, // デフォルトはふつう
 
     opponentScore: 0,
     opponentSelections: [],

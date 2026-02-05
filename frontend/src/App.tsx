@@ -158,31 +158,22 @@ function App() {
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             // 難易度パラメータ調整
-            // Junior (1): 遅い (1200ms), 慎重 (確率50%で選択, 30%で提出)
-            // Senior (2): 普通 (800ms), バランス (確率70%で選択, 50%で提出)
-            // Maintainer (3): 速い (600ms), 積極的 (確率85%で選択, 60%で提出) ※緩和しました
+            // よわい (1): 遅い (1200ms), 慎重 (確率50%で選択, 30%で提出)
+            // ふつう (2): 普通 (800ms), バランス (確率70%で選択, 50%で提出)
+            // つよい (3): 速い (700ms), 積極的 (確率80%で選択, 55%で提出) ※緩和設定を維持
 
             let intervalTime = 800;
             let actionProb = 0.3; // 選択をスキップする確率 (低いほど正確に選ぶ)
             let submitProb = 0.5; // 揃ってない時に提出する確率 (低いほど溜める)
 
-            if (cpuDifficulty === 1) { // Junior (よわい)
+            if (cpuDifficulty === 1) { // よわい
                 intervalTime = 1200;
                 actionProb = 0.5;
                 submitProb = 0.3;
-            } else if (cpuDifficulty === 3) { // Maintainer (つよい)
-                intervalTime = 600; // 400ms -> 600ms に緩和
-                actionProb = 0.15;  // 0.1 -> 0.15 に緩和 (少しミス/見逃しが増える)
-                submitProb = 0.4;   // 0.3 -> 0.4 に緩和 (攻撃頻度を少し下げるため、閾値を上げ/確率を下げる。※変数は (1-submitProb) > Math.random() なので、submitProbが低いほど提出しにくい)
-                // ロジック修正: 下記の条件式に合わせて変数値を再設定
-                // actionProb: Math.random() > actionProb なら選択 => 値が小さいほど選択しやすい
-                // submitProb: Math.random() > (1 - submitProb) なら提出 => 値が大きいほど提出しやすい
-
-                // Senior (基準): actionProb 0.3 (70%選択), submitProb 0.5 (50%提出)
-
-                // Maintainer (修正後): 
-                actionProb = 0.15; // 85%選択
-                submitProb = 0.6;  // 60%提出 (前回は70-80%相当の強さだったので少し下げ)
+            } else if (cpuDifficulty === 3) { // つよい
+                intervalTime = 700; // 緩和版を維持
+                actionProb = 0.2;   // 緩和版を維持
+                submitProb = 0.55;  // 緩和版を維持
             }
 
             const interval = setInterval(() => {
@@ -631,8 +622,8 @@ function App() {
                                         >
                                             <div className="bg-green-100 text-green-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
                                             <div className="text-left">
-                                                <p className="text-xl font-bold text-green-600">Junior</p>
-                                                <p className="text-sm text-gray-400">Hello World! (よわい)</p>
+                                                <p className="text-xl font-bold text-green-600">よわい</p>
+                                                <p className="text-sm text-gray-400">のんびりプレイ向け</p>
                                             </div>
                                         </button>
 
@@ -642,8 +633,8 @@ function App() {
                                         >
                                             <div className="bg-orange-100 text-orange-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">2</div>
                                             <div className="text-left">
-                                                <p className="text-xl font-bold text-orange-600">Senior</p>
-                                                <p className="text-sm text-gray-400">LGTM! (ふつう)</p>
+                                                <p className="text-xl font-bold text-orange-600">ふつう</p>
+                                                <p className="text-sm text-gray-400">バランスの取れた難易度</p>
                                             </div>
                                         </button>
 
@@ -653,8 +644,8 @@ function App() {
                                         >
                                             <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
                                             <div className="text-left">
-                                                <p className="text-xl font-bold text-red-600">Maintainer</p>
-                                                <p className="text-sm text-gray-400">Changes requested! (つよい)</p>
+                                                <p className="text-xl font-bold text-red-600">つよい</p>
+                                                <p className="text-sm text-gray-400">本気で挑戦したい人向け</p>
                                             </div>
                                         </button>
                                     </div>
@@ -845,7 +836,7 @@ function App() {
                                         ></div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'Maintainer' : (cpuDifficulty === 1 ? 'Junior' : 'Senior')) : 'Rival'}: {opponentScore}/5
+                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'CPU (つよい)' : (cpuDifficulty === 1 ? 'CPU (よわい)' : 'CPU (ふつう)')) : 'Rival'}: {opponentScore}/5
                                         <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
                                     </div>
                                 </div>
