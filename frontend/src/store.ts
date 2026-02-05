@@ -13,6 +13,8 @@ interface Store {
     images: string[];
     cpuTarget: string;
     cpuImages: string[];
+    // 追加: CPU難易度 (1: Junior, 2: Senior, 3: Maintainer)
+    cpuDifficulty: number;
 
     opponentScore: number;
     opponentSelections: number[];
@@ -32,6 +34,9 @@ interface Store {
 
     updateCpuPattern: (target: string, images: string[]) => void;
     updatePlayerPattern: (target: string, images: string[]) => void;
+
+    // 追加: 難易度設定用アクション
+    setCpuDifficulty: (level: number) => void;
 
     updateOpponentScore: (score: number) => void;
     toggleOpponentSelection: (index: number) => void;
@@ -55,6 +60,8 @@ export const useGameStore = create<Store>((set) => ({
     images: [],
     cpuTarget: '',
     cpuImages: [],
+    cpuDifficulty: 2, // デフォルトはSenior(普通)
+
     opponentScore: 0,
     opponentSelections: [],
     mySelections: [],
@@ -85,6 +92,8 @@ export const useGameStore = create<Store>((set) => ({
     updatePattern: (target, images) => set({ target, images, opponentSelections: [], mySelections: [] }),
     updateCpuPattern: (target, images) => set({ cpuTarget: target, cpuImages: images, opponentSelections: [] }),
     updatePlayerPattern: (target, images) => set({ target, images, mySelections: [] }),
+
+    setCpuDifficulty: (level) => set({ cpuDifficulty: level }),
 
     updateOpponentScore: (score) => set({ opponentScore: score }),
     toggleOpponentSelection: (index) => set((state) => {

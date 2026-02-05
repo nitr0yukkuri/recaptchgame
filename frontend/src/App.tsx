@@ -108,13 +108,13 @@ const getRandomObstruction = (): ObstructionType => {
 function App() {
     const {
         gameState, roomId, playerId, target, images,
-        cpuImages,
+        cpuImages, cpuDifficulty,
         opponentScore, opponentSelections, mySelections,
         setGameState, setRoomInfo, startGame,
         updateCpuPattern, updatePlayerPattern,
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
-        feedback, setFeedback,
+        feedback, setFeedback, setCpuDifficulty,
         // コンボとお邪魔関連
         playerCombo, opponentCombo, playerEffect, opponentEffect,
         setPlayerCombo, setPlayerEffect, setOpponentEffect
@@ -122,7 +122,8 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
-    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING'>('SELECT');
+    // LOGIN STEPに 'DIFFICULTY' を追加
+    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState(0);
     const [isReloading, setIsReloading] = useState(false);
     // 試合開始ポップアップの管理
@@ -153,9 +154,37 @@ function App() {
     }, [opponentEffect, setOpponentEffect]);
 
 
-    // CPU対戦ロジック
+    // CPU対戦ロジック (難易度対応)
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
+            // 難易度パラメータ調整
+            // Junior (1): 遅い (1200ms), 慎重 (確率50%で選択, 30%で提出)
+            // Senior (2): 普通 (800ms), バランス (確率70%で選択, 50%で提出)
+            // Maintainer (3): 速い (600ms), 積極的 (確率85%で選択, 60%で提出) ※緩和しました
+
+            let intervalTime = 800;
+            let actionProb = 0.3; // 選択をスキップする確率 (低いほど正確に選ぶ)
+            let submitProb = 0.5; // 揃ってない時に提出する確率 (低いほど溜める)
+
+            if (cpuDifficulty === 1) { // Junior (よわい)
+                intervalTime = 1200;
+                actionProb = 0.5;
+                submitProb = 0.3;
+            } else if (cpuDifficulty === 3) { // Maintainer (つよい)
+                intervalTime = 600; // 400ms -> 600ms に緩和
+                actionProb = 0.15;  // 0.1 -> 0.15 に緩和 (少しミス/見逃しが増える)
+                submitProb = 0.4;   // 0.3 -> 0.4 に緩和 (攻撃頻度を少し下げるため、閾値を上げ/確率を下げる。※変数は (1-submitProb) > Math.random() なので、submitProbが低いほど提出しにくい)
+                // ロジック修正: 下記の条件式に合わせて変数値を再設定
+                // actionProb: Math.random() > actionProb なら選択 => 値が小さいほど選択しやすい
+                // submitProb: Math.random() > (1 - submitProb) なら提出 => 値が大きいほど提出しやすい
+
+                // Senior (基準): actionProb 0.3 (70%選択), submitProb 0.5 (50%提出)
+
+                // Maintainer (修正後): 
+                actionProb = 0.15; // 85%選択
+                submitProb = 0.6;  // 60%提出 (前回は70-80%相当の強さだったので少し下げ)
+            }
+
             const interval = setInterval(() => {
                 const store = useGameStore.getState();
 
@@ -168,12 +197,14 @@ function App() {
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
                 if (remaining.length > 0) {
-                    if (Math.random() > 0.3) {
+                    // まだ選ぶべき画像がある
+                    if (Math.random() > actionProb) {
                         const next = remaining[Math.floor(Math.random() * remaining.length)];
                         store.toggleOpponentSelection(next);
                     }
                 } else {
-                    if (Math.random() > 0.5) {
+                    // もう選ぶものがない -> 提出するかどうか
+                    if (Math.random() > (1 - submitProb)) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
 
@@ -189,10 +220,10 @@ function App() {
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
                 }
-            }, 800);
+            }, intervalTime);
             return () => clearInterval(interval);
         }
-    }, [gameMode, gameState]);
+    }, [gameMode, gameState, cpuDifficulty]);
 
     // 勝利判定
     useEffect(() => {
@@ -285,12 +316,16 @@ function App() {
         }
     }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart]);
 
-    const startCpuGame = () => {
+    // 難易度選択画面へ遷移
+    const startCpuFlow = () => {
         initAudio();
+        setLoginStep('DIFFICULTY');
+    };
 
-        // 試合開始演出 (CPU) はスキップして即時開始
+    // 難易度決定＆ゲーム開始
+    const confirmDifficulty = (level: number) => {
         playStart(); // 🔊 スタート音
-
+        setCpuDifficulty(level);
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -547,7 +582,7 @@ function App() {
 
                                     <div className="flex-1 w-full max-w-md space-y-4 pb-10">
                                         <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
-                                        <button onClick={startCpuGame} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                                        <button onClick={startCpuFlow} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
                                             <div className="flex items-center gap-4">
                                                 <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🤖</span>
                                                 <div className="text-left">
@@ -576,6 +611,51 @@ function App() {
                                                 </div>
                                             </div>
                                             <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {loginStep === 'DIFFICULTY' && (
+                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
+                                    <div className="text-center space-y-2">
+                                        <span className="bg-orange-100 text-orange-600 p-4 rounded-2xl text-4xl inline-block mb-2">⚡</span>
+                                        <h2 className="text-3xl font-black text-gray-800">難易度を選択</h2>
+                                        <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>
+                                    </div>
+
+                                    <div className="w-full max-w-md space-y-4">
+                                        <button
+                                            onClick={() => confirmDifficulty(1)}
+                                            className="w-full group bg-white border-2 border-green-200 hover:border-green-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
+                                        >
+                                            <div className="bg-green-100 text-green-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
+                                            <div className="text-left">
+                                                <p className="text-xl font-bold text-green-600">Junior</p>
+                                                <p className="text-sm text-gray-400">Hello World! (よわい)</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => confirmDifficulty(2)}
+                                            className="w-full group bg-white border-2 border-orange-200 hover:border-orange-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
+                                        >
+                                            <div className="bg-orange-100 text-orange-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">2</div>
+                                            <div className="text-left">
+                                                <p className="text-xl font-bold text-orange-600">Senior</p>
+                                                <p className="text-sm text-gray-400">LGTM! (ふつう)</p>
+                                            </div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => confirmDifficulty(3)}
+                                            className="w-full group bg-white border-2 border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
+                                        >
+                                            <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
+                                            <div className="text-left">
+                                                <p className="text-xl font-bold text-red-600">Maintainer</p>
+                                                <p className="text-sm text-gray-400">Changes requested! (つよい)</p>
+                                            </div>
                                         </button>
                                     </div>
                                 </div>
@@ -765,7 +845,7 @@ function App() {
                                         ></div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        {gameMode === 'CPU' ? 'CPU' : 'Rival'}: {opponentScore}/5
+                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'Maintainer' : (cpuDifficulty === 1 ? 'Junior' : 'Senior')) : 'Rival'}: {opponentScore}/5
                                         <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
                                     </div>
                                 </div>
