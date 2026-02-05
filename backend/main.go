@@ -128,10 +128,28 @@ func cleanupClient(ws *websocket.Conn) {
 	// 部屋からの削除処理
 	for rid, conns := range rooms {
 		if _, ok := conns[ws]; ok {
-			delete(conns, ws)
+			delete(conns, ws) // 退出したプレイヤーを削除
+
 			// プレイヤー状態も削除
 			if states, okState := roomStates[rid]; okState && exists {
 				delete(states, playerID)
+			}
+
+			// 重要: 部屋にまだプレイヤーが残っている場合（対戦相手が残された場合）
+			if len(conns) > 0 {
+				// 残っているプレイヤーを勝者として通知する
+				for remainingWs := range conns {
+					if remainingPID, ok := clients[remainingWs]; ok {
+						// 勝利通知を送信
+						res := GameResultPayload{
+							WinnerID: remainingPID,
+							Message:  "Opponent Disconnected",
+						}
+						b, _ := json.Marshal(res)
+						// ロック中だが、別コネクションへの書き込みなので簡易的にここで実行
+						remainingWs.WriteJSON(Message{Type: "GAME_FINISHED", Payload: b})
+					}
+				}
 			}
 
 			// 部屋が空になったら削除
@@ -188,6 +206,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			actualRoomID = waitingRoomID
 			matchMu.Unlock()
 		}
+		// RANDOM以外の場合は指定されたID(p.RoomID)をそのまま使用して部屋を作成/入室
 
 		mu.Lock()
 		clients[ws] = p.PlayerID
@@ -210,6 +229,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 		if roomSize == 2 {
+			// 2人揃ったらゲーム開始
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
 				if waitingRoomID == actualRoomID {
