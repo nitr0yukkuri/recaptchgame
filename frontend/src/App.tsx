@@ -736,14 +736,14 @@ function App() {
                             )}
 
                             {loginStep === 'FRIEND_INPUT' && (
-                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
+                                <div className="space-y-10 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
                                         <h2 className="text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
                                         <p className="text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
                                     </div>
                                     <div className="relative">
-                                        {/* 修正箇所: エラーメッセージを上に移動し、アニメーションを削除 */}
-                                        {loginError && <p className="text-red-500 font-bold text-sm mb-2">{loginError}</p>}
+                                        {/* 修正箇所: エラーメッセージを絶対配置にしてレイアウトシフトを防止 */}
+                                        {loginError && <p className="absolute -top-7 left-0 w-full text-red-500 font-bold text-sm">{loginError}</p>}
                                         <input
                                             type="text"
                                             value={inputRoom}
