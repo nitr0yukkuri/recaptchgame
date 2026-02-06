@@ -532,8 +532,8 @@ function App() {
 
     const obstructionVariants: Variants = {
         SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.5 } },
-        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 5, ease: "linear" } },
-        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 2.0, ease: "easeInOut" } },
+        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 0.5, ease: "linear" } },
+        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } },
         BLUR: {},
         INVERT: {},
         GRAYSCALE: {},
