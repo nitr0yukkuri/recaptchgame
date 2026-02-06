@@ -66,9 +66,17 @@ const OnionRain = () => {
 };
 
 // ヘルパー: 新しいCPU問題を生成
-const generateCpuProblem = () => {
+// prevTarget: 前回のお題（これとは違うお題を選ぶ）
+const generateCpuProblem = (prevTarget?: string) => {
     const targets = ['車', '信号機', '階段', '消火栓'];
-    const newTarget = targets[Math.floor(Math.random() * targets.length)];
+    let newTarget = targets[Math.floor(Math.random() * targets.length)];
+
+    // 前回と同じなら選び直し (無限ループ防止でtargetsが2つ以上ある場合のみ)
+    if (prevTarget && targets.length > 1) {
+        while (newTarget === prevTarget) {
+            newTarget = targets[Math.floor(Math.random() * targets.length)];
+        }
+    }
 
     let searchKey = '';
     if (newTarget === '車') searchKey = 'car';
@@ -217,7 +225,8 @@ function App() {
                             store.setPlayerEffect(getRandomObstruction());
                         }
 
-                        const nextProb = generateCpuProblem();
+                        // 修正: 次の問題を生成する際、現在のお題(cpuTarget)を渡して重複を防ぐ
+                        const nextProb = generateCpuProblem(store.cpuTarget);
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
                 }
@@ -424,7 +433,8 @@ function App() {
         resetMySelections();
         setTimeout(() => {
             if (gameMode === 'CPU') {
-                const nextProb = generateCpuProblem();
+                // 修正: 現在のお題(target)を渡して重複を防ぐ
+                const nextProb = generateCpuProblem(target);
                 updatePlayerPattern(nextProb.target, nextProb.images);
             }
             setIsReloading(false);
@@ -455,7 +465,8 @@ function App() {
                     setOpponentEffect(getRandomObstruction());
                 }
 
-                const nextProb = generateCpuProblem();
+                // 修正: 現在のお題(target)を渡して重複を防ぐ
+                const nextProb = generateCpuProblem(target);
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
                 playError();

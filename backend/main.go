@@ -368,8 +368,8 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				return
 			}
 
-			// 次の問題を生成
-			newTarget, newImages := generateProblem()
+			// 次の問題を生成（前回のお題と被らないようにする）
+			newTarget, newImages := generateProblem(state.Target)
 			state.Target = newTarget
 			state.Images = newImages
 
@@ -415,9 +415,17 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 }
 
 // 新しい問題（お題と画像のセット）を生成する関数
-func generateProblem() (string, []string) {
-	// お題をランダム決定
-	target := targets[rand.Intn(len(targets))]
+// prevTarget: 前回のお題（これとは違うお題を選ぶ）
+func generateProblem(prevTarget string) (string, []string) {
+	// お題をランダム決定 (前回と違うものが出るまで繰り返す)
+	var target string
+	for {
+		target = targets[rand.Intn(len(targets))]
+		if target != prevTarget {
+			break
+		}
+	}
+
 	searchKey := ""
 	switch target {
 	case "車":
@@ -482,7 +490,8 @@ func startGame(roomID string) {
 
 	// 各プレイヤーに最初の問題を生成・割り当て
 	for pid, state := range states {
-		t, i := generateProblem()
+		// 初回なので前回のお題は無し("")
+		t, i := generateProblem("")
 		state.Target = t
 		state.Images = i
 		state.Score = 0
