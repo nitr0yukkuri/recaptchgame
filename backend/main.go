@@ -32,8 +32,9 @@ type PlayerState struct {
 // --- 以下、フロントエンドと送受信するデータの定義 (Payload) ---
 
 type JoinRoomPayload struct {
-	RoomID   string `json:"room_id"`
-	PlayerID string `json:"player_id"`
+	RoomID       string `json:"room_id"`
+	PlayerID     string `json:"player_id"`
+	WinningScore int    `json:"winning_score"` // 勝利に必要なスコア（設定用）
 }
 
 type RoomAssignedPayload struct {
@@ -51,6 +52,7 @@ type GameStartPayload struct {
 	Target         string   `json:"target"`
 	Images         []string `json:"images"`
 	OpponentImages []string `json:"opponent_images"` // 相手の画像（画面表示用）
+	WinningScore   int      `json:"winning_score"`   // このゲームの勝利条件スコア
 }
 
 type UpdatePatternPayload struct {
@@ -82,6 +84,9 @@ type SelectImagePayload struct {
 var (
 	// 各部屋のプレイヤー状態を保持するマップ: RoomID -> PlayerID -> State
 	roomStates = make(map[string]map[string]*PlayerState)
+
+	// 各部屋の勝利条件スコアを保持するマップ: RoomID -> WinningScore
+	roomWinningScores = make(map[string]int)
 
 	// WebSocketの設定（オリジン許可）
 	upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
@@ -174,6 +179,7 @@ func cleanupClient(ws *websocket.Conn) {
 			if len(conns) == 0 {
 				delete(rooms, rid)
 				delete(roomStates, rid)
+				delete(roomWinningScores, rid) // 設定も削除
 
 				// 待機中の部屋だった場合は待機IDをクリア
 				matchMu.Lock()
@@ -242,6 +248,13 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		if rooms[actualRoomID] == nil {
 			rooms[actualRoomID] = make(map[*websocket.Conn]bool)
 			roomStates[actualRoomID] = make(map[string]*PlayerState)
+
+			// 勝利スコアの設定（デフォルトは5）
+			score := p.WinningScore
+			if score <= 0 {
+				score = 5
+			}
+			roomWinningScores[actualRoomID] = score
 		}
 		rooms[actualRoomID][ws] = true
 
@@ -293,7 +306,6 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 修正箇所: ロック範囲を拡大して競合状態（連打による多重加算）を防ぐ
 		mu.Lock()
 		states, okRoom := roomStates[p.RoomID]
 		if !okRoom {
@@ -306,8 +318,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			return
 		}
 
-		// 既に5点取って終了している場合は無視
-		if state.Score >= 5 {
+		// 勝利条件スコアを取得
+		winningScore := roomWinningScores[p.RoomID]
+		if winningScore <= 0 {
+			winningScore = 5 // フォールバック
+		}
+
+		// 既に勝利点に達している場合は無視
+		if state.Score >= winningScore {
 			mu.Unlock()
 			return
 		}
@@ -358,8 +376,8 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			currentScore := state.Score
 			currentCombo := state.Combo
 
-			// 5点先取で勝利
-			if currentScore >= 5 {
+			// 設定された点数先取で勝利
+			if currentScore >= winningScore {
 				mu.Unlock()
 				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
 				b, _ := json.Marshal(res)
@@ -488,6 +506,12 @@ func startGame(roomID string) {
 	conns := rooms[roomID]
 	states := roomStates[roomID]
 
+	// 勝利条件を取得
+	limit := roomWinningScores[roomID]
+	if limit <= 0 {
+		limit = 5
+	}
+
 	// 各プレイヤーに最初の問題を生成・割り当て
 	for pid, state := range states {
 		// 初回なので前回のお題は無し("")
@@ -517,6 +541,7 @@ func startGame(roomID string) {
 			Target:         myState.Target,
 			Images:         myState.Images,
 			OpponentImages: opponentImages,
+			WinningScore:   limit, // 勝利条件を通知
 		}
 		b, _ := json.Marshal(payload)
 		ws.WriteJSON(Message{Type: "GAME_START", Payload: b})

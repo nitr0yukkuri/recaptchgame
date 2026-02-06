@@ -144,6 +144,10 @@ function App() {
     const [myScore, setMyScore] = useState(0);
     const [isReloading, setIsReloading] = useState(false);
 
+    // ターン数設定用ステート
+    const [settingScore, setSettingScore] = useState(5); // 設定画面での選択値
+    const [winningScore, setWinningScore] = useState(5); // 実際のゲームでの勝利条件
+
     // 連打防止のためのフラグ
     const [isVerifying, setIsVerifying] = useState(false);
 
@@ -225,7 +229,6 @@ function App() {
                             store.setPlayerEffect(getRandomObstruction());
                         }
 
-                        // 修正: 次の問題を生成する際、現在のお題(cpuTarget)を渡して重複を防ぐ
                         const nextProb = generateCpuProblem(store.cpuTarget);
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
@@ -238,15 +241,15 @@ function App() {
     // 勝利判定
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
-            if (opponentScore >= 5) {
+            if (opponentScore >= winningScore) {
                 playLose();
                 endGame('cpu');
-            } else if (myScore >= 5) {
+            } else if (myScore >= winningScore) {
                 playWin();
                 endGame('human');
             }
         }
-    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose]);
+    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose, winningScore]);
 
 
     // メッセージハンドリング
@@ -277,6 +280,10 @@ function App() {
                         startGame(msg.payload.target, msg.payload.images);
                         if (msg.payload.opponent_images) {
                             updateCpuPattern("", msg.payload.opponent_images);
+                        }
+                        // サーバーから通知された勝利条件をセット
+                        if (msg.payload.winning_score) {
+                            setWinningScore(msg.payload.winning_score);
                         }
                         setMyScore(0);
                         setIsVerifying(false);
@@ -360,12 +367,14 @@ function App() {
 
     const startCpuFlow = () => {
         initAudio();
+        setSettingScore(5); // デフォルトに戻す
         setLoginStep('DIFFICULTY');
     };
 
     const confirmDifficulty = (level: number) => {
         playStart();
         setCpuDifficulty(level);
+        setWinningScore(settingScore); // 設定値を反映
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -380,7 +389,7 @@ function App() {
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: "RANDOM", player_id: playerId }
+            payload: { room_id: "RANDOM", player_id: playerId, winning_score: 5 } // ランダムマッチは5回固定
         }));
     };
 
@@ -392,6 +401,7 @@ function App() {
     const createRoom = () => {
         playStart();
         setIsCreator(true);
+        setSettingScore(5); // デフォルトに戻す
         setLoginError('');
         setLoginStep('FRIEND_INPUT');
     };
@@ -412,7 +422,7 @@ function App() {
         setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: room, player_id: playerId }
+            payload: { room_id: room, player_id: playerId, winning_score: settingScore }
         }));
     };
 
@@ -433,7 +443,6 @@ function App() {
         resetMySelections();
         setTimeout(() => {
             if (gameMode === 'CPU') {
-                // 修正: 現在のお題(target)を渡して重複を防ぐ
                 const nextProb = generateCpuProblem(target);
                 updatePlayerPattern(nextProb.target, nextProb.images);
             }
@@ -449,7 +458,7 @@ function App() {
             const isCorrect = mySelections.length === correctIndices.length && mySelections.every(idx => correctIndices.includes(idx));
 
             if (isCorrect) {
-                if (myScore + 1 < 5) {
+                if (myScore + 1 < winningScore) {
                     playSuccess();
                     setFeedback('CORRECT');
                     setTimeout(() => setFeedback(null), 1000);
@@ -465,7 +474,6 @@ function App() {
                     setOpponentEffect(getRandomObstruction());
                 }
 
-                // 修正: 現在のお題(target)を渡して重複を防ぐ
                 const nextProb = generateCpuProblem(target);
                 updatePlayerPattern(nextProb.target, nextProb.images);
             } else {
@@ -552,6 +560,24 @@ function App() {
         ONION_RAIN: {},
         NORMAL: { x: 0, rotate: 0, skewX: 0 }
     };
+
+    // スコア選択用コンポーネント
+    const ScoreSelector = () => (
+        <div className="flex flex-col items-center gap-2 mb-4">
+            <p className="text-gray-500 font-bold text-sm">勝利条件</p>
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+                {[3, 5, 10].map(num => (
+                    <button
+                        key={num}
+                        onClick={() => setSettingScore(num)}
+                        className={`px-4 py-2 rounded-lg font-bold transition ${settingScore === num ? 'bg-white text-[#5B46F5] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        {num}回
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
 
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
@@ -747,11 +773,12 @@ function App() {
                             )}
 
                             {loginStep === 'FRIEND_INPUT' && (
-                                <div className="space-y-10 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
+                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
                                         <h2 className="text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
                                         <p className="text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
                                     </div>
+
                                     <div className="relative">
                                         {/* 修正箇所: エラーメッセージを絶対配置にしてレイアウトシフトを防止 */}
                                         {loginError && <p className="absolute -top-7 left-0 w-full text-red-500 font-bold text-sm">{loginError}</p>}
@@ -767,6 +794,10 @@ function App() {
                                             autoFocus
                                         />
                                     </div>
+
+                                    {/* 部屋作成者のみ勝利条件を選択できる */}
+                                    {isCreator && <ScoreSelector />}
+
                                     <button
                                         onClick={() => joinRoomInternal(inputRoom)}
                                         className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
@@ -777,12 +808,15 @@ function App() {
                             )}
 
                             {loginStep === 'DIFFICULTY' && (
-                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
+                                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
                                     <div className="text-center space-y-2">
                                         <span className="bg-orange-100 text-orange-600 p-4 rounded-2xl text-4xl inline-block mb-2">⚡</span>
-                                        <h2 className="text-3xl font-black text-gray-800">難易度を選択</h2>
+                                        <h2 className="text-3xl font-black text-gray-800">設定を選択</h2>
                                         <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>
                                     </div>
+
+                                    {/* CPU対戦の勝利条件選択 */}
+                                    <ScoreSelector />
 
                                     <div className="w-full max-w-md space-y-4">
                                         <button
@@ -882,7 +916,8 @@ function App() {
                                                     onClick={() => handleImageClick(idx)}
                                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                                 >
-                                                    <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75' : 'scale-100 group-hover:opacity-90'}`}>
+                                                    {/* 修正箇所: 選択時に画像を右下(origin-bottom-right)へ縮小させることで左上にスペースを空ける */}
+                                                    <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75 origin-bottom-right' : 'scale-100 origin-center group-hover:opacity-90'}`}>
                                                         <img
                                                             src={img}
                                                             alt="captcha"
@@ -891,8 +926,8 @@ function App() {
                                                     </div>
 
                                                     {mySelections.includes(idx) && (
-                                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-1 m-1 shadow-md z-10">
-                                                            <svg className="w-4 h-4 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-0.5 m-1 shadow-md z-10">
+                                                            <svg className="w-3 h-3 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
                                                         </div>
                                                     )}
                                                 </div>
@@ -966,16 +1001,16 @@ function App() {
                                 <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
                                     <div className="flex items-center gap-3">
                                         <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
-                                        You: {myScore}/5
+                                        You: {myScore}/{winningScore}
                                     </div>
                                     <div className="flex-1 mx-4 md:mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
                                         <div
                                             className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
-                                            style={{ width: `${(myScore / 5) * 100}%` }}
+                                            style={{ width: `${(myScore / winningScore) * 100}%` }}
                                         ></div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'CPU (つよい)' : (cpuDifficulty === 1 ? 'CPU (よわい)' : 'CPU (ふつう)')) : 'Rival'}: {opponentScore}/5
+                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'CPU (つよい)' : (cpuDifficulty === 1 ? 'CPU (よわい)' : 'CPU (ふつう)')) : 'Rival'}: {opponentScore}/{winningScore}
                                         <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
                                     </div>
                                 </div>
