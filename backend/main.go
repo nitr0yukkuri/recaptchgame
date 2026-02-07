@@ -134,20 +134,14 @@ func getEnv(key, fallback string) string {
 // クライアントの切断・退出処理を共通化
 // 通信が切れたり、部屋から退出した際にメモリを掃除する
 func cleanupClient(ws *websocket.Conn) {
-	mu.Lock() // データの変更中に他の処理が割り込まないようにロック
+	mu.Lock() // ロックを開始
+	defer mu.Unlock() // 関数終了までロックを維持（重要：書き込み競合防止）
+
 	playerID, exists := clients[ws]
 	if !exists {
-		mu.Unlock()
 		return
 	}
 	delete(clients, ws) // クライアントリストから削除
-
-	// 通知を送るべき相手とメッセージを一時保存するリスト
-	type notification struct {
-		conn *websocket.Conn
-		msg  Message
-	}
-	var notifications []notification
 
 	// 所属していた部屋を探して削除処理を行う
 	for rid, conns := range rooms {
@@ -169,10 +163,9 @@ func cleanupClient(ws *websocket.Conn) {
 							Message:  "Opponent Disconnected",
 						}
 						b, _ := json.Marshal(res)
-						notifications = append(notifications, notification{
-							conn: remainingWs,
-							msg:  Message{Type: "GAME_FINISHED", Payload: b},
-						})
+						
+						// ここで書き込む（muで保護されているので他のbroadcastと競合しない）
+						remainingWs.WriteJSON(Message{Type: "GAME_FINISHED", Payload: b})
 					}
 				}
 			}
@@ -191,12 +184,6 @@ func cleanupClient(ws *websocket.Conn) {
 				matchMu.Unlock()
 			}
 		}
-	}
-	mu.Unlock() // ここでロック解除（他の処理が動けるようにする）
-
-	// ロックの外でメッセージ送信（デッドロック防止のため）
-	for _, n := range notifications {
-		n.conn.WriteJSON(n.msg)
 	}
 }
 
@@ -260,19 +247,17 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 		rooms[actualRoomID][ws] = true
 
-		// プレイヤーの初期状態を設定
-		roomStates[actualRoomID][p.PlayerID] = &PlayerState{
-			Score: 0,
-			Combo: 0,
-		}
-
 		roomSize := len(rooms[actualRoomID])
 		mu.Unlock()
 
 		// 「部屋が決まったよ」とクライアントに通知
 		assigned := RoomAssignedPayload{RoomID: actualRoomID, PlayerID: p.PlayerID}
 		b, _ := json.Marshal(assigned)
+
+		// 修正: 書き込み競合を防ぐためロックを使用
+		mu.Lock()
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
+		mu.Unlock()
 
 		// 2人揃ったらゲーム開始
 		if roomSize == 2 {
@@ -287,7 +272,10 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			startGame(actualRoomID) // ゲーム開始処理へ
 		} else {
 			// 1人の場合は待機通知
+			// 修正: 書き込み競合を防ぐためロックを使用
+			mu.Lock()
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
+			mu.Unlock()
 		}
 
 	case "LEAVE_ROOM": // 退出要求
@@ -403,7 +391,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				state.Combo = 0 // コンボ消費
 				sendObstruction = true
 			}
-			
+
 			// 相手に送るコンボ数（消費後は0を送る）
 			comboToSend := state.Combo
 
@@ -412,11 +400,15 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			// 自分に次の問題を送信
 			updateMy := UpdatePatternPayload{Target: targetToSend, Images: imagesToSend}
 			bMy, _ := json.Marshal(updateMy)
+
+			// 修正: 書き込み競合を防ぐためロックを使用
+			mu.Lock()
 			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
+			mu.Unlock()
 
 			// 相手に自分のスコアと新しい盤面（監視用）、そしてコンボ数を送信
 			updateOpp := OpponentUpdatePayload{
-				Images: imagesToSend, 
+				Images: imagesToSend,
 				Score:  currentScore,
 				Combo:  comboToSend, // 追加
 			}
@@ -437,8 +429,11 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			// 不正解の場合
 			state.Combo = 0 // コンボリセット
 			mu.Unlock()     // ロック解除
-			// 不正解通知を送信
+
+			// 修正: 書き込み競合を防ぐためロックを使用
+			mu.Lock()
 			ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
+			mu.Unlock()
 		}
 	}
 }

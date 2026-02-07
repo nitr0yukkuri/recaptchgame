@@ -141,7 +141,7 @@ function App() {
     const [loginError, setLoginError] = useState('');
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
-    const [myScore, setMyScore] = useState(0);
+    const [myScore, setMyScore] = useState<number>(0);
     const [isReloading, setIsReloading] = useState(false);
 
     // ターン数設定用ステート
@@ -324,7 +324,7 @@ function App() {
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
-                        setPlayerCombo(prev => prev + 1); // 正解したらコンボ加算
+                        setPlayerCombo(playerCombo + 1); // 正解したらコンボ加算
                         setTimeout(() => setFeedback(null), 1000);
                         break;
 
@@ -342,7 +342,6 @@ function App() {
                         if (msg.payload.attacker_id === playerId) {
                             setOpponentEffect(msg.payload.effect as ObstructionType);
                             setPlayerCombo(0); // 自分のコンボ消費
-                            playObstruction(); // 自分が攻撃した時も音を鳴らす
                         } else {
                             setPlayerEffect(msg.payload.effect as ObstructionType);
                             setOpponentCombo(0); // 相手のコンボ消費
@@ -378,7 +377,7 @@ function App() {
                 console.error("Failed to parse message:", e);
             }
         }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart, feedback]);
+    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart, feedback, playerCombo]);
 
     const startCpuFlow = () => {
         initAudio();
@@ -613,7 +612,7 @@ function App() {
                         initial={{ y: -50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: -50, opacity: 0 }}
-                        className="fixed top-36 left-0 right-0 z-[100] flex justify-center pointer-events-none"
+                        className="fixed top-36 left-0 right-0 z-[60] flex justify-center pointer-events-none"
                     >
                         <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
                             ⚔️ 攻撃中: {opponentEffect}
