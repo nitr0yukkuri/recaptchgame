@@ -399,7 +399,7 @@ function App() {
     };
 
     const createRoom = () => {
-        playStart();
+        // playStart(); // 削除: 効果音不要
         setIsCreator(true);
         setSettingScore(5); // デフォルトに戻す
         setLoginError('');
@@ -407,7 +407,7 @@ function App() {
     };
 
     const enterRoomFlow = () => {
-        playStart();
+        // playStart(); // 削除: 効果音不要
         setIsCreator(false);
         setLoginError('');
         setLoginStep('FRIEND_INPUT');
