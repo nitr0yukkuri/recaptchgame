@@ -705,6 +705,40 @@ function App() {
                                 </div>
                             )}
 
+                            {loginStep === 'FRIEND' && (
+                                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
+                                    <div className="text-center space-y-2">
+                                        <span className="bg-teal-50 text-teal-600 p-4 rounded-2xl text-4xl inline-block mb-2">🤝</span>
+                                        <h2 className="text-3xl font-bold text-gray-800">友達と対戦</h2>
+                                        <p className="text-gray-500 font-medium">メニューを選択</p>
+                                    </div>
+
+                                    <div className="w-full max-w-md space-y-4">
+                                        <button onClick={createRoom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🏠</span>
+                                                <div className="text-left">
+                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-indigo-600 transition">部屋を作る</p>
+                                                    <p className="text-sm text-gray-400 font-medium">ホストになる</p>
+                                                </div>
+                                            </div>
+                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+
+                                        <button onClick={enterRoomFlow} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🔑</span>
+                                                <div className="text-left">
+                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-teal-600 transition">部屋に入る</p>
+                                                    <p className="text-sm text-gray-400 font-medium">IDを入力して参加</p>
+                                                </div>
+                                            </div>
+                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {loginStep === 'FRIEND_INPUT' && (
                                 <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
                                     <div className="space-y-2">
