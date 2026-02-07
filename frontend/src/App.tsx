@@ -8,13 +8,11 @@ import { useSound } from './useSound';
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 
-// WebSocketのオプションをコンポーネント外に定義して固定化
 const STATIC_WS_OPTIONS = {
     onOpen: () => console.log('Connected to Server'),
     shouldReconnect: () => true,
 };
 
-// CPUモード用: 全画像プール
 const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
     '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
@@ -23,20 +21,17 @@ const ALL_CPU_IMAGES = [
     '/images/tamanegi5.png',
 ];
 
-// タマネギ画像のパス
 const ONION_IMAGE = '/images/tamanegi5.png';
 
-// 待機時間を制御するヘルパー関数
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// タマネギ降下エフェクトコンポーネント
 const OnionRain = () => {
     const onions = Array.from({ length: 100 }).map((_, i) => ({
         id: i,
-        left: Math.random() * 100, // %
-        delay: Math.random() * 2, // 秒
-        duration: 0.5 + Math.random() * 1.5, // 秒
-        size: 30 + Math.random() * 100, // px
+        left: Math.random() * 100,
+        delay: Math.random() * 2,
+        duration: 0.5 + Math.random() * 1.5,
+        size: 30 + Math.random() * 100,
     }));
 
     return (
@@ -65,13 +60,10 @@ const OnionRain = () => {
     );
 };
 
-// ヘルパー: 新しいCPU問題を生成
-// prevTarget: 前回のお題（これとは違うお題を選ぶ）
 const generateCpuProblem = (prevTarget?: string) => {
     const targets = ['車', '信号機', '階段', '消火栓'];
     let newTarget = targets[Math.floor(Math.random() * targets.length)];
 
-    // 前回と同じなら選び直し (無限ループ防止でtargetsが2つ以上ある場合のみ)
     if (prevTarget && targets.length > 1) {
         while (newTarget === prevTarget) {
             newTarget = targets[Math.floor(Math.random() * targets.length)];
@@ -101,7 +93,6 @@ const generateCpuProblem = (prevTarget?: string) => {
     };
 };
 
-// ヘルパー: 正解インデックス計算
 const getCorrectIndices = (imgs: string[], tgt: string) => {
     let searchKey = '';
     if (tgt === '車') searchKey = 'car';
@@ -116,7 +107,6 @@ const getCorrectIndices = (imgs: string[], tgt: string) => {
         .filter(idx => idx !== -1);
 };
 
-// ヘルパー: ランダムなお邪魔エフェクト
 const getRandomObstruction = (): ObstructionType => {
     const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN', 'GRAYSCALE', 'SEPIA', 'SKEW'];
     return effects[Math.floor(Math.random() * effects.length)];
@@ -132,7 +122,6 @@ function App() {
         updateOpponentScore, toggleOpponentSelection,
         resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
         feedback, setFeedback, setCpuDifficulty,
-        // コンボとお邪魔関連
         playerCombo, opponentCombo, playerEffect, opponentEffect,
         setPlayerCombo, setPlayerEffect, setOpponentEffect, setOpponentCombo
     } = useGameStore();
@@ -143,30 +132,18 @@ function App() {
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState<number>(0);
     const [isReloading, setIsReloading] = useState(false);
-
-    // ターン数設定用ステート
-    const [settingScore, setSettingScore] = useState(5); // 設定画面での選択値
-    const [winningScore, setWinningScore] = useState(5); // 実際のゲームでの勝利条件
-
-    // 連打防止のためのフラグ
+    const [settingScore, setSettingScore] = useState(5);
+    const [winningScore, setWinningScore] = useState(5);
     const [isVerifying, setIsVerifying] = useState(false);
-
-    // 試合開始ポップアップの管理
     const [startPopup, setStartPopup] = useState(false);
     const [startMessage, setStartMessage] = useState('Start!');
     const [isCreator, setIsCreator] = useState(false);
-
-    // キャンセル時にカウントダウンなどを止めるフラグ
     const isMatchingRef = useRef(false);
-
-    // メッセージの重複処理防止用
     const prevMessageRef = useRef<MessageEvent<any> | null>(null);
 
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
-
     const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
-    // お邪魔エフェクト
     useEffect(() => {
         if (playerEffect) {
             playObstruction();
@@ -182,19 +159,17 @@ function App() {
         }
     }, [opponentEffect, setOpponentEffect]);
 
-
-    // CPU対戦ロジック
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             let intervalTime = 800;
             let actionProb = 0.3;
             let submitProb = 0.5;
 
-            if (cpuDifficulty === 1) { // よわい
+            if (cpuDifficulty === 1) {
                 intervalTime = 1200;
                 actionProb = 0.5;
                 submitProb = 0.3;
-            } else if (cpuDifficulty === 3) { // つよい
+            } else if (cpuDifficulty === 3) {
                 intervalTime = 700;
                 actionProb = 0.2;
                 submitProb = 0.55;
@@ -202,11 +177,9 @@ function App() {
 
             const interval = setInterval(() => {
                 const store = useGameStore.getState();
-
                 if (store.opponentEffect) {
                     if (Math.random() > 0.5) return;
                 }
-
                 const currentSelections = store.opponentSelections;
                 const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
                 const remaining = correctIndices.filter(i => !currentSelections.includes(i));
@@ -220,15 +193,12 @@ function App() {
                     if (Math.random() > (1 - submitProb)) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
-
                         const newCombo = store.opponentCombo + 1;
                         store.setOpponentCombo(newCombo);
-
                         if (newCombo >= 2) {
                             store.setOpponentCombo(0);
                             store.setPlayerEffect(getRandomObstruction());
                         }
-
                         const nextProb = generateCpuProblem(store.cpuTarget);
                         store.updateCpuPattern(nextProb.target, nextProb.images);
                     }
@@ -238,7 +208,6 @@ function App() {
         }
     }, [gameMode, gameState, cpuDifficulty]);
 
-    // 勝利判定
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
             if (opponentScore >= winningScore) {
@@ -251,13 +220,8 @@ function App() {
         }
     }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose, winningScore]);
 
-
-    // メッセージハンドリング
     useEffect(() => {
-        if (gameMode !== 'ONLINE') return;
-
         if (lastMessage !== null) {
-            // 重複メッセージ防止
             if (lastMessage === prevMessageRef.current) return;
             prevMessageRef.current = lastMessage;
 
@@ -266,9 +230,9 @@ function App() {
                 switch (msg.type) {
                     case 'ROOM_ASSIGNED':
                         setRoomInfo(msg.payload.room_id, playerId);
-                        if (gameState === 'LOGIN') {
-                            setGameState('WAITING');
-                        }
+                        setGameMode('ONLINE');
+                        // 強制的にWAITINGに移行
+                        setGameState('WAITING');
                         break;
                     case 'STATUS_UPDATE':
                         setGameState('WAITING');
@@ -276,44 +240,38 @@ function App() {
                     case 'GAME_START':
                         if (isMatchingRef.current) return;
                         isMatchingRef.current = true;
+                        setGameMode('ONLINE');
 
                         startGame(msg.payload.target, msg.payload.images);
                         if (msg.payload.opponent_images) {
                             updateCpuPattern("", msg.payload.opponent_images);
                         }
-                        // サーバーから通知された勝利条件をセット
                         if (msg.payload.winning_score) {
                             setWinningScore(msg.payload.winning_score);
                         }
                         setMyScore(0);
                         setIsVerifying(false);
-                        setPlayerCombo(0); // リセット
-                        setOpponentCombo(0); // リセット
+                        setPlayerCombo(0);
+                        setOpponentCombo(0);
 
                         (async () => {
                             setStartPopup(true);
                             setStartMessage("マッチングしました！");
                             playStart();
-
                             await sleep(1500);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
-
                             setStartMessage("3");
                             await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
-
                             setStartMessage("2");
                             await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
-
                             setStartMessage("1");
                             await sleep(1000);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
-
                             setStartMessage("START!");
                             await sleep(500);
                             if (!isMatchingRef.current) { setStartPopup(false); return; }
-
                             setTimeout(() => setStartPopup(false), 500);
                         })();
                         break;
@@ -324,7 +282,7 @@ function App() {
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
-                        setPlayerCombo(playerCombo + 1); // 正解したらコンボ加算
+                        setPlayerCombo(playerCombo + 1);
                         setTimeout(() => setFeedback(null), 1000);
                         break;
 
@@ -332,19 +290,18 @@ function App() {
                         updateCpuPattern("", msg.payload.images);
                         updateOpponentScore(msg.payload.score);
                         if (msg.payload.combo !== undefined) {
-                            setOpponentCombo(msg.payload.combo); // 相手のコンボを更新
+                            setOpponentCombo(msg.payload.combo);
                         }
                         resetOpponentSelections();
                         break;
 
                     case 'OBSTRUCTION':
-                        // 攻撃者が自分なら相手枠に、他人なら自分枠にエフェクトを適用
                         if (msg.payload.attacker_id === playerId) {
                             setOpponentEffect(msg.payload.effect as ObstructionType);
-                            setPlayerCombo(0); // 自分のコンボ消費
+                            setPlayerCombo(0);
                         } else {
                             setPlayerEffect(msg.payload.effect as ObstructionType);
-                            setOpponentCombo(0); // 相手のコンボ消費
+                            setOpponentCombo(0);
                         }
                         break;
 
@@ -367,7 +324,7 @@ function App() {
                         if (feedback !== 'WRONG') {
                             playError();
                             setFeedback('WRONG');
-                            setPlayerCombo(0); // 不正解ならコンボリセット
+                            setPlayerCombo(0);
                             setTimeout(() => setFeedback(null), 1000);
                             resetMySelections();
                         }
@@ -381,14 +338,14 @@ function App() {
 
     const startCpuFlow = () => {
         initAudio();
-        setSettingScore(5); // デフォルトに戻す
+        setSettingScore(5);
         setLoginStep('DIFFICULTY');
     };
 
     const confirmDifficulty = (level: number) => {
         playStart();
         setCpuDifficulty(level);
-        setWinningScore(settingScore); // 設定値を反映
+        setWinningScore(settingScore);
         setGameMode('CPU');
         setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
@@ -403,7 +360,7 @@ function App() {
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: "RANDOM", player_id: playerId, winning_score: 5 } // ランダムマッチは5回固定
+            payload: { room_id: "RANDOM", player_id: playerId, winning_score: 5 }
         }));
     };
 
@@ -414,7 +371,7 @@ function App() {
 
     const createRoom = () => {
         setIsCreator(true);
-        setSettingScore(5); // デフォルトに戻す
+        setSettingScore(5);
         setLoginError('');
         setLoginStep('FRIEND_INPUT');
     };
@@ -549,7 +506,6 @@ function App() {
         setMyScore(0);
     };
 
-    // 再接続時のバグ防止
     useEffect(() => {
         if (readyState === ReadyState.OPEN) {
             const store = useGameStore.getState();
@@ -573,7 +529,6 @@ function App() {
         NORMAL: { x: 0, rotate: 0, skewX: 0 }
     };
 
-    // スコア選択用コンポーネント
     const ScoreSelector = () => (
         <div className="flex flex-col items-center gap-2 mb-4">
             <p className="text-gray-500 font-bold text-sm">勝利条件</p>
@@ -690,7 +645,6 @@ function App() {
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
                                     <div className="flex-1 w-full max-w-md space-y-6">
                                         <div className="text-center space-y-2">
-                                            {/* <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p> 削除 */}
                                             <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
                                                 相手より早く<br />人間か証明できる？
                                             </h2>
@@ -759,7 +713,6 @@ function App() {
                                     </div>
 
                                     <div className="relative">
-                                        {/* 修正箇所: エラーメッセージを絶対配置にしてレイアウトシフトを防止 */}
                                         {loginError && <p className="absolute -top-7 left-0 w-full text-red-500 font-bold text-sm">{loginError}</p>}
                                         <input
                                             type="text"
@@ -774,7 +727,6 @@ function App() {
                                         />
                                     </div>
 
-                                    {/* 部屋作成者のみ勝利条件を選択できる */}
                                     {isCreator && <ScoreSelector />}
 
                                     <button
@@ -794,7 +746,6 @@ function App() {
                                         <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>
                                     </div>
 
-                                    {/* CPU対戦の勝利条件選択 */}
                                     <ScoreSelector />
 
                                     <div className="w-full max-w-md space-y-4">
@@ -895,7 +846,6 @@ function App() {
                                                     onClick={() => handleImageClick(idx)}
                                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                                 >
-                                                    {/* 修正箇所: 選択時に画像を右下(origin-bottom-right)へ縮小させることで左上にスペースを空ける */}
                                                     <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75 origin-bottom-right' : 'scale-100 origin-center group-hover:opacity-90'}`}>
                                                         <img
                                                             src={img}
