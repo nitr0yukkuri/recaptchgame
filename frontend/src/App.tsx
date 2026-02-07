@@ -342,6 +342,7 @@ function App() {
                         if (msg.payload.attacker_id === playerId) {
                             setOpponentEffect(msg.payload.effect as ObstructionType);
                             setPlayerCombo(0); // 自分のコンボ消費
+                            playObstruction(); // 自分が攻撃した時も音を鳴らす
                         } else {
                             setPlayerEffect(msg.payload.effect as ObstructionType);
                             setOpponentCombo(0); // 相手のコンボ消費
@@ -612,7 +613,7 @@ function App() {
                         initial={{ y: -50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: -50, opacity: 0 }}
-                        className="fixed top-36 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+                        className="fixed top-36 left-0 right-0 z-[100] flex justify-center pointer-events-none"
                     >
                         <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
                             ⚔️ 攻撃中: {opponentEffect}
