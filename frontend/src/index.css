@@ -11,7 +11,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* スクロールバーのカスタマイズ（任意） */
+/* スクロールバーのカスタマイズ任意 */
 ::-webkit-scrollbar {
     width: 8px;
 }
