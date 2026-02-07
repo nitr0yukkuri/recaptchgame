@@ -47,8 +47,10 @@ export const useSound = () => {
     const playSuccess = () => {
         if (synthRef.current) {
             const now = Tone.now();
-            synthRef.current.triggerAttackRelease("C5", "16n", now);
-            synthRef.current.triggerAttackRelease("E5", "4n", now + 0.1);
+            // Cメジャーアルペジオで明るく「テレリン！」（正解感を強化）
+            synthRef.current.triggerAttackRelease("C5", "32n", now);
+            synthRef.current.triggerAttackRelease("E5", "32n", now + 0.05);
+            synthRef.current.triggerAttackRelease("G5", "8n", now + 0.1);
         }
     };
 
