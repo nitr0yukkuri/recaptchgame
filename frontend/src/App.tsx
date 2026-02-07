@@ -134,7 +134,7 @@ function App() {
         feedback, setFeedback, setCpuDifficulty,
         // コンボとお邪魔関連
         playerCombo, opponentCombo, playerEffect, opponentEffect,
-        setPlayerCombo, setPlayerEffect, setOpponentEffect
+        setPlayerCombo, setPlayerEffect, setOpponentEffect, setOpponentCombo
     } = useGameStore();
 
     const [inputRoom, setInputRoom] = useState('');
@@ -287,6 +287,8 @@ function App() {
                         }
                         setMyScore(0);
                         setIsVerifying(false);
+                        setPlayerCombo(0); // リセット
+                        setOpponentCombo(0); // リセット
 
                         (async () => {
                             setStartPopup(true);
@@ -322,17 +324,28 @@ function App() {
                         updatePlayerPattern(msg.payload.target, msg.payload.images);
                         setFeedback('CORRECT');
                         setMyScore(prev => prev + 1);
+                        setPlayerCombo(prev => prev + 1); // 正解したらコンボ加算
                         setTimeout(() => setFeedback(null), 1000);
                         break;
 
                     case 'OPPONENT_UPDATE':
                         updateCpuPattern("", msg.payload.images);
                         updateOpponentScore(msg.payload.score);
+                        if (msg.payload.combo !== undefined) {
+                            setOpponentCombo(msg.payload.combo); // 相手のコンボを更新
+                        }
                         resetOpponentSelections();
                         break;
 
                     case 'OBSTRUCTION':
-                        setPlayerEffect(msg.payload.effect as ObstructionType);
+                        // 攻撃者が自分なら相手枠に、他人なら自分枠にエフェクトを適用
+                        if (msg.payload.attacker_id === playerId) {
+                            setOpponentEffect(msg.payload.effect as ObstructionType);
+                            setPlayerCombo(0); // 自分のコンボ消費
+                        } else {
+                            setPlayerEffect(msg.payload.effect as ObstructionType);
+                            setOpponentCombo(0); // 相手のコンボ消費
+                        }
                         break;
 
                     case 'OPPONENT_SELECT':
@@ -354,6 +367,7 @@ function App() {
                         if (feedback !== 'WRONG') {
                             playError();
                             setFeedback('WRONG');
+                            setPlayerCombo(0); // 不正解ならコンボリセット
                             setTimeout(() => setFeedback(null), 1000);
                             resetMySelections();
                         }
@@ -399,7 +413,6 @@ function App() {
     };
 
     const createRoom = () => {
-        // playStart(); // 削除: 効果音不要
         setIsCreator(true);
         setSettingScore(5); // デフォルトに戻す
         setLoginError('');
@@ -407,7 +420,6 @@ function App() {
     };
 
     const enterRoomFlow = () => {
-        // playStart(); // 削除: 効果音不要
         setIsCreator(false);
         setLoginError('');
         setLoginStep('FRIEND_INPUT');
@@ -678,9 +690,9 @@ function App() {
                                 <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
                                     <div className="flex-1 w-full max-w-md space-y-6">
                                         <div className="text-center space-y-2">
-                                            <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p>
+                                            {/* <p className="text-lg text-gray-600 font-medium">くそうざいreCAPTCHAを面白くしよう！</p> 削除 */}
                                             <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
-                                                60秒以内に何回人間か<br />証明できる？
+                                                相手より早く<br />人間か証明できる？
                                             </h2>
                                         </div>
 
@@ -734,39 +746,6 @@ function App() {
                                                 </div>
                                             </div>
                                             <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {loginStep === 'FRIEND' && (
-                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
-                                    <div className="text-center space-y-2">
-                                        <h2 className="text-3xl font-black text-gray-800">友達と対戦</h2>
-                                        <p className="text-gray-500 font-medium">どうやって対戦する？</p>
-                                    </div>
-
-                                    <div className="w-full max-w-md space-y-4">
-                                        <button
-                                            onClick={createRoom}
-                                            className="w-full group bg-white border-2 border-indigo-200 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
-                                        >
-                                            <div className="bg-indigo-100 text-indigo-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">🏠</div>
-                                            <div className="text-left">
-                                                <p className="text-xl font-bold text-indigo-600">部屋を作成</p>
-                                                <p className="text-sm text-gray-400">新しい部屋を作って待機</p>
-                                            </div>
-                                        </button>
-
-                                        <button
-                                            onClick={enterRoomFlow}
-                                            className="w-full group bg-white border-2 border-purple-200 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
-                                        >
-                                            <div className="bg-purple-100 text-purple-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">🚪</div>
-                                            <div className="text-left">
-                                                <p className="text-xl font-bold text-purple-600">部屋に入室</p>
-                                                <p className="text-sm text-gray-400">IDを入力して参加</p>
-                                            </div>
                                         </button>
                                     </div>
                                 </div>

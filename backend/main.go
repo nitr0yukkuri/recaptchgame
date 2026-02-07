@@ -63,10 +63,12 @@ type UpdatePatternPayload struct {
 type OpponentUpdatePayload struct {
 	Images []string `json:"images"`
 	Score  int      `json:"score"`
+	Combo  int      `json:"combo"` // 追加: 相手のコンボ数
 }
 
 type ObstructionPayload struct {
-	Effect string `json:"effect"` // お邪魔効果の種類 (SHAKE, SPINなど)
+	Effect     string `json:"effect"`      // お邪魔効果の種類 (SHAKE, SPINなど)
+	AttackerID string `json:"attacker_id"` // 攻撃者のID
 }
 
 type GameResultPayload struct {
@@ -401,6 +403,9 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 				state.Combo = 0 // コンボ消費
 				sendObstruction = true
 			}
+			
+			// 相手に送るコンボ数（消費後は0を送る）
+			comboToSend := state.Combo
 
 			mu.Unlock() // 状態更新後にロック解除
 
@@ -409,17 +414,23 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			bMy, _ := json.Marshal(updateMy)
 			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
 
-			// 相手に自分のスコアと新しい盤面（監視用）を送信
-			updateOpp := OpponentUpdatePayload{Images: imagesToSend, Score: currentScore}
+			// 相手に自分のスコアと新しい盤面（監視用）、そしてコンボ数を送信
+			updateOpp := OpponentUpdatePayload{
+				Images: imagesToSend, 
+				Score:  currentScore,
+				Combo:  comboToSend, // 追加
+			}
 			bOpp, _ := json.Marshal(updateOpp)
 			broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 
 			// お邪魔攻撃を実行
 			if sendObstruction {
 				effect := effects[rand.Intn(len(effects))] // ランダムに効果を選択
-				obs := ObstructionPayload{Effect: effect}
+				// 攻撃者IDをセット
+				obs := ObstructionPayload{Effect: effect, AttackerID: p.PlayerID}
 				bObs, _ := json.Marshal(obs)
-				broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OBSTRUCTION", Payload: bObs})
+				// 部屋全体に送信して、自分（攻撃者）も見れるようにする
+				broadcastToRoom(p.RoomID, Message{Type: "OBSTRUCTION", Payload: bObs})
 			}
 
 		} else {
