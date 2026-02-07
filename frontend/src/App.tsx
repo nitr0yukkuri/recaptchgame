@@ -506,14 +506,7 @@ function App() {
         setMyScore(0);
     };
 
-    useEffect(() => {
-        if (readyState === ReadyState.OPEN) {
-            const store = useGameStore.getState();
-            if ((store.gameState === 'PLAYING' || store.gameState === 'WAITING') && store.roomId !== 'LOCAL_CPU') {
-                goHome();
-            }
-        }
-    }, [readyState]);
+    // 【修正】ReadyState監視による強制退出処理を削除
 
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 

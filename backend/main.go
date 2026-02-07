@@ -247,6 +247,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 		rooms[actualRoomID][ws] = true
 
+		// 【修正】プレイヤーの状態を初期化して登録する（これが無いとゲーム開始時にループが回らない）
+		if _, exists := roomStates[actualRoomID][p.PlayerID]; !exists {
+			roomStates[actualRoomID][p.PlayerID] = &PlayerState{
+				Score: 0,
+				Combo: 0,
+			}
+		}
+
 		roomSize := len(rooms[actualRoomID])
 		mu.Unlock()
 
@@ -510,6 +518,12 @@ func startGame(roomID string) {
 	defer mu.Unlock()
 
 	conns := rooms[roomID]
+	
+	// 【修正】競合チェック - すでに誰か抜けている場合は開始しない
+	if len(conns) < 2 {
+		return
+	}
+
 	states := roomStates[roomID]
 
 	// 勝利条件を取得
