@@ -15,95 +15,121 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 )
 
-// クライアントとやり取りする基本メッセージ形式
+// ---------------------------------------------------------------------
+// データ構造の定義
+// ---------------------------------------------------------------------
+
+// Message: クライアントとサーバー間でやり取りされるWebSocketメッセージの基本フォーマット
+// Typeで処理を分岐し、Payloadに実際のデータが入ります。
 type Message struct {
 	Type    string          `json:"type"`    // メッセージの種類 (例: "JOIN_ROOM", "VERIFY")
-	Payload json.RawMessage `json:"payload"` // データの中身
+	Payload json.RawMessage `json:"payload"` // データの中身 (JSON形式)
 }
 
-// プレイヤー個別の状態管理（画像、お題、スコア、コンボ数）
+// PlayerState: サーバー側で保持するプレイヤー個別の状態
 type PlayerState struct {
-	Images []string
-	Target string
-	Score  int
-	Combo  int
+	Images []string // 現在表示されている画像のリスト（パス）
+	Target string   // 現在のお題（例: "車"）
+	Score  int      // 現在のスコア
+	Combo  int      // 連続正解数（コンボ）
 }
 
-// --- 以下、フロントエンドと送受信するデータの定義 (Payload) ---
+// --- フロントエンドと送受信するデータの定義 (Payload) ---
 
+// JoinRoomPayload: 部屋参加リクエスト時のデータ
 type JoinRoomPayload struct {
-	RoomID       string `json:"room_id"`
-	PlayerID     string `json:"player_id"`
+	RoomID       string `json:"room_id"`       // 部屋ID ("RANDOM"の場合は自動マッチング)
+	PlayerID     string `json:"player_id"`     // プレイヤーの識別子
 	WinningScore int    `json:"winning_score"` // 勝利に必要なスコア（設定用）
 }
 
+// RoomAssignedPayload: 部屋割り当て完了通知用データ
 type RoomAssignedPayload struct {
 	RoomID   string `json:"room_id"`
 	PlayerID string `json:"player_id"`
 }
 
+// VerifyPayload: ユーザーが画像を回答した際のデータ
 type VerifyPayload struct {
 	RoomID          string `json:"room_id"`
 	PlayerID        string `json:"player_id"`
-	SelectedIndices []int  `json:"selected_indices"` // ユーザーが選んだ画像のインデックス
+	SelectedIndices []int  `json:"selected_indices"` // ユーザーが選んだ画像のインデックス配列
 }
 
+// GameStartPayload: ゲーム開始時にクライアントへ送る初期データ
 type GameStartPayload struct {
-	Target         string   `json:"target"`
-	Images         []string `json:"images"`
-	OpponentImages []string `json:"opponent_images"` // 相手の画像（画面表示用）
+	Target         string   `json:"target"`          // 最初のお題
+	Images         []string `json:"images"`          // 自分の画像リスト
+	OpponentImages []string `json:"opponent_images"` // 相手の画像リスト（画面表示用）
 	WinningScore   int      `json:"winning_score"`   // このゲームの勝利条件スコア
 }
 
+// UpdatePatternPayload: 正解後に新しい問題を通知するデータ
 type UpdatePatternPayload struct {
 	Target string   `json:"target"`
 	Images []string `json:"images"`
 }
 
+// OpponentUpdatePayload: 相手側の状況更新通知用データ
 type OpponentUpdatePayload struct {
-	Images []string `json:"images"`
-	Score  int      `json:"score"`
-	Combo  int      `json:"combo"` // 追加: 相手のコンボ数
+	Images []string `json:"images"` // 相手の新しい画像
+	Score  int      `json:"score"`  // 相手の現在のスコア
+	Combo  int      `json:"combo"`  // 相手の現在のコンボ数
 }
 
+// ObstructionPayload: お邪魔攻撃発生時の通知データ
 type ObstructionPayload struct {
 	Effect     string `json:"effect"`      // お邪魔効果の種類 (SHAKE, SPINなど)
 	AttackerID string `json:"attacker_id"` // 攻撃者のID
 }
 
+// GameResultPayload: ゲーム終了時の結果通知データ
 type GameResultPayload struct {
-	WinnerID string `json:"winner_id"`
-	Message  string `json:"message"`
+	WinnerID string `json:"winner_id"` // 勝者のID
+	Message  string `json:"message"`   // メッセージ
 }
 
+// SelectImagePayload: リアルタイムで選択中の画像を同期するためのデータ
 type SelectImagePayload struct {
 	RoomID     string `json:"room_id"`
 	PlayerID   string `json:"player_id"`
 	ImageIndex int    `json:"image_index"`
 }
 
-// --- グローバル変数定義 ---
+// ---------------------------------------------------------------------
+// グローバル変数と定数
+// ---------------------------------------------------------------------
+
 var (
-	// 各部屋のプレイヤー状態を保持するマップ: RoomID -> PlayerID -> State
+	// roomStates: 各部屋のゲーム進行状況を管理するマップ
+	// キー: RoomID -> 値: (PlayerID -> PlayerState)
 	roomStates = make(map[string]map[string]*PlayerState)
 
-	// 各部屋の勝利条件スコアを保持するマップ: RoomID -> WinningScore
+	// roomWinningScores: 各部屋ごとの勝利条件スコアを保持
 	roomWinningScores = make(map[string]int)
 
-	// WebSocketの設定（オリジン許可）
+	// upgrader: HTTPリクエストをWebSocket通信にアップグレードするための設定
+	// CheckOriginですべてのオリジンからの接続を許可しています（CORS対策）
 	upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
 
-	// 接続管理用のマップ
-	clients = make(map[*websocket.Conn]string)          // WebSocket接続 -> プレイヤーID
-	rooms   = make(map[string]map[*websocket.Conn]bool) // 部屋ID -> 参加している接続リスト
+	// clients: WebSocket接続とプレイヤーIDの紐付け管理
+	clients = make(map[*websocket.Conn]string)
 
-	// 排他制御用ロック（データの競合を防ぐため）
-	mu            sync.Mutex
-	waitingRoomID string     // ランダムマッチ待ちの部屋ID
-	matchMu       sync.Mutex // マッチング処理用のロック
+	// rooms: 部屋ごとの接続リスト管理
+	// キー: RoomID -> 値: (WebSocket接続 -> 存在フラグ)
+	rooms = make(map[string]map[*websocket.Conn]bool)
+
+	// mu: データの競合（レースコンディション）を防ぐための排他制御用ロック
+	mu sync.Mutex
+
+	// waitingRoomID: ランダムマッチング待ちの部屋IDを一時保存する変数
+	waitingRoomID string
+
+	// matchMu: マッチング処理専用の排他制御用ロック
+	matchMu sync.Mutex
 )
 
-// 画像プール（ここからランダムに出題）
+// allImages: ゲームで使用する画像のパスリスト
 var allImages = []string{
 	"/images/car1.jpg", "/images/car2.jpg", "/images/car3.jpg", "/images/car4.jpg", "/images/car5.jpg",
 	"/images/shingouki1.jpg", "/images/shingouki2.jpg", "/images/shingouki3.jpg", "/images/shingouki4.jpg",
@@ -112,18 +138,19 @@ var allImages = []string{
 	"/images/tamanegi5.png",
 }
 
-// ターゲット（お題）リスト
+// targets: 出題されるお題のリスト
 var targets = []string{"車", "信号機", "階段", "消火栓"}
 
-// お邪魔エフェクト定義
+// effects: お邪魔攻撃のエフェクト種類定義
 var effects = []string{"SHAKE", "SPIN", "BLUR", "INVERT", "ONION_RAIN"}
 
-// 初期化処理
+// init: アプリケーション起動時の初期化処理
 func init() {
-	rand.Seed(time.Now().UnixNano()) // 乱数のシード値を現在時刻で設定
+	// 乱数のシード値を現在時刻で設定（毎回違うランダムパターンにするため）
+	rand.Seed(time.Now().UnixNano())
 }
 
-// 環境変数を取得するヘルパー関数（PORT設定などに使用）
+// getEnv: 環境変数を取得するヘルパー関数。存在しない場合はfallback値を返す
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
 		return value
@@ -131,52 +158,54 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// クライアントの切断・退出処理を共通化
-// 通信が切れたり、部屋から退出した際にメモリを掃除する
+// ---------------------------------------------------------------------
+// WebSocket関連処理
+// ---------------------------------------------------------------------
+
+// cleanupClient: クライアント切断時や退出時のリソース解放処理
 func cleanupClient(ws *websocket.Conn) {
-	mu.Lock() // ロックを開始
-	defer mu.Unlock() // 関数終了までロックを維持（重要：書き込み競合防止）
+	mu.Lock()         // データの整合性を保つためロック開始
+	defer mu.Unlock() // 関数終了時にロック解除
 
 	playerID, exists := clients[ws]
 	if !exists {
 		return
 	}
-	delete(clients, ws) // クライアントリストから削除
+	delete(clients, ws) // クライアント一覧から削除
 
 	// 所属していた部屋を探して削除処理を行う
 	for rid, conns := range rooms {
 		if _, ok := conns[ws]; ok {
 			delete(conns, ws) // 部屋の接続リストから削除
-			// プレイヤー状態も削除
+			// プレイヤーの状態データも削除
 			if states, okState := roomStates[rid]; okState && exists {
 				delete(states, playerID)
 			}
 
-			// 重要: 部屋にまだプレイヤーが残っている場合（対戦相手が残された場合）
-			// 相手の切断による勝利（不戦勝）として処理する
+			// 対戦相手が残されている場合の処理（不戦勝判定）
 			if len(conns) > 0 {
 				for remainingWs := range conns {
 					if remainingPID, ok := clients[remainingWs]; ok {
-						// 勝利通知を準備
+						// 勝利通知を作成
 						res := GameResultPayload{
 							WinnerID: remainingPID,
-							Message:  "Opponent Disconnected",
+							Message:  "Opponent Disconnected", // 相手の切断による勝利
 						}
 						b, _ := json.Marshal(res)
-						
-						// ここで書き込む（muで保護されているので他のbroadcastと競合しない）
+
+						// 残っているプレイヤーに通知
 						remainingWs.WriteJSON(Message{Type: "GAME_FINISHED", Payload: b})
 					}
 				}
 			}
 
-			// 誰もいなくなった部屋は削除してメモリを解放
+			// 誰もいなくなった部屋は完全に削除してメモリ解放
 			if len(conns) == 0 {
 				delete(rooms, rid)
 				delete(roomStates, rid)
-				delete(roomWinningScores, rid) // 設定も削除
+				delete(roomWinningScores, rid)
 
-				// 待機中の部屋だった場合は待機IDをクリア
+				// もし待機中の部屋だった場合は、待機状態を解除
 				matchMu.Lock()
 				if waitingRoomID == rid {
 					waitingRoomID = ""
@@ -187,44 +216,50 @@ func cleanupClient(ws *websocket.Conn) {
 	}
 }
 
-// WebSocket接続のエントリーポイント
+// handleWebSocket: WebSocket接続のエントリーポイント
+// HTTPリクエストをWebSocketにアップグレードし、メッセージ受信ループを開始する
 func handleWebSocket(c echo.Context) error {
-	// HTTP接続をWebSocket接続にアップグレード
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		return err
 	}
-	defer ws.Close()
+	defer ws.Close() // 関数終了時に接続を閉じる
 
-	// 関数終了時（切断時）にクリーンアップを実行
+	// 切断時に必ずクリーンアップを実行
 	defer cleanupClient(ws)
 
 	// メッセージ受信ループ
 	for {
 		var msg Message
+		// JSONメッセージを読み込む
 		if err := ws.ReadJSON(&msg); err != nil {
-			break // エラー（切断など）があればループを抜ける
+			// エラー（切断など）があればループを抜けて終了処理へ
+			break
 		}
+		// メッセージの内容に応じた処理を実行
 		handleMessage(ws, msg)
 	}
 	return nil
 }
 
-// 受信したメッセージの種類に応じて処理を振り分ける
+// handleMessage: 受信したメッセージの種類(Type)に応じて処理を振り分ける
 func handleMessage(ws *websocket.Conn, msg Message) {
 	switch msg.Type {
-	case "JOIN_ROOM": // 部屋への参加・マッチング要求
+	case "JOIN_ROOM":
+		// ----------------------------------------------------
+		// 部屋への参加・マッチング要求
+		// ----------------------------------------------------
 		var p JoinRoomPayload
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return
 		}
 
 		actualRoomID := p.RoomID
-		// "RANDOM" 指定の場合は自動マッチングロジック
+		// "RANDOM" 指定の場合は自動マッチングロジックを実行
 		if p.RoomID == "RANDOM" {
 			matchMu.Lock()
 			if waitingRoomID == "" {
-				// 待機部屋がなければ新しく作る
+				// 待機部屋がなければ新しくIDを生成して待機状態にする
 				waitingRoomID = "ROOM_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 			}
 			actualRoomID = waitingRoomID // 待機中の部屋に入る
@@ -233,12 +268,12 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 
 		mu.Lock()
 		clients[ws] = p.PlayerID
-		// 部屋データがなければ作成
+		// 部屋データが存在しなければ新規作成
 		if rooms[actualRoomID] == nil {
 			rooms[actualRoomID] = make(map[*websocket.Conn]bool)
 			roomStates[actualRoomID] = make(map[string]*PlayerState)
 
-			// 勝利スコアの設定（デフォルトは5）
+			// 勝利スコアの設定（指定がなければデフォルト5点）
 			score := p.WinningScore
 			if score <= 0 {
 				score = 5
@@ -247,7 +282,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 		rooms[actualRoomID][ws] = true
 
-		// 【修正】プレイヤーの状態を初期化して登録する（これが無いとゲーム開始時にループが回らない）
+		// プレイヤーの初期状態を設定
 		if _, exists := roomStates[actualRoomID][p.PlayerID]; !exists {
 			roomStates[actualRoomID][p.PlayerID] = &PlayerState{
 				Score: 0,
@@ -258,53 +293,60 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		roomSize := len(rooms[actualRoomID])
 		mu.Unlock()
 
-		// 「部屋が決まったよ」とクライアントに通知
+		// クライアントへ「部屋が決まった」と通知
 		assigned := RoomAssignedPayload{RoomID: actualRoomID, PlayerID: p.PlayerID}
 		b, _ := json.Marshal(assigned)
 
-		// 修正: 書き込み競合を防ぐためロックを使用
+		// 同時書き込みを防ぐためロックして送信
 		mu.Lock()
 		ws.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
 		mu.Unlock()
 
-		// 2人揃ったらゲーム開始
+		// 2人揃ったらゲーム開始処理へ
 		if roomSize == 2 {
+			// ランダムマッチング完了時は待機IDをクリア
 			if p.RoomID == "RANDOM" || waitingRoomID == actualRoomID {
 				matchMu.Lock()
-				// マッチング成立したので待機IDをクリア
 				if waitingRoomID == actualRoomID {
 					waitingRoomID = ""
 				}
 				matchMu.Unlock()
 			}
-			startGame(actualRoomID) // ゲーム開始処理へ
+			startGame(actualRoomID)
 		} else {
-			// 1人の場合は待機通知
-			// 修正: 書き込み競合を防ぐためロックを使用
+			// まだ1人の場合は待機通知
 			mu.Lock()
 			ws.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 			mu.Unlock()
 		}
 
-	case "LEAVE_ROOM": // 退出要求
-		// フロントエンドからキャンセルなどで退出要求があった場合
+	case "LEAVE_ROOM":
+		// ----------------------------------------------------
+		// 退出要求（キャンセルボタンなど）
+		// ----------------------------------------------------
 		cleanupClient(ws)
 
-	case "SELECT_IMAGE": // 画像選択（リアルタイム同期用）
+	case "SELECT_IMAGE":
+		// ----------------------------------------------------
+		// 画像選択（リアルタイム同期用）
+		// ----------------------------------------------------
 		var p SelectImagePayload
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return
 		}
-		// 同じ部屋の相手に「あいつここ選んだぞ」と通知
+		// 部屋内の他のプレイヤーへ「相手が選択した」と通知
 		broadcastToRoom(p.RoomID, Message{Type: "OPPONENT_SELECT", Payload: msg.Payload})
 
-	case "VERIFY": // 「確認」ボタンが押された時の正解判定
+	case "VERIFY":
+		// ----------------------------------------------------
+		// 「確認」ボタン押下時の正解判定・ゲーム進行
+		// ----------------------------------------------------
 		var p VerifyPayload
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return
 		}
 
-		mu.Lock()
+		mu.Lock() // 状態更新のためロック
 		states, okRoom := roomStates[p.RoomID]
 		if !okRoom {
 			mu.Unlock()
@@ -319,16 +361,17 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		// 勝利条件スコアを取得
 		winningScore := roomWinningScores[p.RoomID]
 		if winningScore <= 0 {
-			winningScore = 5 // フォールバック
+			winningScore = 5
 		}
 
-		// 既に勝利点に達している場合は無視
+		// 既にゲーム終了スコアに達している場合は処理しない
 		if state.Score >= winningScore {
 			mu.Unlock()
 			return
 		}
 
-		// 正解判定ロジック: 現在のお題から検索キーワードを決定
+		// --- 正解判定ロジック開始 ---
+		// お題に対応する検索キーワード（ファイル名に含まれる文字列）を決定
 		searchKey := ""
 		switch state.Target {
 		case "車":
@@ -341,7 +384,7 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			searchKey = "shoukasen"
 		}
 
-		// 正解画像のインデックスを特定
+		// 現在表示されている画像リストから、正解（キーワードを含む）のインデックスを特定
 		correctIndices := []int{}
 		for i, img := range state.Images {
 			if strings.Contains(strings.ToLower(img), searchKey) {
@@ -349,12 +392,12 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 			}
 		}
 
-		// ユーザーの回答と比較
+		// ユーザーの回答と正解リストを比較
 		isCorrect := true
 		if len(p.SelectedIndices) != len(correctIndices) {
-			isCorrect = false // 数が合わなければ不正解
+			isCorrect = false // 個数が合わなければ不正解
 		} else {
-			// 選んだ場所がすべて合っているか確認
+			// 選択されたインデックスがすべて正解リストに含まれているか確認
 			selectionMap := make(map[int]bool)
 			for _, idx := range p.SelectedIndices {
 				selectionMap[idx] = true
@@ -368,77 +411,72 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 		}
 
 		if isCorrect {
-			// 正解ならスコアとコンボを加算
-			state.Score++
-			state.Combo++
+			// --- 正解時の処理 ---
+			state.Score++ // スコア加算
+			state.Combo++ // コンボ加算
 			currentScore := state.Score
 			currentCombo := state.Combo
 
-			// 設定された点数先取で勝利
+			// 勝利判定
 			if currentScore >= winningScore {
 				mu.Unlock()
 				res := GameResultPayload{WinnerID: p.PlayerID, Message: "You are Human!"}
 				b, _ := json.Marshal(res)
-				// 部屋全体に終了通知
+				// 全員にゲーム終了を通知
 				broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
 				return
 			}
 
-			// 次の問題を生成（前回のお題と被らないようにする）
+			// 次の問題を生成（前回と同じお題にならないようにする）
 			newTarget, newImages := generateProblem(state.Target)
 			state.Target = newTarget
 			state.Images = newImages
 
-			// ロックを解除する前に送信データを確保
+			// ロック解除後の送信データの準備
 			targetToSend := newTarget
 			imagesToSend := newImages
 
 			sendObstruction := false
-			// 2コンボ以上でお邪魔攻撃フラグを立てる
+			// 2コンボ以上でお邪魔攻撃を発動
 			if currentCombo >= 2 {
-				state.Combo = 0 // コンボ消費
+				state.Combo = 0 // コンボを消費（リセット）
 				sendObstruction = true
 			}
+			comboToSend := state.Combo // 相手に送るコンボ数
 
-			// 相手に送るコンボ数（消費後は0を送る）
-			comboToSend := state.Combo
+			mu.Unlock() // 状態更新完了、ロック解除
 
-			mu.Unlock() // 状態更新後にロック解除
-
-			// 自分に次の問題を送信
+			// 自分自身に次の問題を送信
 			updateMy := UpdatePatternPayload{Target: targetToSend, Images: imagesToSend}
 			bMy, _ := json.Marshal(updateMy)
 
-			// 修正: 書き込み競合を防ぐためロックを使用
 			mu.Lock()
 			ws.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
 			mu.Unlock()
 
-			// 相手に自分のスコアと新しい盤面（監視用）、そしてコンボ数を送信
+			// 相手プレイヤーに「自分のスコア・盤面・コンボ数」を送信
 			updateOpp := OpponentUpdatePayload{
 				Images: imagesToSend,
 				Score:  currentScore,
-				Combo:  comboToSend, // 追加
+				Combo:  comboToSend,
 			}
 			bOpp, _ := json.Marshal(updateOpp)
 			broadcastToOpponent(p.RoomID, p.PlayerID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 
-			// お邪魔攻撃を実行
+			// お邪魔攻撃の実行（全員に通知）
 			if sendObstruction {
-				effect := effects[rand.Intn(len(effects))] // ランダムに効果を選択
-				// 攻撃者IDをセット
+				effect := effects[rand.Intn(len(effects))] // 効果をランダム選択
 				obs := ObstructionPayload{Effect: effect, AttackerID: p.PlayerID}
 				bObs, _ := json.Marshal(obs)
-				// 部屋全体に送信して、自分（攻撃者）も見れるようにする
 				broadcastToRoom(p.RoomID, Message{Type: "OBSTRUCTION", Payload: bObs})
 			}
 
 		} else {
-			// 不正解の場合
+			// --- 不正解時の処理 ---
 			state.Combo = 0 // コンボリセット
 			mu.Unlock()     // ロック解除
 
-			// 修正: 書き込み競合を防ぐためロックを使用
+			// 不正解通知を送信（クライアント側でエラー表示などを行う）
 			mu.Lock()
 			ws.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 			mu.Unlock()
@@ -446,10 +484,14 @@ func handleMessage(ws *websocket.Conn, msg Message) {
 	}
 }
 
-// 新しい問題（お題と画像のセット）を生成する関数
-// prevTarget: 前回のお題（これとは違うお題を選ぶ）
+// ---------------------------------------------------------------------
+// ゲームロジック・ヘルパー関数
+// ---------------------------------------------------------------------
+
+// generateProblem: 新しい問題（お題と9枚の画像セット）を生成する
+// prevTarget: 直前のお題（これと被らないお題を選ぶ）
 func generateProblem(prevTarget string) (string, []string) {
-	// お題をランダム決定 (前回と違うものが出るまで繰り返す)
+	// 前回と違うお題が出るまでランダム選択
 	var target string
 	for {
 		target = targets[rand.Intn(len(targets))]
@@ -458,6 +500,7 @@ func generateProblem(prevTarget string) (string, []string) {
 		}
 	}
 
+	// お題に対応するキーワード設定
 	searchKey := ""
 	switch target {
 	case "車":
@@ -473,7 +516,7 @@ func generateProblem(prevTarget string) (string, []string) {
 	var corrects []string
 	var others []string
 
-	// 全画像から正解と不正解を分類
+	// 全画像プールから正解画像と不正解画像を分類
 	for _, img := range allImages {
 		if strings.Contains(strings.ToLower(img), searchKey) {
 			corrects = append(corrects, img)
@@ -482,7 +525,7 @@ func generateProblem(prevTarget string) (string, []string) {
 		}
 	}
 
-	// シャッフル
+	// ランダム性を高めるためシャッフル
 	rand.Shuffle(len(corrects), func(i, j int) { corrects[i], corrects[j] = corrects[j], corrects[i] })
 	rand.Shuffle(len(others), func(i, j int) { others[i], others[j] = others[j], others[i] })
 
@@ -495,46 +538,47 @@ func generateProblem(prevTarget string) (string, []string) {
 	}
 	selected = append(selected, corrects[:correctCount]...)
 
-	// 残りを不正解画像（または余った正解画像）で埋める
+	// 残りの枠を不正解画像（または余った正解画像）で埋める
 	remaining := append(others, corrects[correctCount:]...)
 	rand.Shuffle(len(remaining), func(i, j int) { remaining[i], remaining[j] = remaining[j], remaining[i] })
 
 	needed := 9 - len(selected)
 	if len(remaining) < needed {
+		// 画像が足りない場合はあるだけ追加（エラー回避）
 		selected = append(selected, remaining...)
 	} else {
 		selected = append(selected, remaining[:needed]...)
 	}
 
-	// 最終的な9枚をシャッフルして配置をランダムにする
+	// 最終的に選ばれた9枚の並び順をシャッフル
 	rand.Shuffle(len(selected), func(i, j int) { selected[i], selected[j] = selected[j], selected[i] })
 
 	return target, selected
 }
 
-// ゲーム開始処理（2人揃った時）
+// startGame: 2人揃った部屋でゲームを開始する処理
 func startGame(roomID string) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	conns := rooms[roomID]
-	
-	// 【修正】競合チェック - すでに誰か抜けている場合は開始しない
+
+	// 人数が減っている場合は開始しない（競合対策）
 	if len(conns) < 2 {
 		return
 	}
 
 	states := roomStates[roomID]
 
-	// 勝利条件を取得
+	// 勝利スコア設定の取得
 	limit := roomWinningScores[roomID]
 	if limit <= 0 {
 		limit = 5
 	}
 
-	// 各プレイヤーに最初の問題を生成・割り当て
+	// 各プレイヤーの初期問題を生成・状態リセット
 	for pid, state := range states {
-		// 初回なので前回のお題は無し("")
+		// 初回問題生成
 		t, i := generateProblem("")
 		state.Target = t
 		state.Images = i
@@ -543,12 +587,12 @@ func startGame(roomID string) {
 		states[pid] = state
 	}
 
-	// 全員に「ゲーム開始」メッセージを送信
+	// 部屋内の全員に「ゲーム開始」を通知
 	for ws := range conns {
 		myID := clients[ws]
 		myState := states[myID]
 
-		// 相手の画像を取得（相手画面のプレビュー用）
+		// 相手の現在の画像を取得（プレビュー表示用）
 		var opponentImages []string
 		for pid, s := range states {
 			if pid != myID {
@@ -561,14 +605,14 @@ func startGame(roomID string) {
 			Target:         myState.Target,
 			Images:         myState.Images,
 			OpponentImages: opponentImages,
-			WinningScore:   limit, // 勝利条件を通知
+			WinningScore:   limit,
 		}
 		b, _ := json.Marshal(payload)
 		ws.WriteJSON(Message{Type: "GAME_START", Payload: b})
 	}
 }
 
-// 部屋内の全員にメッセージを送る
+// broadcastToRoom: 指定した部屋の全クライアントにメッセージを送信
 func broadcastToRoom(roomID string, msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -579,13 +623,13 @@ func broadcastToRoom(roomID string, msg Message) {
 	}
 }
 
-// 部屋内の「相手（自分以外）」にメッセージを送る
+// broadcastToOpponent: 指定した部屋の「自分以外」のクライアントにメッセージを送信
 func broadcastToOpponent(roomID string, myPlayerID string, msg Message) {
 	mu.Lock()
 	defer mu.Unlock()
 	if conns, ok := rooms[roomID]; ok {
 		for ws := range conns {
-			// 自分以外のプレイヤーIDを持つ接続を探して送信
+			// IDを確認して自分以外なら送信
 			if pid, ok := clients[ws]; ok && pid != myPlayerID {
 				ws.WriteJSON(msg)
 			}
@@ -593,13 +637,18 @@ func broadcastToOpponent(roomID string, myPlayerID string, msg Message) {
 	}
 }
 
+// main: アプリケーションのエントリーポイント
 func main() {
 	e := echo.New()
+	// ミドルウェア設定（ログ出力、リカバリー、CORS）
 	e.Use(middleware.Logger(), middleware.Recover(), middleware.CORS())
-	// サーバー稼働確認用
+
+	// ヘルスチェック用エンドポイント
 	e.GET("/", func(c echo.Context) error { return c.String(http.StatusOK, "Backend Running") })
-	// WebSocketエンドポイント
+
+	// WebSocket用エンドポイント
 	e.GET("/ws", handleWebSocket)
-	// 8080ポートで起動
+
+	// サーバー起動（ポートは環境変数PORT、または8080）
 	e.Logger.Fatal(e.Start(":" + getEnv("PORT", "8080")))
 }
