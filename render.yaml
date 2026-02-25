@@ -5,8 +5,9 @@ services:
     env: go
     region: singapore
     plan: free
-    buildCommand: cd backend && go build -o main .
-    startCommand: cd backend && ./main
+    rootDir: backend
+    buildCommand: go build -o main .
+    startCommand: ./main
     healthCheckPath: /
     envVars:
       - key: PORT
@@ -19,8 +20,9 @@ services:
     name: recaptchgame-web
     env: static
     region: singapore
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     envVars:
       - key: VITE_WS_URL
         # 本番環境用の公開URLを指定（Render側ではこれが優先されます）
