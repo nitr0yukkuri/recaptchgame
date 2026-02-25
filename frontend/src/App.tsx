@@ -1,9 +1,15 @@
 /// <reference types="vite/client" />
 import { useEffect, useState, useRef } from 'react';
-import useWebSocket, { ReadyState } from 'react-use-websocket';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import useWebSocket from 'react-use-websocket';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore, ObstructionType } from './store';
 import { useSound } from './useSound';
+import { generateCpuProblem, getCorrectIndices, getRandomObstruction, sleep } from './utils/game';
+
+import { LoginScreen } from './components/LoginScreen';
+import { WaitingScreen } from './components/WaitingScreen';
+import { GameScreen } from './components/GameScreen';
+import { ResultScreen } from './components/ResultScreen';
 
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
@@ -13,116 +19,17 @@ const STATIC_WS_OPTIONS = {
     shouldReconnect: () => true,
 };
 
-const ALL_CPU_IMAGES = [
-    '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
-    '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
-    '/images/kaidan0.jpg', '/images/kaidan1.jpg', '/images/kaidan2.jpg',
-    '/images/shoukasen0.jpg', '/images/shoukasen1.jpg', '/images/shoukasen2.jpg',
-    '/images/tamanegi5.png',
-];
-
-const ONION_IMAGE = '/images/tamanegi5.png';
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const OnionRain = () => {
-    const onions = Array.from({ length: 100 }).map((_, i) => ({
-        id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 2,
-        duration: 0.5 + Math.random() * 1.5,
-        size: 30 + Math.random() * 100,
-    }));
-
-    return (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none z-50 rounded-sm">
-            {onions.map((o) => (
-                <motion.img
-                    key={o.id}
-                    src={ONION_IMAGE}
-                    initial={{ y: -150, opacity: 1, rotate: 0 }}
-                    animate={{ y: 800, rotate: 720 }}
-                    transition={{
-                        duration: o.duration,
-                        repeat: Infinity,
-                        delay: o.delay,
-                        ease: "linear"
-                    }}
-                    className="absolute object-contain opacity-100"
-                    style={{
-                        left: `${o.left}%`,
-                        width: `${o.size}px`,
-                        height: `${o.size}px`
-                    }}
-                />
-            ))}
-        </div>
-    );
-};
-
-const generateCpuProblem = (prevTarget?: string) => {
-    const targets = ['車', '信号機', '階段', '消火栓'];
-    let newTarget = targets[Math.floor(Math.random() * targets.length)];
-
-    if (prevTarget && targets.length > 1) {
-        while (newTarget === prevTarget) {
-            newTarget = targets[Math.floor(Math.random() * targets.length)];
-        }
-    }
-
-    let searchKey = '';
-    if (newTarget === '車') searchKey = 'car';
-    else if (newTarget === '信号機') searchKey = 'shingouki';
-    else if (newTarget === '階段') searchKey = 'kaidan';
-    else if (newTarget === '消火栓') searchKey = 'shoukasen';
-
-    const corrects = ALL_CPU_IMAGES.filter(img => img.toLowerCase().includes(searchKey));
-    const others = ALL_CPU_IMAGES.filter(img => !img.toLowerCase().includes(searchKey));
-
-    const shuffledCorrects = [...corrects].sort(() => Math.random() - 0.5);
-    const shuffledOthers = [...others].sort(() => Math.random() - 0.5);
-
-    const count = Math.min(3, shuffledCorrects.length);
-    const selected = shuffledCorrects.slice(0, count);
-    const remainingCandidates = [...shuffledOthers, ...shuffledCorrects.slice(count)].sort(() => Math.random() - 0.5);
-    const finalImages = [...selected, ...remainingCandidates.slice(0, 9 - selected.length)];
-
-    return {
-        target: newTarget,
-        images: finalImages.sort(() => Math.random() - 0.5)
-    };
-};
-
-const getCorrectIndices = (imgs: string[], tgt: string) => {
-    let searchKey = '';
-    if (tgt === '車') searchKey = 'car';
-    else if (tgt === '信号機') searchKey = 'shingouki';
-    else if (tgt === '階段') searchKey = 'kaidan';
-    else if (tgt === '消火栓') searchKey = 'shoukasen';
-    else if (tgt === 'TRAFFIC LIGHT') searchKey = 'shingouki';
-    else searchKey = tgt.toLowerCase();
-
-    return imgs
-        .map((img, idx) => img.toLowerCase().includes(searchKey) ? idx : -1)
-        .filter(idx => idx !== -1);
-};
-
-const getRandomObstruction = (): ObstructionType => {
-    const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN', 'GRAYSCALE', 'SEPIA', 'SKEW'];
-    return effects[Math.floor(Math.random() * effects.length)];
-};
-
 function App() {
     const {
         gameState, roomId, playerId, target, images,
-        cpuImages, cpuDifficulty,
-        opponentScore, opponentSelections, mySelections,
+        cpuDifficulty,
+        opponentScore, mySelections,
         setGameState, setRoomInfo, startGame,
         updateCpuPattern, updatePlayerPattern,
         updateOpponentScore, toggleOpponentSelection,
-        resetOpponentSelections, toggleMySelection, resetMySelections, endGame, winner,
+        resetOpponentSelections, toggleMySelection, resetMySelections, endGame,
         feedback, setFeedback, setCpuDifficulty,
-        playerCombo, opponentCombo, playerEffect, opponentEffect,
+        playerCombo, playerEffect, opponentEffect,
         setPlayerCombo, setPlayerEffect, setOpponentEffect, setOpponentCombo
     } = useGameStore();
 
@@ -142,7 +49,7 @@ function App() {
     const prevMessageRef = useRef<MessageEvent<any> | null>(null);
 
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
-    const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
+    const { sendMessage, lastMessage } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
     useEffect(() => {
         if (playerEffect) {
@@ -231,7 +138,6 @@ function App() {
                     case 'ROOM_ASSIGNED':
                         setRoomInfo(msg.payload.room_id, playerId);
                         setGameMode('ONLINE');
-                        // 強制的にWAITINGに移行
                         setGameState('WAITING');
                         break;
                     case 'STATUS_UPDATE':
@@ -506,42 +412,8 @@ function App() {
         setMyScore(0);
     };
 
-    // 【修正】ReadyState監視による強制退出処理を削除
-
-    const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
-
-    const obstructionVariants: Variants = {
-        SHAKE: { x: [-15, 15, -15, 15, 0], transition: { repeat: Infinity, duration: 0.5 } },
-        SPIN: { rotate: 360, transition: { repeat: Infinity, duration: 0.5, ease: "linear" } },
-        SKEW: { skewX: [-20, 20, -20], transition: { repeat: Infinity, duration: 0.5, ease: "easeInOut" } },
-        BLUR: {},
-        INVERT: {},
-        GRAYSCALE: {},
-        SEPIA: {},
-        ONION_RAIN: {},
-        NORMAL: { x: 0, rotate: 0, skewX: 0 }
-    };
-
-    const ScoreSelector = () => (
-        <div className="flex flex-col items-center gap-2 mb-4">
-            <p className="text-gray-500 font-bold text-sm">勝利条件</p>
-            <div className="flex bg-gray-100 p-1 rounded-xl">
-                {[3, 5, 10].map(num => (
-                    <button
-                        key={num}
-                        onClick={() => setSettingScore(num)}
-                        className={`px-4 py-2 rounded-lg font-bold transition ${settingScore === num ? 'bg-white text-[#5B46F5] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        {num}回
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
-
             <AnimatePresence>
                 {playerEffect && (
                     <motion.div
@@ -631,380 +503,45 @@ function App() {
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto w-full">
-
                     {gameState === 'LOGIN' && (
-                        <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
-                            {loginStep === 'SELECT' && (
-                                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
-                                    <div className="flex-1 w-full max-w-md space-y-6">
-                                        <div className="text-center space-y-2">
-                                            <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
-                                                相手より早く<br />人間か証明できる？
-                                            </h2>
-                                        </div>
-
-                                        <div className="bg-[#F9F9F7] p-6 rounded-3xl text-left space-y-4 shadow-sm border border-gray-100">
-                                            <h3 className="text-center font-bold text-gray-800 text-lg mb-2">ルール：</h3>
-                                            <ul className="space-y-3 text-base text-gray-700 font-medium">
-                                                <li className="flex items-start gap-3">
-                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    画像の該当部分をすべて選択
-                                                </li>
-                                                <li className="flex items-start gap-3">
-                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    「確認」ボタンを押して正解なら1点
-                                                </li>
-                                                <li className="flex items-start gap-3">
-                                                    <span className="text-[#5B46F5] font-bold text-xl">✓</span>
-                                                    2連続正解で相手を妨害！
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 w-full max-w-md space-y-4 pb-10">
-                                        <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
-                                        <button onClick={startCpuFlow} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🤖</span>
-                                                <div className="text-left">
-                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-indigo-600 transition">CPUと対戦</p>
-                                                    <p className="text-sm text-gray-400 font-medium">一人で練習</p>
-                                                </div>
-                                            </div>
-                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                        <button onClick={joinRandom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-3xl bg-pink-50 p-3 rounded-xl group-hover:scale-110 transition">🌍</span>
-                                                <div className="text-left">
-                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-pink-600 transition">誰かと対戦</p>
-                                                    <p className="text-sm text-gray-400 font-medium">ランダムマッチ</p>
-                                                </div>
-                                            </div>
-                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-pink-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                        <button onClick={joinFriend} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🤝</span>
-                                                <div className="text-left">
-                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-teal-600 transition">友達と対戦</p>
-                                                    <p className="text-sm text-gray-400 font-medium">部屋を作る・入る</p>
-                                                </div>
-                                            </div>
-                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {loginStep === 'FRIEND' && (
-                                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
-                                    <div className="text-center space-y-2">
-                                        <span className="bg-teal-50 text-teal-600 p-4 rounded-2xl text-4xl inline-block mb-2">🤝</span>
-                                        <h2 className="text-3xl font-bold text-gray-800">友達と対戦</h2>
-                                        <p className="text-gray-500 font-medium">メニューを選択</p>
-                                    </div>
-
-                                    <div className="w-full max-w-md space-y-4">
-                                        <button onClick={createRoom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🏠</span>
-                                                <div className="text-left">
-                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-indigo-600 transition">部屋を作る</p>
-                                                    <p className="text-sm text-gray-400 font-medium">ホストになる</p>
-                                                </div>
-                                            </div>
-                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-
-                                        <button onClick={enterRoomFlow} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🔑</span>
-                                                <div className="text-left">
-                                                    <p className="text-xl font-bold text-gray-800 group-hover:text-teal-600 transition">部屋に入る</p>
-                                                    <p className="text-sm text-gray-400 font-medium">IDを入力して参加</p>
-                                                </div>
-                                            </div>
-                                            <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {loginStep === 'FRIEND_INPUT' && (
-                                <div className="space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full">
-                                    <div className="space-y-2">
-                                        <h2 className="text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
-                                        <p className="text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
-                                    </div>
-
-                                    <div className="relative">
-                                        {loginError && <p className="absolute -top-7 left-0 w-full text-red-500 font-bold text-sm">{loginError}</p>}
-                                        <input
-                                            type="text"
-                                            value={inputRoom}
-                                            onChange={(e) => {
-                                                setInputRoom(e.target.value);
-                                                if (loginError) setLoginError('');
-                                            }}
-                                            placeholder="1234"
-                                            className="w-full text-3xl font-bold text-center py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
-                                            autoFocus
-                                        />
-                                    </div>
-
-                                    {isCreator && <ScoreSelector />}
-
-                                    <button
-                                        onClick={() => joinRoomInternal(inputRoom)}
-                                        className="w-full bg-[#5B46F5] text-white text-lg font-bold py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
-                                    >
-                                        {isCreator ? "部屋を作る" : "入室する"}
-                                    </button>
-                                </div>
-                            )}
-
-                            {loginStep === 'DIFFICULTY' && (
-                                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
-                                    <div className="text-center space-y-2">
-                                        <span className="bg-orange-100 text-orange-600 p-4 rounded-2xl text-4xl inline-block mb-2">⚡</span>
-                                        <h2 className="text-3xl font-black text-gray-800">設定を選択</h2>
-                                        <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>
-                                    </div>
-
-                                    <ScoreSelector />
-
-                                    <div className="w-full max-w-md space-y-4">
-                                        <button
-                                            onClick={() => confirmDifficulty(1)}
-                                            className="w-full group bg-white border-2 border-green-200 hover:border-green-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
-                                        >
-                                            <div className="bg-green-100 text-green-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
-                                            <div className="text-left">
-                                                <p className="text-xl font-bold text-green-600">よわい</p>
-                                                <p className="text-sm text-gray-400">のんびりプレイ向け</p>
-                                            </div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => confirmDifficulty(2)}
-                                            className="w-full group bg-white border-2 border-orange-200 hover:border-orange-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
-                                        >
-                                            <div className="bg-orange-100 text-orange-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">2</div>
-                                            <div className="text-left">
-                                                <p className="text-xl font-bold text-orange-600">ふつう</p>
-                                                <p className="text-sm text-gray-400">バランスの取れた難易度</p>
-                                            </div>
-                                        </button>
-
-                                        <button
-                                            onClick={() => confirmDifficulty(3)}
-                                            className="w-full group bg-white border-2 border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 p-4 rounded-2xl flex items-center gap-4"
-                                        >
-                                            <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
-                                            <div className="text-left">
-                                                <p className="text-xl font-bold text-red-600">つよい</p>
-                                                <p className="text-sm text-gray-400">本気で挑戦したい人向け</p>
-                                            </div>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <LoginScreen
+                            loginStep={loginStep}
+                            isCreator={isCreator}
+                            loginError={loginError}
+                            inputRoom={inputRoom}
+                            setInputRoom={setInputRoom}
+                            setLoginError={setLoginError}
+                            settingScore={settingScore}
+                            setSettingScore={setSettingScore}
+                            startCpuFlow={startCpuFlow}
+                            joinRandom={joinRandom}
+                            joinFriend={joinFriend}
+                            createRoom={createRoom}
+                            enterRoomFlow={enterRoomFlow}
+                            joinRoomInternal={joinRoomInternal}
+                            confirmDifficulty={confirmDifficulty}
+                        />
                     )}
 
                     {gameState === 'WAITING' && (
-                        <div className="text-center h-full flex flex-col items-center justify-center space-y-10">
-                            <div className="animate-spin h-20 w-20 border-8 border-[#5B46F5] border-t-transparent rounded-full"></div>
-                            <div>
-                                <p className="text-3xl font-bold text-gray-700">対戦相手を待機中...</p>
-                                <p className="text-lg text-gray-400 mt-2">Room: {roomId}</p>
-                            </div>
-                            <button
-                                onClick={cancelWaiting}
-                                className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition cursor-pointer z-50 pointer-events-auto"
-                            >
-                                キャンセル
-                            </button>
-                        </div>
+                        <WaitingScreen roomId={roomId} cancelWaiting={cancelWaiting} />
                     )}
 
                     {gameState === 'PLAYING' && (
-                        <div className="flex flex-col h-full justify-start pt-12 pb-20">
-
-                            <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl">
-                                <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
-                                <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
-                            </div>
-
-                            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
-
-                                <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
-                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
-
-                                    <motion.div
-                                        variants={obstructionVariants}
-                                        animate={['SHAKE', 'SPIN', 'SKEW'].includes(playerEffect || '') ? (playerEffect as string) : 'NORMAL'}
-                                        className={`relative overflow-hidden bg-white rounded-sm p-2 shadow-sm w-full border border-gray-300 flex flex-col 
-                                            ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} 
-                                            ${playerEffect === 'INVERT' ? 'invert' : ''}
-                                            ${playerEffect === 'GRAYSCALE' ? 'grayscale' : ''}
-                                            ${playerEffect === 'SEPIA' ? 'sepia' : ''}
-                                        `}
-                                    >
-                                        {playerEffect === 'ONION_RAIN' && <OnionRain />}
-
-                                        <AnimatePresence>
-                                            {(isReloading || isVerifying) && (
-                                                <motion.div
-                                                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                                    className="absolute inset-0 z-30 bg-white/80 flex items-center justify-center"
-                                                >
-                                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5B46F5]"></div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-
-                                        <div className="grid grid-cols-3 gap-1 w-full aspect-square">
-                                            {images.map((img: string, idx: number) => (
-                                                <div
-                                                    key={idx}
-                                                    onClick={() => handleImageClick(idx)}
-                                                    className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
-                                                >
-                                                    <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75 origin-bottom-right' : 'scale-100 origin-center group-hover:opacity-90'}`}>
-                                                        <img
-                                                            src={img}
-                                                            alt="captcha"
-                                                            className="w-full h-full object-cover aspect-square block"
-                                                        />
-                                                    </div>
-
-                                                    {mySelections.includes(idx) && (
-                                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-0.5 m-1 shadow-md z-10">
-                                                            <svg className="w-3 h-3 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        <div className="flex justify-between items-center mt-4 px-2 w-full">
-                                            <button
-                                                onClick={handleReload}
-                                                disabled={isReloading || isVerifying}
-                                                className="p-2 text-gray-400 hover:text-[#5B46F5] hover:bg-gray-100 rounded-full transition duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-                                            >
-                                                <svg className={`w-6 h-6 ${isReloading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                </svg>
-                                            </button>
-
-                                            <button
-                                                onClick={handleVerify}
-                                                disabled={isReloading || isVerifying}
-                                                className="bg-[#4285F4] hover:bg-[#3367D6] disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide transition shadow-sm active:shadow-inner z-20 relative mr-8"
-                                            >
-                                                {isVerifying ? '判定中...' : '確認'}
-                                            </button>
-                                            <div className="w-6"></div>
-                                        </div>
-                                    </motion.div>
-                                </div>
-
-                                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto">
-                                    <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
-
-                                    <motion.div
-                                        variants={obstructionVariants}
-                                        animate={['SHAKE', 'SPIN', 'SKEW'].includes(opponentEffect || '') ? (opponentEffect as string) : 'NORMAL'}
-                                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner w-[200px] md:w-48 border border-gray-300 
-                                            ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} 
-                                            ${opponentEffect === 'INVERT' ? 'invert' : ''}
-                                            ${opponentEffect === 'GRAYSCALE' ? 'grayscale' : ''}
-                                            ${opponentEffect === 'SEPIA' ? 'sepia' : ''}
-                                        `}
-                                    >
-                                        {opponentEffect === 'ONION_RAIN' && <OnionRain />}
-
-                                        <div className="flex items-center gap-2 mb-2 w-full justify-center">
-                                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                            <p className="text-xs font-bold text-gray-500">RIVAL VIEW</p>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-0.5 w-full opacity-90">
-                                            {rivalImages.map((img: string, idx: number) => (
-                                                <div
-                                                    key={`opp-${idx}`}
-                                                    className="relative aspect-square overflow-hidden bg-gray-300"
-                                                >
-                                                    <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
-                                                        <img src={img} className="w-full h-full object-cover aspect-square block" />
-                                                    </div>
-                                                    {opponentSelections.includes(idx) && (
-                                                        <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">
-                                                            <svg className="w-2 h-2 md:w-3 md:h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                </div>
-                            </div>
-
-                            <div className="w-full max-w-4xl mx-auto px-4 mt-8">
-                                <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
-                                    <div className="flex items-center gap-3">
-                                        <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>
-                                        You: {myScore}/{winningScore}
-                                    </div>
-                                    <div className="flex-1 mx-4 md:mx-6 h-4 bg-gray-200 rounded-full overflow-hidden relative shadow-inner">
-                                        <div
-                                            className="absolute top-0 left-0 h-full bg-[#5B46F5] transition-all duration-500 ease-out"
-                                            style={{ width: `${(myScore / winningScore) * 100}%` }}
-                                        ></div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        {gameMode === 'CPU' ? (cpuDifficulty === 3 ? 'CPU (つよい)' : (cpuDifficulty === 1 ? 'CPU (よわい)' : 'CPU (ふつう)')) : 'Rival'}: {opponentScore}/{winningScore}
-                                        <span className="w-4 h-4 rounded-full bg-red-500 shadow-sm"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
+                        <GameScreen
+                            myScore={myScore}
+                            winningScore={winningScore}
+                            gameMode={gameMode}
+                            isReloading={isReloading}
+                            isVerifying={isVerifying}
+                            handleImageClick={handleImageClick}
+                            handleReload={handleReload}
+                            handleVerify={handleVerify}
+                        />
                     )}
 
                     {gameState === 'RESULT' && (
-                        <div className="flex flex-col items-center justify-center h-full text-center space-y-10">
-                            {winner === playerId || (winner === 'human' && gameMode === 'CPU') ? (
-                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-green-600 space-y-6">
-                                    <div className="bg-green-100 w-32 h-32 rounded-full flex items-center justify-center mx-auto shadow-lg">
-                                        <span className="text-6xl">🎉</span>
-                                    </div>
-                                    <div>
-                                        <h2 className="text-4xl md:text-5xl font-bold text-gray-800">You are Human!</h2>
-                                        <p className="text-xl text-gray-500 mt-3">人間であることが証明されました。</p>
-                                    </div>
-                                </motion.div>
-                            ) : (
-                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-red-600 space-y-6">
-                                    <div className="bg-red-100 w-32 h-32 rounded-full flex items-center justify-center mx-auto shadow-lg">
-                                        <span className="text-6xl">🤖</span>
-                                    </div>
-                                    <div>
-                                        <h2 className="text-4xl md:text-5xl font-black text-gray-800">DEFEAT</h2>
-                                        <p className="text-xl text-gray-500 mt-3">敗北しました...</p>
-                                    </div>
-                                </motion.div>
-                            )}
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="px-10 py-5 bg-gray-900 text-white rounded-2xl font-bold text-xl hover:bg-black transition shadow-2xl"
-                            >
-                                もう一度プレイ
-                            </button>
-                        </div>
+                        <ResultScreen gameMode={gameMode} />
                     )}
                 </div>
             </div>
