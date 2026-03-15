@@ -1,110 +1,54 @@
 # reCAPTCHA Game
 
-**〜 60秒以内に何回、人間か証明できる？ 〜**
+## 🎮 概要 (Overview)
+おなじみの「画像認証（reCAPTCHA）」をモチーフにした、新感覚のリアルタイム対戦ゲームです。
+出題されるお題（例：「車」「信号機」「階段」など）に当てはまる画像を素早く正確に選択し、相手より先に目標スコアに到達することを目指します。
 
-日常でおなじみの **reCAPTCHA（画像選択認証）** を、
-対戦型ゲームとして再構築した Web アプリケーションです。
+一人で遊べる「CPU戦」と、WebSocketを利用した白熱の「オンライン対戦」に対応しています。
 
-CPU またはオンライン上のプレイヤーと対戦し、
-**どちらがより速く「人間であること」を証明できるか** を競います。
+## ✨ 特徴・こだわりポイント (Features)
 
----
+* **リアルタイムな対戦状況の可視化 (RIVAL VIEW)**
+    WebSocketによる低遅延な同期通信により、相手が今どの画像を選択しているかが「RIVAL VIEW」としてリアルタイムに表示されます。焦燥感を煽るスリリングなUIデザインです。
+* **コンボ＆お邪魔（妨害）エフェクトシステム**
+    連続で正解してコンボを繋ぐと、相手の画面に対して様々な妨害エフェクトを発動できます。
+    * `SHAKE` (画面揺れ) / `SPIN` (回転) / `SKEW` (歪み)
+    * `BLUR` (ぼかし) / `INVERT` (色反転) / `GRAYSCALE` (白黒)
+    * `ONION_RAIN` (画面に玉ねぎが降ってくる謎演出) 🧅
+* **心地よいUI/UXとサウンド演出**
+    `Framer Motion`を活用したスムーズなアニメーションと、`Tone.js`によるブラウザ上でのリッチなサウンド再生を組み合わせ、プレイしていて気持ちの良い操作感を実現しました。
+* **モダンで軽量なフロントエンド**
+    状態管理にはReduxではなく軽量な`Zustand`を採用し、シンプルかつ拡張性の高いコードベースを維持しています。スタイリングは`Tailwind CSS`でスピーディに構築しています。
 
-## 🎮 ゲームモード
-
-### 🤖 CPU対戦（Solo）
-
-* AIボットと対戦する練習モードです。
-* 相手の強さは一定で、落ち着いて操作を練習できます。
-
-### 🌍 ランダムマッチ（Online）
-
-* オンライン上のプレイヤーと即時マッチングします。
-* 待機中のユーザー同士をサーバーが自動でマッチさせます。
-
-### 🤝 フレンド対戦（Online）
-
-* 「合言葉（ルームID）」を共有し、特定の友達と対戦できます。
-
----
-
-## 🛠 機能・システム
-
-* **リアルタイム通信**
-  WebSocket を使用し、相手のスコアや選択状況を低遅延で同期します。
-
-* **正誤判定ロジック**
-  「車」「信号機」などの対象物をサーバーサイドで判定します。
-  ※ CPUモードの一部ではクライアント判定も使用
-
-* **勝利条件**
-  先に **5問正解** したプレイヤーの勝利です。
-
-* **Rival View**
-  相手が現在どの画像を選択しているか、進捗をリアルタイムで可視化します。
-
----
-
-## 💻 技術構成（Tech Stack）
+## 🛠 技術構成 (Tech Stack)
 
 ### Frontend
-
-* **Framework:** React（Vite）
-* **Language:** TypeScript
-* **Styling:** Tailwind CSS
-* **Animation:** Framer Motion
-* **State Management:** Zustand
-* **Communication:** WebSocket（react-use-websocket）
-
-### Backend
-
-* **Language:** Go（1.21）
-* **Framework:** Echo
-* **WebSocket:** Gorilla WebSocket
-* **Architecture:** In-Memory Room Management（マップによるオンメモリ管理）
-
-### Infrastructure
-
-* **Platform:** Render
-
-  * Web Service：Backend（Go）
-  * Static Site：Frontend（React / Vite）
-
----
-
-## 🚀 ローカルでの実行方法
+* **Core**: React 18, TypeScript, Vite
+* **State Management**: Zustand
+* **Styling**: Tailwind CSS, clsx, tailwind-merge
+* **Animation**: Framer Motion
+* **Communication**: react-use-websocket
+* **Audio**: Tone.js
 
 ### Backend
+* **Core**: Go (Golang)
+* **Communication**: WebSocket (`net/http`)
+* **Architecture**: 標準モジュールベースの軽量かつシンプルなサーバー構成
 
+## 🚀 遊び方 (How to Play)
+
+1.  ゲームモード（CPU戦 または オンライン戦）を選択します。
+2.  画面上部に表示される「お題」（例：以下の画像をすべて選択：車）を確認します。
+3.  9枚のパネルの中から、お題に合致する画像をすべてクリックして選択します。
+4.  「確認」ボタンを押して判定を行います。正解するとスコアが加算されます！
+5.  相手より先に目標スコア（Winning Score）に到達したプレイヤーの勝利です。
+6.  *Hint: 早く正確に答えてコンボを繋げば、相手の画面を妨害できます！*
+
+## 📦 ローカルでの環境構築 (Setup)
+
+### Backend (Go)
 ```bash
 cd backend
-go mod tidy
+go mod download
 go run main.go
-# Server starts at :8080
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-# App starts at http://localhost:5173
-```
-
----
-
-## 📂 ディレクトリ構成
-
-```text
-.
-├── backend/            # Go API & WebSocket Server
-│   ├── main.go         # エントリーポイント & ゲームロジック
-│   └── go.mod
-├── frontend/           # React Application
-│   ├── src/
-│   │   ├── App.tsx     # メインUIコンポーネント
-│   │   └── store.ts    # Zustandによる状態管理
-│   └── tailwind.config.js
-└── render.yaml         # Render へのデプロイ設定
-```
+# デフォルトでポート8080で起動します
