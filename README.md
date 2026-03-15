@@ -45,10 +45,20 @@
 6.  *Hint: 早く正確に答えてコンボを繋げば、相手の画面を妨害できます！*
 
 ## 📦 ローカルでの環境構築 (Setup)
-
 ### Backend (Go)
+
 ```bash
 cd backend
 go mod download
 go run main.go
 # デフォルトでポート8080で起動します
+```
+
+### Frontend (React/Vite)
+
+```bash
+cd frontend
+npm install
+npm run dev
+# localhost:5173 などでプレビューが開きます
+```
