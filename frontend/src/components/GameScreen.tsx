@@ -78,7 +78,7 @@ export const GameScreen = ({
                                     onClick={() => handleImageClick(idx)}
                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                 >
-                                    <div className={`w-full h-full transition-transform duration-100 ${mySelections.includes(idx) ? 'scale-75 origin-bottom-right' : 'scale-100 origin-center group-hover:opacity-90'}`}>
+                                    <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${mySelections.includes(idx) ? 'scale-90' : 'scale-100 group-hover:opacity-90'}`}>
                                         <img
                                             src={img}
                                             alt="captcha"
@@ -143,7 +143,7 @@ export const GameScreen = ({
                                     key={`opp-${idx}`}
                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                 >
-                                    <div className={`w-full h-full transition-transform duration-100 ${opponentSelections.includes(idx) ? 'scale-75' : ''}`}>
+                                    <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${opponentSelections.includes(idx) ? 'scale-90' : 'scale-100'}`}>
                                         <img src={img} className="w-full h-full object-cover aspect-square block" />
                                     </div>
                                     {opponentSelections.includes(idx) && (
