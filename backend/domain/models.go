@@ -134,6 +134,17 @@ func (r *Room) GetOpponentGameState(playerID string) *GameState {
 	return r.GameState1
 }
 
+// EvaluateComboAndApplyObstruction はコンボを評価して妨害発動判定を行う
+// ドメインルール：コンボが2以上なら妨害を発動し、コンボをリセット
+func (r *Room) EvaluateComboAndApplyObstruction(playerID string) bool {
+	player := r.GetPlayerByID(playerID)
+	if player.Combo >= 2 {
+		player.ResetCombo()
+		return true // 妨害発動
+	}
+	return false
+}
+
 // Problem は問題を表すドメインエンティティ
 type Problem struct {
 	Target string
@@ -150,7 +161,7 @@ func NewProblem(target string, images []string) *Problem {
 
 // GetCorrectIndices は正答のインデックスリストを返す
 func (p *Problem) GetCorrectIndices() []int {
-	searchKey := TargetSearchKeyMap[p.Target]
+	searchKey := GetSearchKey(p.Target)
 	var correctIndices []int
 
 	for i, img := range p.Images {

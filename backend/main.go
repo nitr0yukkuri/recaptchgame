@@ -47,15 +47,16 @@ func init() {
 	// インフラストラクチャの初期化
 	roomRepo = infrastructure.NewMemoryRoomRepository()
 	clientRepo = infrastructure.NewMemoryClientRepository()
+	// IDGenerator の初期化（DI）
+	idGenerator := infrastructure.NewTimeBasedIDGenerator()
 
-	// ユースケース層の初期化
-	problemGeneratorUC = usecase.NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
-	)
-	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo)
-	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.EffectTypes)
+	// ドメインサービスの初期化
+	problemFactory := domain.NewProblemFactory()
+
+	// ユースケース層の初期化（新フォーマット）
+	problemGeneratorUC = usecase.NewProblemGeneratorUseCase(problemFactory, domain.GetAllTargets())
+	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo, idGenerator)
+	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.GetAllEffects())
 	startGameUC = usecase.NewStartGameUseCase(roomRepo, problemGeneratorUC)
 	leaveRoomUC = usecase.NewLeaveRoomUseCase(roomRepo, clientRepo)
 

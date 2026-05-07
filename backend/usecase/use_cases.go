@@ -3,24 +3,22 @@ package usecase
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
 	"recaptchgame-backend/domain"
 )
 
 // ProblemGeneratorUseCase は問題生成のユースケース
+// 手順のみを実行し、アルゴリズムはドメイン層（ProblemFactory）に委譲
 type ProblemGeneratorUseCase struct {
-	allTargets   []string
-	allImages    []string
-	targetKeyMap map[string]string
+	factory *domain.ProblemFactory
+	targets []string
 }
 
 // NewProblemGeneratorUseCase は新しいProblemGeneratorUseCaseを生成
-func NewProblemGeneratorUseCase(targets []string, images []string, keyMap map[string]string) *ProblemGeneratorUseCase {
+func NewProblemGeneratorUseCase(factory *domain.ProblemFactory, targets []string) *ProblemGeneratorUseCase {
 	return &ProblemGeneratorUseCase{
-		allTargets:   targets,
-		allImages:    images,
-		targetKeyMap: keyMap,
+		factory: factory,
+		targets: targets,
 	}
 }
 
@@ -28,103 +26,33 @@ func NewProblemGeneratorUseCase(targets []string, images []string, keyMap map[st
 func (uc *ProblemGeneratorUseCase) Execute(prevTarget string) (*domain.Problem, error) {
 	// 異なるターゲットを選択
 	target := uc.selectDifferentTarget(prevTarget)
-	searchKey := uc.targetKeyMap[target]
-
-	// 正答と その他を分類
-	var corrects []string
-	var others []string
-
-	for _, img := range uc.allImages {
-		if contains(img, searchKey) {
-			corrects = append(corrects, img)
-		} else {
-			others = append(others, img)
-		}
-	}
-
-	// シャッフル
-	shuffleStrings(corrects)
-	shuffleStrings(others)
-
-	// 正答から3つ選択
-	correctCount := 3
-	if len(corrects) < 3 {
-		correctCount = len(corrects)
-	}
-
-	selected := make([]string, 0)
-	selected = append(selected, corrects[:correctCount]...)
-
-	// 残りから候補を作成
-	remaining := append(others, corrects[correctCount:]...)
-	shuffleStrings(remaining)
-
-	// 9枚になるまで追加
-	needed := 9 - len(selected)
-	if len(remaining) < needed {
-		selected = append(selected, remaining...)
-	} else {
-		selected = append(selected, remaining[:needed]...)
-	}
-
-	// 最後にシャッフル
-	shuffleStrings(selected)
-
-	return domain.NewProblem(target, selected), nil
+	// ドメインサービスに問題生成を委譲
+	return uc.factory.CreateProblem(target), nil
 }
 
 // selectDifferentTarget は前回のターゲットと異なるターゲットを選択
 func (uc *ProblemGeneratorUseCase) selectDifferentTarget(prevTarget string) string {
 	for {
-		target := uc.allTargets[rand.Intn(len(uc.allTargets))]
+		target := uc.targets[rand.Intn(len(uc.targets))]
 		if target != prevTarget {
 			return target
 		}
 	}
 }
 
-// Helper functions
-func shuffleStrings(s []string) {
-	rand.Shuffle(len(s), func(i, j int) {
-		s[i], s[j] = s[j], s[i]
-	})
-}
-
-func contains(str string, substr string) bool {
-	var lowerStr string
-	for _, r := range str {
-		if r >= 'A' && r <= 'Z' {
-			lowerStr += string(r + 32)
-		} else {
-			lowerStr += string(r)
-		}
-	}
-	return stringContains(lowerStr, substr)
-}
-
-func stringContains(str, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // JoinRoomUseCase はプレイヤーがルームに参加するユースケース
 type JoinRoomUseCase struct {
-	roomRepo   domain.RoomRepository
-	clientRepo domain.ClientRepository
+	roomRepo    domain.RoomRepository
+	clientRepo  domain.ClientRepository
+	idGenerator domain.IDGenerator
 }
 
 // NewJoinRoomUseCase は新しいJoinRoomUseCaseを生成
-func NewJoinRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository) *JoinRoomUseCase {
+func NewJoinRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository, idGenerator domain.IDGenerator) *JoinRoomUseCase {
 	return &JoinRoomUseCase{
-		roomRepo:   roomRepo,
-		clientRepo: clientRepo,
+		roomRepo:    roomRepo,
+		clientRepo:  clientRepo,
+		idGenerator: idGenerator,
 	}
 }
 
@@ -153,7 +81,8 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
 		if waitingRoom == nil || (waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != "") {
 			// 新しいルームを作成
-			actualRoomID = "ROOM_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			// ✅ IDGenerator を使用（DI）
+			actualRoomID = uc.idGenerator.GenerateRoomID()
 			newRoom := domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
 			uc.roomRepo.Save(newRoom)
 			uc.roomRepo.SetWaitingRoom(newRoom)
@@ -272,11 +201,13 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 		output.NewTarget = newProblem.Target
 		output.NewImages = newProblem.Images
 
-		// コンボ判定：コンボが2以上でリセット＆妨害発動
-		if output.CurrentCombo >= 2 {
-			player.ResetCombo()
-			output.CurrentCombo = 0 // リセット後の値を反映
+		// ✅ ドメインメソッドに委譲（ビジネスルール判定）
+		shouldObstruct := room.EvaluateComboAndApplyObstruction(input.PlayerID)
+		if shouldObstruct {
+			// リセット後の値を反映
+			output.CurrentCombo = player.Combo
 			output.SendObstruction = true
+			// ← エフェクト選択は「戦術的」なのでユースケース層に残す
 			output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
 		}
 
