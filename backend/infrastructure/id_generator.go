@@ -3,7 +3,6 @@ package infrastructure
 import (
 	"fmt"
 	"time"
-
 	"recaptchgame-backend/domain"
 )
 
