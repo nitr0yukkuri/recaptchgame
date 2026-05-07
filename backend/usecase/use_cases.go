@@ -1,0 +1,408 @@
+package usecase
+
+import (
+	"fmt"
+	"math/rand"
+	"time"
+
+	"recaptchgame-backend/domain"
+)
+
+// ProblemGeneratorUseCase は問題生成のユースケース
+type ProblemGeneratorUseCase struct {
+	allTargets   []string
+	allImages    []string
+	targetKeyMap map[string]string
+}
+
+// NewProblemGeneratorUseCase は新しいProblemGeneratorUseCaseを生成
+func NewProblemGeneratorUseCase(targets []string, images []string, keyMap map[string]string) *ProblemGeneratorUseCase {
+	return &ProblemGeneratorUseCase{
+		allTargets:   targets,
+		allImages:    images,
+		targetKeyMap: keyMap,
+	}
+}
+
+// Execute は問題を生成する
+func (uc *ProblemGeneratorUseCase) Execute(prevTarget string) (*domain.Problem, error) {
+	// 異なるターゲットを選択
+	target := uc.selectDifferentTarget(prevTarget)
+	searchKey := uc.targetKeyMap[target]
+
+	// 正答と その他を分類
+	var corrects []string
+	var others []string
+
+	for _, img := range uc.allImages {
+		if contains(img, searchKey) {
+			corrects = append(corrects, img)
+		} else {
+			others = append(others, img)
+		}
+	}
+
+	// シャッフル
+	shuffleStrings(corrects)
+	shuffleStrings(others)
+
+	// 正答から3つ選択
+	correctCount := 3
+	if len(corrects) < 3 {
+		correctCount = len(corrects)
+	}
+
+	selected := make([]string, 0)
+	selected = append(selected, corrects[:correctCount]...)
+
+	// 残りから候補を作成
+	remaining := append(others, corrects[correctCount:]...)
+	shuffleStrings(remaining)
+
+	// 9枚になるまで追加
+	needed := 9 - len(selected)
+	if len(remaining) < needed {
+		selected = append(selected, remaining...)
+	} else {
+		selected = append(selected, remaining[:needed]...)
+	}
+
+	// 最後にシャッフル
+	shuffleStrings(selected)
+
+	return domain.NewProblem(target, selected), nil
+}
+
+// selectDifferentTarget は前回のターゲットと異なるターゲットを選択
+func (uc *ProblemGeneratorUseCase) selectDifferentTarget(prevTarget string) string {
+	for {
+		target := uc.allTargets[rand.Intn(len(uc.allTargets))]
+		if target != prevTarget {
+			return target
+		}
+	}
+}
+
+// Helper functions
+func shuffleStrings(s []string) {
+	rand.Shuffle(len(s), func(i, j int) {
+		s[i], s[j] = s[j], s[i]
+	})
+}
+
+func contains(str string, substr string) bool {
+	var lowerStr string
+	for _, r := range str {
+		if r >= 'A' && r <= 'Z' {
+			lowerStr += string(r + 32)
+		} else {
+			lowerStr += string(r)
+		}
+	}
+	return stringContains(lowerStr, substr)
+}
+
+func stringContains(str, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	for i := 0; i <= len(str)-len(substr); i++ {
+		if str[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// JoinRoomUseCase はプレイヤーがルームに参加するユースケース
+type JoinRoomUseCase struct {
+	roomRepo   domain.RoomRepository
+	clientRepo domain.ClientRepository
+}
+
+// NewJoinRoomUseCase は新しいJoinRoomUseCaseを生成
+func NewJoinRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository) *JoinRoomUseCase {
+	return &JoinRoomUseCase{
+		roomRepo:   roomRepo,
+		clientRepo: clientRepo,
+	}
+}
+
+// JoinRoomInput はJoinRoomの入力
+type JoinRoomInput struct {
+	ClientID     string
+	PlayerID     string
+	RoomID       string
+	WinningScore int
+}
+
+// JoinRoomOutput はJoinRoomの出力
+type JoinRoomOutput struct {
+	ActualRoomID  string
+	IsFirstPlayer bool
+	RoomSize      int
+}
+
+// Execute はルーム参加を実行
+func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error) {
+	actualRoomID := input.RoomID
+	createdNewRoom := false
+
+	// RANDOMの場合は待機ルームを取得/作成
+	if input.RoomID == "RANDOM" {
+		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
+		if waitingRoom == nil || (waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != "") {
+			// 新しいルームを作成
+			actualRoomID = "ROOM_" + fmt.Sprintf("%d", time.Now().UnixNano())
+			newRoom := domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
+			uc.roomRepo.Save(newRoom)
+			uc.roomRepo.SetWaitingRoom(newRoom)
+			createdNewRoom = true
+		} else {
+			actualRoomID = waitingRoom.ID
+		}
+	}
+
+	// ルームを取得
+	room, err := uc.roomRepo.FindByID(actualRoomID)
+	if err != nil {
+		// ルームが存在しない場合は作成
+		room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
+		uc.roomRepo.Save(room)
+	} else if !createdNewRoom {
+		// ルームが存在する場合、2番目のプレイヤーを設定
+		if room.Player2 == nil || room.Player2.ID == "" {
+			room.Player2 = domain.NewPlayer(input.PlayerID)
+		}
+	}
+
+	// クライアントを割り当て
+	uc.clientRepo.AssignClient(input.ClientID, input.PlayerID)
+
+	// ルームを保存
+	uc.roomRepo.Save(room)
+
+	// ルームがいっぱいになったら待機ルームをクリア
+	roomSize := 1
+	if room.Player1 != nil && room.Player1.ID != "" && room.Player2 != nil && room.Player2.ID != "" {
+		roomSize = 2
+		if input.RoomID == "RANDOM" {
+			uc.roomRepo.ClearWaitingRoom()
+		}
+	}
+
+	return &JoinRoomOutput{
+		ActualRoomID:  actualRoomID,
+		IsFirstPlayer: true, // 簡略化
+		RoomSize:      roomSize,
+	}, nil
+}
+
+// VerifyAnswerUseCase は回答検証のユースケース
+type VerifyAnswerUseCase struct {
+	roomRepo    domain.RoomRepository
+	problemGen  *ProblemGeneratorUseCase
+	effectTypes []string
+}
+
+// NewVerifyAnswerUseCase は新しいVerifyAnswerUseCaseを生成
+func NewVerifyAnswerUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase, effectTypes []string) *VerifyAnswerUseCase {
+	return &VerifyAnswerUseCase{
+		roomRepo:    roomRepo,
+		problemGen:  problemGen,
+		effectTypes: effectTypes,
+	}
+}
+
+// VerifyAnswerInput はVerifyAnswerの入力
+type VerifyAnswerInput struct {
+	RoomID          string
+	PlayerID        string
+	SelectedIndices []int
+}
+
+// VerifyAnswerOutput はVerifyAnswerの出力
+type VerifyAnswerOutput struct {
+	IsCorrect       bool
+	NewTarget       string
+	NewImages       []string
+	CurrentScore    int
+	CurrentCombo    int
+	IsGameOver      bool
+	Winner          string
+	SendObstruction bool
+	Effect          string
+}
+
+// Execute は回答を検証
+func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOutput, error) {
+	room, err := uc.roomRepo.FindByID(input.RoomID)
+	if err != nil {
+		return nil, err
+	}
+
+	player := room.GetPlayerByID(input.PlayerID)
+	gameState := room.GetGameStateByPlayerID(input.PlayerID)
+	problem := domain.NewProblem(gameState.Target, gameState.Images)
+
+	isCorrect := problem.VerifyAnswer(input.SelectedIndices)
+
+	output := &VerifyAnswerOutput{
+		IsCorrect:    isCorrect,
+		CurrentScore: player.Score,
+		CurrentCombo: player.Combo,
+	}
+
+	if isCorrect {
+		player.IncreaseScore()
+		player.IncreaseCombo()
+		output.CurrentScore = player.Score
+		output.CurrentCombo = player.Combo
+
+		// ゲーム終了判定
+		if player.Score >= room.WinningScore {
+			output.IsGameOver = true
+			output.Winner = player.ID
+			return output, nil
+		}
+
+		// 新しい問題を生成
+		newProblem, _ := uc.problemGen.Execute(gameState.Target)
+		gameState.UpdateState(newProblem.Target, newProblem.Images)
+		output.NewTarget = newProblem.Target
+		output.NewImages = newProblem.Images
+
+		// コンボ判定：コンボが2以上でリセット＆妨害発動
+		if output.CurrentCombo >= 2 {
+			player.ResetCombo()
+			output.CurrentCombo = 0 // リセット後の値を反映
+			output.SendObstruction = true
+			output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
+		}
+
+		uc.roomRepo.Save(room)
+	} else {
+		// 不正解
+		player.ResetCombo()
+		output.CurrentCombo = player.Combo
+		uc.roomRepo.Save(room)
+	}
+
+	return output, nil
+}
+
+// StartGameUseCase はゲーム開始のユースケース
+type StartGameUseCase struct {
+	roomRepo   domain.RoomRepository
+	problemGen *ProblemGeneratorUseCase
+}
+
+// NewStartGameUseCase は新しいStartGameUseCaseを生成
+func NewStartGameUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase) *StartGameUseCase {
+	return &StartGameUseCase{
+		roomRepo:   roomRepo,
+		problemGen: problemGen,
+	}
+}
+
+// StartGameInput はStartGameの入力
+type StartGameInput struct {
+	RoomID string
+}
+
+// StartGameOutput はStartGameの出力
+type StartGameOutput struct {
+	Player1Target         string
+	Player1Images         []string
+	Player1OpponentImages []string
+	Player2Target         string
+	Player2Images         []string
+	Player2OpponentImages []string
+	WinningScore          int
+}
+
+// Execute はゲーム開始を実行
+func (uc *StartGameUseCase) Execute(input StartGameInput) (*StartGameOutput, error) {
+	room, err := uc.roomRepo.FindByID(input.RoomID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !room.IsReady() {
+		return nil, fmt.Errorf("room is not ready")
+	}
+
+	room.Start()
+
+	// 両プレイヤーに問題を生成
+	problem1, _ := uc.problemGen.Execute("")
+	problem2, _ := uc.problemGen.Execute("")
+
+	room.GameState1.UpdateState(problem1.Target, problem1.Images)
+	room.GameState2.UpdateState(problem2.Target, problem2.Images)
+
+	// スコア/コンボをリセット
+	room.Player1.Score = 0
+	room.Player1.Combo = 0
+	room.Player2.Score = 0
+	room.Player2.Combo = 0
+
+	uc.roomRepo.Save(room)
+
+	return &StartGameOutput{
+		Player1Target:         problem1.Target,
+		Player1Images:         problem1.Images,
+		Player1OpponentImages: problem2.Images,
+		Player2Target:         problem2.Target,
+		Player2Images:         problem2.Images,
+		Player2OpponentImages: problem1.Images,
+		WinningScore:          room.WinningScore,
+	}, nil
+}
+
+// LeaveRoomUseCase はプレイヤーがルームを退出するユースケース
+type LeaveRoomUseCase struct {
+	roomRepo   domain.RoomRepository
+	clientRepo domain.ClientRepository
+}
+
+// NewLeaveRoomUseCase は新しいLeaveRoomUseCaseを生成
+func NewLeaveRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository) *LeaveRoomUseCase {
+	return &LeaveRoomUseCase{
+		roomRepo:   roomRepo,
+		clientRepo: clientRepo,
+	}
+}
+
+// LeaveRoomInput はLeaveRoomの入力
+type LeaveRoomInput struct {
+	ClientID string
+	PlayerID string
+}
+
+// Execute はルーム退出を実行
+func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
+	uc.clientRepo.RemoveClient(input.ClientID)
+
+	room, err := uc.roomRepo.FindByPlayerID(input.PlayerID)
+	if err != nil {
+		return nil // ルームが見つからない場合は無視
+	}
+
+	// プレイヤーを削除
+	if room.Player1.ID == input.PlayerID {
+		room.Player1 = nil
+	} else {
+		room.Player2 = nil
+	}
+
+	// ルームが空になったら削除
+	if room.Player1 == nil && room.Player2 == nil {
+		uc.roomRepo.Delete(room.ID)
+		uc.roomRepo.ClearWaitingRoom()
+	} else {
+		uc.roomRepo.Save(room)
+	}
+
+	return nil
+}
