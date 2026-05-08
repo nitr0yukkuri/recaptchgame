@@ -10,10 +10,50 @@ import (
 	"recaptchgame-backend/usecase"
 )
 
+var errSendQueueClosed = fmt.Errorf("send queue is closed")
+
+type clientConnection struct {
+	conn   *websocket.Conn
+	send   chan Message
+	mu     sync.Mutex
+	closed bool
+}
+
+func newClientConnection(conn *websocket.Conn) *clientConnection {
+	return &clientConnection{
+		conn: conn,
+		send: make(chan Message, 32),
+	}
+}
+
+func (c *clientConnection) enqueue(msg Message) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return errSendQueueClosed
+	}
+	c.send <- msg
+	return nil
+}
+
+func (c *clientConnection) close() {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.closed = true
+	close(c.send)
+	c.mu.Unlock()
+
+	c.conn.Close()
+}
+
 // WebSocketManager はWebSocket接続を管理
 type WebSocketManager struct {
 	mu             sync.RWMutex
-	connections    map[string]*websocket.Conn // clientID -> conn
+	connections    map[string]*clientConnection // clientID -> connection state
 	clientToPlayer map[string]string          // clientID -> playerID
 	clientToRoom   map[string]string          // clientID -> roomID
 	roomToClients  map[string]map[string]bool // roomID -> map[clientID]bool
@@ -22,7 +62,7 @@ type WebSocketManager struct {
 // NewWebSocketManager は新しいWebSocketManagerを生成
 func NewWebSocketManager() *WebSocketManager {
 	return &WebSocketManager{
-		connections:    make(map[string]*websocket.Conn),
+		connections:    make(map[string]*clientConnection),
 		clientToPlayer: make(map[string]string),
 		clientToRoom:   make(map[string]string),
 		roomToClients:  make(map[string]map[string]bool),
@@ -31,23 +71,33 @@ func NewWebSocketManager() *WebSocketManager {
 
 // RegisterConnection はコネクションを登録
 func (m *WebSocketManager) RegisterConnection(clientID string, conn *websocket.Conn) {
+	client := newClientConnection(conn)
+
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.connections[clientID] = conn
+	m.connections[clientID] = client
+	m.mu.Unlock()
+
+	go m.writePump(clientID, client)
 }
 
 // UnregisterConnection はコネクションを解除
 func (m *WebSocketManager) UnregisterConnection(clientID string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.connections, clientID)
+	client, ok := m.connections[clientID]
+	if ok {
+		delete(m.connections, clientID)
+	}
 	delete(m.clientToPlayer, clientID)
 	roomID := m.clientToRoom[clientID]
 	delete(m.clientToRoom, clientID)
 
 	if roomID != "" && m.roomToClients[roomID] != nil {
 		delete(m.roomToClients[roomID], clientID)
+	}
+	m.mu.Unlock()
+
+	if ok {
+		client.close()
 	}
 }
 
@@ -70,43 +120,31 @@ func (m *WebSocketManager) AssignClientToPlayer(clientID string, playerID string
 	m.clientToPlayer[clientID] = playerID
 }
 
-// GetConnection はコネクションを取得
-func (m *WebSocketManager) GetConnection(clientID string) (*websocket.Conn, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	conn, ok := m.connections[clientID]
-	return conn, ok
-}
-
-// GetConnectionsByRoomID はルーム内のコネクションを取得
-func (m *WebSocketManager) GetConnectionsByRoomID(roomID string) map[string]*websocket.Conn {
+// GetClientIDsByRoomIDExcept はルーム内のクライアントIDを取得（特定クライアントを除く）
+func (m *WebSocketManager) GetClientIDsByRoomIDExcept(roomID string, exceptClientID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make(map[string]*websocket.Conn)
+	var result []string
 	if clients, ok := m.roomToClients[roomID]; ok {
 		for clientID := range clients {
-			if conn, ok := m.connections[clientID]; ok {
-				result[clientID] = conn
+			if clientID != exceptClientID {
+				result = append(result, clientID)
 			}
 		}
 	}
 	return result
 }
 
-// GetConnectionsByRoomIDExcept はルーム内のコネクションを取得（特定クライアントを除く）
-func (m *WebSocketManager) GetConnectionsByRoomIDExcept(roomID string, exceptClientID string) map[string]*websocket.Conn {
+// GetClientIDsByPlayerID はプレイヤーIDに紐づくクライアントIDを取得
+func (m *WebSocketManager) GetClientIDsByPlayerID(playerID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make(map[string]*websocket.Conn)
-	if clients, ok := m.roomToClients[roomID]; ok {
-		for clientID := range clients {
-			if clientID != exceptClientID {
-				if conn, ok := m.connections[clientID]; ok {
-					result[clientID] = conn
-				}
-			}
+	var result []string
+	for clientID, mappedPlayerID := range m.clientToPlayer {
+		if mappedPlayerID == playerID {
+			result = append(result, clientID)
 		}
 	}
 	return result
@@ -126,6 +164,45 @@ func (m *WebSocketManager) GetPlayerID(clientID string) (string, bool) {
 	defer m.mu.RUnlock()
 	playerID, ok := m.clientToPlayer[clientID]
 	return playerID, ok
+}
+
+// SendToClient は指定クライアントにメッセージ送信キュー経由で送る
+func (m *WebSocketManager) SendToClient(clientID string, msg Message) error {
+	m.mu.RLock()
+	client, ok := m.connections[clientID]
+	m.mu.RUnlock()
+	if !ok {
+		return nil
+	}
+
+	return client.enqueue(msg)
+}
+
+// SendToRoom はルーム内全員にメッセージ送信キュー経由で送る
+func (m *WebSocketManager) SendToRoom(roomID string, msg Message) {
+	m.mu.RLock()
+	var targets []*clientConnection
+	if clients, ok := m.roomToClients[roomID]; ok {
+		for clientID := range clients {
+			if client, ok := m.connections[clientID]; ok {
+				targets = append(targets, client)
+			}
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, client := range targets {
+		_ = client.enqueue(msg)
+	}
+}
+
+func (m *WebSocketManager) writePump(clientID string, client *clientConnection) {
+	for msg := range client.send {
+		if err := client.conn.WriteJSON(msg); err != nil {
+			break
+		}
+	}
+	m.UnregisterConnection(clientID)
 }
 
 // WebSocketHandler はWebSocket通信のハンドラー
@@ -161,7 +238,6 @@ func NewWebSocketHandler(
 func (h *WebSocketHandler) HandleConnection(clientID string, conn *websocket.Conn) {
 	h.wsManager.RegisterConnection(clientID, conn)
 	defer func() {
-		conn.Close()
 		h.wsManager.UnregisterConnection(clientID)
 	}()
 
@@ -217,7 +293,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 		PlayerID: p.PlayerID,
 	}
 	b, _ := json.Marshal(assigned)
-	conn.WriteJSON(Message{Type: "ROOM_ASSIGNED", Payload: b})
+	_ = h.wsManager.SendToClient(clientID, Message{Type: "ROOM_ASSIGNED", Payload: b})
 
 	// ルームが2人になったかチェック
 	if output.RoomSize == 2 {
@@ -249,16 +325,13 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 			}
 			b, _ := json.Marshal(gamePayload)
 
-			// プレイヤーのコネクション全てに送信
-			for cID, wsConn := range h.wsManager.connections {
-				if playerID, _ := h.getPlayerIDByClientID(cID); playerID == player.ID {
-					wsConn.WriteJSON(Message{Type: "GAME_START", Payload: b})
-				}
+			for _, cID := range h.wsManager.GetClientIDsByPlayerID(player.ID) {
+				_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_START", Payload: b})
 			}
 		}
 	} else {
 		// 相手を待機中
-		conn.WriteJSON(Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 	}
 }
 
@@ -295,10 +368,8 @@ func (h *WebSocketHandler) handleLeaveRoom(clientID string, payload json.RawMess
 				}
 				b, _ := json.Marshal(res)
 
-				for cID, conn := range h.wsManager.connections {
-					if playerID, _ := h.getPlayerIDByClientID(cID); playerID == opponentID {
-						conn.WriteJSON(Message{Type: "GAME_FINISHED", Payload: b})
-					}
+				for _, cID := range h.wsManager.GetClientIDsByPlayerID(opponentID) {
+					_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
 				}
 			}
 		}
@@ -315,10 +386,8 @@ func (h *WebSocketHandler) handleSelectImage(clientID string, payload json.RawMe
 	// ルームの相手に通知
 	roomID, ok := h.wsManager.GetRoomID(clientID)
 	if ok {
-		for cID, conn := range h.wsManager.GetConnectionsByRoomIDExcept(roomID, clientID) {
-			if cID != clientID {
-				conn.WriteJSON(Message{Type: "OPPONENT_SELECT", Payload: payload})
-			}
+		for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
+			_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_SELECT", Payload: payload})
 		}
 	}
 }
@@ -348,7 +417,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			Images: output.NewImages,
 		}
 		bMy, _ := json.Marshal(updateMy)
-		conn.WriteJSON(Message{Type: "UPDATE_PATTERN", Payload: bMy})
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "UPDATE_PATTERN", Payload: bMy})
 
 		// 相手に状態更新を送信
 		roomID, _ := h.wsManager.GetRoomID(clientID)
@@ -360,10 +429,8 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			}
 			bOpp, _ := json.Marshal(updateOpp)
 
-			for cID, wsConn := range h.wsManager.GetConnectionsByRoomIDExcept(roomID, clientID) {
-				if cID != clientID {
-					wsConn.WriteJSON(Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
-				}
+			for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
+				_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 			}
 
 			// 妨害エフェクト送信
@@ -388,15 +455,13 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 		}
 	} else {
 		// 不正解
-		conn.WriteJSON(Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "VERIFY_FAILED", Payload: json.RawMessage(`{}`)})
 	}
 }
 
 // broadcastToRoom はルーム内全員にメッセージを送信
 func (h *WebSocketHandler) broadcastToRoom(roomID string, msg Message) {
-	for _, conn := range h.wsManager.GetConnectionsByRoomID(roomID) {
-		conn.WriteJSON(msg)
-	}
+	h.wsManager.SendToRoom(roomID, msg)
 }
 
 // getPlayerIDByClientID はクライアントIDからプレイヤーIDを取得（ここは改善可能）

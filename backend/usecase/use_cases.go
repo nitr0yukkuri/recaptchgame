@@ -3,9 +3,37 @@ package usecase
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 
 	"recaptchgame-backend/domain"
 )
+
+// RoomExecutionGuard はルーム単位で処理を直列化する
+type RoomExecutionGuard struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+// NewRoomExecutionGuard は新しいRoomExecutionGuardを生成
+func NewRoomExecutionGuard() *RoomExecutionGuard {
+	return &RoomExecutionGuard{locks: make(map[string]*sync.Mutex)}
+}
+
+// Lock は指定ルームのロックを取得し、解除関数を返す
+func (g *RoomExecutionGuard) Lock(roomID string) func() {
+	g.mu.Lock()
+	lock, ok := g.locks[roomID]
+	if !ok {
+		lock = &sync.Mutex{}
+		g.locks[roomID] = lock
+	}
+	g.mu.Unlock()
+
+	lock.Lock()
+	return func() {
+		lock.Unlock()
+	}
+}
 
 // ProblemGeneratorUseCase は問題生成のユースケース
 // 手順のみを実行し、アルゴリズムはドメイン層（ProblemFactory）に委譲
@@ -132,14 +160,16 @@ type VerifyAnswerUseCase struct {
 	roomRepo    domain.RoomRepository
 	problemGen  *ProblemGeneratorUseCase
 	effectTypes []string
+	roomGuard   *RoomExecutionGuard
 }
 
 // NewVerifyAnswerUseCase は新しいVerifyAnswerUseCaseを生成
-func NewVerifyAnswerUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase, effectTypes []string) *VerifyAnswerUseCase {
+func NewVerifyAnswerUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase, effectTypes []string, roomGuard *RoomExecutionGuard) *VerifyAnswerUseCase {
 	return &VerifyAnswerUseCase{
 		roomRepo:    roomRepo,
 		problemGen:  problemGen,
 		effectTypes: effectTypes,
+		roomGuard:   roomGuard,
 	}
 }
 
@@ -165,6 +195,9 @@ type VerifyAnswerOutput struct {
 
 // Execute は回答を検証
 func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOutput, error) {
+	unlock := uc.roomGuard.Lock(input.RoomID)
+	defer unlock()
+
 	room, err := uc.roomRepo.FindByID(input.RoomID)
 	if err != nil {
 		return nil, err

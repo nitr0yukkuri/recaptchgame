@@ -54,9 +54,10 @@ func init() {
 	problemFactory := domain.NewProblemFactory()
 
 	// ユースケース層の初期化（新フォーマット）
+	roomGuard := usecase.NewRoomExecutionGuard()
 	problemGeneratorUC = usecase.NewProblemGeneratorUseCase(problemFactory, domain.GetAllTargets())
 	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo, idGenerator)
-	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.GetAllEffects())
+	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.GetAllEffects(), roomGuard)
 	startGameUC = usecase.NewStartGameUseCase(roomRepo, problemGeneratorUC)
 	leaveRoomUC = usecase.NewLeaveRoomUseCase(roomRepo, clientRepo)
 
