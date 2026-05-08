@@ -1,6 +1,7 @@
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore } from '../store';
 import { OnionRain } from './OnionRain';
+import { parseSplitTileIndex } from '../utils/game';
 
 type GameScreenProps = {
     myScore: number;
@@ -23,6 +24,40 @@ const obstructionVariants: Variants = {
     SEPIA: {},
     ONION_RAIN: {},
     NORMAL: { x: 0, rotate: 0, skewX: 0 }
+};
+
+const getSplitTileStyle = (tileIndex: number) => {
+    const row = Math.floor(tileIndex / 3);
+    const col = tileIndex % 3;
+
+    return {
+        width: '300%',
+        height: '300%',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        position: 'absolute' as const,
+        left: `${-col * 100}%`,
+        top: `${-row * 100}%`,
+    };
+};
+
+const renderCaptchaImage = (img: string, tileIndex: number, className: string) => {
+    const splitTileIndex = parseSplitTileIndex(img);
+
+    if (splitTileIndex === null) {
+        return <img src={img} alt="captcha" className={className} />;
+    }
+
+    return (
+        <div className="relative w-full h-full overflow-hidden">
+            <img
+                src={img}
+                alt="captcha"
+                className={className}
+                style={getSplitTileStyle(tileIndex)}
+            />
+        </div>
+    );
 };
 
 export const GameScreen = ({
@@ -79,11 +114,7 @@ export const GameScreen = ({
                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                 >
                                     <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${mySelections.includes(idx) ? 'scale-90' : 'scale-100 group-hover:opacity-90'}`}>
-                                        <img
-                                            src={img}
-                                            alt="captcha"
-                                            className="w-full h-full object-cover aspect-square block"
-                                        />
+                                        {renderCaptchaImage(img, idx, 'w-full h-full object-cover aspect-square block')}
                                     </div>
 
                                     {mySelections.includes(idx) && (
@@ -144,7 +175,7 @@ export const GameScreen = ({
                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                 >
                                     <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${opponentSelections.includes(idx) ? 'scale-90' : 'scale-100'}`}>
-                                        <img src={img} className="w-full h-full object-cover aspect-square block" />
+                                        {renderCaptchaImage(img, idx, 'w-full h-full object-cover aspect-square block')}
                                     </div>
                                     {opponentSelections.includes(idx) && (
                                         <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">

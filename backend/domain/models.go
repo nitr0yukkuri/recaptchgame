@@ -161,6 +161,10 @@ func NewProblem(target string, images []string) *Problem {
 
 // GetCorrectIndices は正答のインデックスリストを返す
 func (p *Problem) GetCorrectIndices() []int {
+	if p.Target == string(TargetSignal) {
+		return p.getCorrectSplitTileIndices()
+	}
+
 	searchKey := GetSearchKey(p.Target)
 	var correctIndices []int
 
@@ -170,6 +174,23 @@ func (p *Problem) GetCorrectIndices() []int {
 		}
 	}
 
+	return correctIndices
+}
+
+func (p *Problem) getCorrectSplitTileIndices() []int {
+	correctIndices := make([]int, 0)
+	for i, img := range p.Images {
+		_, tileIndex, ok := isSplitTileImage(img)
+		if !ok {
+			continue
+		}
+		for _, correctTile := range signalSplitCorrectTiles {
+			if tileIndex == correctTile {
+				correctIndices = append(correctIndices, i)
+				break
+			}
+		}
+	}
 	return correctIndices
 }
 

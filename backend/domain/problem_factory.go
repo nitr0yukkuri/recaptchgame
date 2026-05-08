@@ -1,8 +1,14 @@
 package domain
 
 import (
+	"fmt"
 	"math/rand"
+	"strings"
 )
+
+const signalSplitBaseImage = "/images/shingouki4.jpg"
+
+var signalSplitCorrectTiles = []int{2, 5}
 
 // ProblemFactory は問題を生成するドメインサービス
 // アルゴリズムはすべてドメイン層に封じ込める
@@ -19,6 +25,10 @@ func NewProblemFactory() *ProblemFactory {
 //   2. その他から6つ追加
 //   3. 全9枚をシャッフル
 func (pf *ProblemFactory) CreateProblem(target string) *Problem {
+	if target == string(TargetSignal) {
+		return pf.createSplitImageProblem(target)
+	}
+
 	allImages := GetAllImageIDs()
 	searchKey := GetSearchKey(target)
 
@@ -63,6 +73,28 @@ func (pf *ProblemFactory) CreateProblem(target string) *Problem {
 	shuffleStrings(selected)
 
 	return NewProblem(target, selected)
+}
+
+func (pf *ProblemFactory) createSplitImageProblem(target string) *Problem {
+	images := make([]string, 9)
+	for i := 0; i < 9; i++ {
+		images[i] = fmt.Sprintf("%s#tile=%d", signalSplitBaseImage, i)
+	}
+	return NewProblem(target, images)
+}
+
+func isSplitTileImage(image string) (string, int, bool) {
+	base, tilePart, ok := strings.Cut(image, "#tile=")
+	if !ok {
+		return "", 0, false
+	}
+
+	var tileIndex int
+	if _, err := fmt.Sscanf(tilePart, "%d", &tileIndex); err != nil {
+		return "", 0, false
+	}
+
+	return base, tileIndex, true
 }
 
 // Helper functions（アルゴリズム部分）

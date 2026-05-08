@@ -1,5 +1,8 @@
 import { ObstructionType } from '../store';
 
+const SIGNAL_SPLIT_BASE_IMAGE = '/images/shingouki4.jpg';
+const SIGNAL_SPLIT_CORRECT_TILES = [2, 5];
+
 export const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
     '/images/shingouki1.jpg', '/images/shingouki2.jpg', '/images/shingouki3.jpg', '/images/shingouki4.jpg',
@@ -22,9 +25,15 @@ export const generateCpuProblem = (prevTarget?: string) => {
         }
     }
 
+    if (newTarget === '信号機') {
+        return {
+            target: newTarget,
+            images: Array.from({ length: 9 }, (_, idx) => `${SIGNAL_SPLIT_BASE_IMAGE}#tile=${idx}`),
+        };
+    }
+
     let searchKey = '';
     if (newTarget === '車') searchKey = 'car';
-    else if (newTarget === '信号機') searchKey = 'shingouki';
     else if (newTarget === '階段') searchKey = 'kaidan';
     else if (newTarget === '消火栓') searchKey = 'shoukasen';
 
@@ -46,6 +55,12 @@ export const generateCpuProblem = (prevTarget?: string) => {
 };
 
 export const getCorrectIndices = (imgs: string[], tgt: string) => {
+    if (tgt === '信号機') {
+        return imgs
+            .map((img, idx) => parseSplitTileIndex(img) && SIGNAL_SPLIT_CORRECT_TILES.includes(parseSplitTileIndex(img) as number) ? idx : -1)
+            .filter(idx => idx !== -1);
+    }
+
     let searchKey = '';
     if (tgt === '車') searchKey = 'car';
     else if (tgt === '信号機') searchKey = 'shingouki';
@@ -59,6 +74,10 @@ export const getCorrectIndices = (imgs: string[], tgt: string) => {
         .filter(idx => idx !== -1);
 };
 
+export const parseSplitTileIndex = (img: string) => {
+    const match = img.match(/#tile=(\d+)$/);
+    return match ? Number(match[1]) : null;
+};
 export const getRandomObstruction = (): ObstructionType => {
     const effects: ObstructionType[] = ['SHAKE', 'SPIN', 'BLUR', 'INVERT', 'ONION_RAIN', 'GRAYSCALE', 'SEPIA', 'SKEW'];
     return effects[Math.floor(Math.random() * effects.length)];
