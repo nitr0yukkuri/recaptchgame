@@ -149,7 +149,7 @@ export const GameScreen = ({
                     </motion.div>
                 </div>
 
-                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto mt-12 md:mt-32">
+                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto mt-10 md:mt-20">
                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
 
                     <motion.div
