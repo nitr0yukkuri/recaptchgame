@@ -1,7 +1,8 @@
 import { ObstructionType } from '../store';
 
 const SIGNAL_SPLIT_BASE_IMAGE = '/images/shingouki4.jpg';
-const SIGNAL_SPLIT_CORRECT_TILES = [2, 5];
+// 中段（左, 中央, 右）を正解タイルに設定（3x3 グリッドでのインデックス）
+const SIGNAL_SPLIT_CORRECT_TILES = [3, 4, 5];
 
 export const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
