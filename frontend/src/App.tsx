@@ -496,9 +496,12 @@ function App() {
 
             <div className="w-full h-full max-w-7xl flex flex-col relative">
                 <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40 pointer-events-none">
-                    <h1 className="text-2xl md:text-4xl font-bold flex items-center gap-2 pointer-events-auto">
-                        <span className="text-[#4A90E2]">reCAPTCHA</span>
-                        <span className="text-[#BFA15F]">ゲーム</span>
+                    <h1 className="pointer-events-auto">
+                        <img
+                            src="/images/recaptch_logo.png"
+                            alt="reCAPTCHA ゲーム"
+                            className="h-10 md:h-14 w-auto"
+                        />
                     </h1>
                 </div>
 
