@@ -500,7 +500,7 @@ function App() {
                         <img
                             src="/images/recaptch_logo.png"
                             alt="reCAPTCHA ゲーム"
-                            className="h-10 md:h-14 w-auto"
+                            className="h-14 md:h-24 w-auto"
                         />
                     </h1>
                 </div>
