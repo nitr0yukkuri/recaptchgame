@@ -3,6 +3,9 @@ import { ObstructionType } from '../store';
 const SIGNAL_SPLIT_BASE_IMAGE = '/images/shingouki4.jpg';
 // 中段（左, 中央, 右）を正解タイルに設定（3x3 グリッドでのインデックス）
 const SIGNAL_SPLIT_CORRECT_TILES = [3, 4, 5];
+// 消火器（新規ターゲット）用の分割ベース画像と正解タイル（中列上中下）
+const EXTINGUISHER_SPLIT_BASE_IMAGE = '/images/shoukasen0.jpg';
+const EXTINGUISHER_SPLIT_CORRECT_TILES = [1, 4, 7];
 
 export const ALL_CPU_IMAGES = [
     '/images/car1.jpg', '/images/car2.jpg', '/images/car3.jpg', '/images/car4.jpg', '/images/car5.jpg',
@@ -17,7 +20,7 @@ export const ONION_IMAGE = '/images/tamanegi5.png';
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const generateCpuProblem = (prevTarget?: string) => {
-    const targets = ['車', '信号機', '階段', '消火栓'];
+    const targets = ['車', '信号機', '階段', '消火栓', '消火器'];
     let newTarget = targets[Math.floor(Math.random() * targets.length)];
 
     if (prevTarget && targets.length > 1) {
@@ -30,6 +33,12 @@ export const generateCpuProblem = (prevTarget?: string) => {
         return {
             target: newTarget,
             images: Array.from({ length: 9 }, (_, idx) => `${SIGNAL_SPLIT_BASE_IMAGE}#tile=${idx}`),
+        };
+    }
+    if (newTarget === '消火器') {
+        return {
+            target: newTarget,
+            images: Array.from({ length: 9 }, (_, idx) => `${EXTINGUISHER_SPLIT_BASE_IMAGE}#tile=${idx}`),
         };
     }
 
@@ -59,6 +68,11 @@ export const getCorrectIndices = (imgs: string[], tgt: string) => {
     if (tgt === '信号機') {
         return imgs
             .map((img, idx) => parseSplitTileIndex(img) && SIGNAL_SPLIT_CORRECT_TILES.includes(parseSplitTileIndex(img) as number) ? idx : -1)
+            .filter(idx => idx !== -1);
+    }
+    if (tgt === '消火器') {
+        return imgs
+            .map((img, idx) => parseSplitTileIndex(img) && EXTINGUISHER_SPLIT_CORRECT_TILES.includes(parseSplitTileIndex(img) as number) ? idx : -1)
             .filter(idx => idx !== -1);
     }
 
