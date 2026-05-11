@@ -79,7 +79,7 @@ export const GameScreen = ({
                 <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
             </div>
 
-            <div className="flex flex-col md:flex-row items-start justify-center gap-6 md:gap-6 w-full max-w-3xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-start justify-center gap-6 md:gap-24 w-full max-w-3xl mx-auto px-4">
                 <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
@@ -149,7 +149,7 @@ export const GameScreen = ({
                     </motion.div>
                 </div>
 
-                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto">
+                <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto mt-12 md:mt-32">
                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">相手 {opponentCombo > 0 && <span className="text-orange-500">Combo: {opponentCombo}</span>}</h3>
 
                     <motion.div
