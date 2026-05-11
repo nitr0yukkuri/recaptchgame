@@ -79,7 +79,7 @@ export const GameScreen = ({
                 <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
             </div>
 
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 w-full max-w-6xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-start justify-center gap-6 md:gap-6 w-full max-w-3xl mx-auto px-4">
                 <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
@@ -189,7 +189,7 @@ export const GameScreen = ({
                 </div>
             </div>
 
-            <div className="w-full max-w-4xl mx-auto px-4 mt-8">
+            <div className="w-full max-w-3xl mx-auto px-4 mt-6">
                 <div className="flex justify-between items-center text-lg md:text-xl font-bold text-gray-600 bg-white/80 p-3 rounded-xl shadow-sm border border-gray-100">
                     <div className="flex items-center gap-3">
                         <span className="w-4 h-4 rounded-full bg-green-500 shadow-sm"></span>

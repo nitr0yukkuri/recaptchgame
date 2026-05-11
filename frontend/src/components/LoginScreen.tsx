@@ -26,16 +26,16 @@ export const LoginScreen = ({
     return (
         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
             {loginStep === 'SELECT' && (
-                <div className="flex flex-col items-center justify-center gap-8 h-full py-4">
-                    <div className="flex-1 w-full max-w-md space-y-6">
+                <div className="flex flex-col items-center justify-center gap-4 py-2 mt-2">
+                    <div className="w-full max-w-md space-y-4">
                         <div className="text-center space-y-2">
                             <h2 className="text-3xl font-bold text-[#5B46F5] leading-tight">
                                 相手より早く<br />人間か証明できる？
                             </h2>
                         </div>
 
-                        <div className="bg-[#F9F9F7] p-6 rounded-3xl text-left space-y-4 shadow-sm border border-gray-100">
-                            <h3 className="text-center font-bold text-gray-800 text-lg mb-2">ルール：</h3>
+                        <div className="bg-[#F9F9F7] p-4 rounded-3xl text-left space-y-2 shadow-sm border border-gray-100">
+                            <h3 className="text-center font-bold text-gray-800 text-lg mb-1">ルール：</h3>
                             <ul className="space-y-3 text-base text-gray-700 font-medium">
                                 <li className="flex items-start gap-3">
                                     <span className="text-[#5B46F5] font-bold text-xl">✓</span>
@@ -53,9 +53,9 @@ export const LoginScreen = ({
                         </div>
                     </div>
 
-                    <div className="flex-1 w-full max-w-md space-y-4 pb-10">
-                        <p className="text-center text-gray-400 font-bold mb-2">対戦モードを選択</p>
-                        <button onClick={startCpuFlow} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                    <div className="w-full max-w-md space-y-2 pb-4">
+                        <p className="text-center text-gray-400 font-bold mb-1">対戦モードを選択</p>
+                        <button onClick={startCpuFlow} className="group w-full flex items-center justify-between px-6 py-3 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
                             <div className="flex items-center gap-4">
                                 <span className="text-3xl bg-indigo-50 p-3 rounded-xl group-hover:scale-110 transition">🤖</span>
                                 <div className="text-left">
@@ -65,7 +65,7 @@ export const LoginScreen = ({
                             </div>
                             <svg className="w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
-                        <button onClick={joinRandom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={joinRandom} className="group w-full flex items-center justify-between px-6 py-3 rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300">
                             <div className="flex items-center gap-4">
                                 <span className="text-3xl bg-pink-50 p-3 rounded-xl group-hover:scale-110 transition">🌍</span>
                                 <div className="text-left">
@@ -75,7 +75,7 @@ export const LoginScreen = ({
                             </div>
                             <svg className="w-6 h-6 text-gray-300 group-hover:text-pink-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
-                        <button onClick={joinFriend} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={joinFriend} className="group w-full flex items-center justify-between px-6 py-3 rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
                             <div className="flex items-center gap-4">
                                 <span className="text-3xl bg-teal-50 p-3 rounded-xl group-hover:scale-110 transition">🤝</span>
                                 <div className="text-left">
@@ -90,7 +90,7 @@ export const LoginScreen = ({
             )}
 
             {loginStep === 'FRIEND' && (
-                <div className="flex flex-col items-center justify-start gap-6 h-full py-8">
+                <div className="flex flex-col items-center justify-center gap-6 py-8 mt-4">
                     <div className="text-center space-y-2">
                         <span className="bg-teal-50 text-teal-600 p-4 rounded-2xl text-4xl inline-block mb-2">🤝</span>
                         <h2 className="text-3xl font-bold text-gray-800">友達と対戦</h2>
@@ -159,7 +159,7 @@ export const LoginScreen = ({
             )}
 
             {loginStep === 'DIFFICULTY' && (
-                <div className="flex flex-col items-center justify-start gap-6 h-full py-8">
+                <div className="flex flex-col items-center justify-center gap-6 py-8 mt-4">
                     <div className="text-center space-y-2">
                         <h2 className="text-3xl font-black text-gray-800">設定を選択</h2>
                         <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>

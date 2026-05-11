@@ -494,8 +494,8 @@ function App() {
                 </button>
             )}
 
-            <div className="w-full h-full max-w-7xl flex flex-col relative">
-                <div className="flex flex-col items-center mt-2 mb-1 shrink-0 z-40 pointer-events-none">
+            <div className="w-full h-full max-w-4xl flex flex-col relative">
+                <div className="flex flex-col items-center mt-2 mb-0 shrink-0 z-40 pointer-events-none">
                     <h1 className="pointer-events-auto">
                         <img
                             src="/images/recaptch_logo.png"
