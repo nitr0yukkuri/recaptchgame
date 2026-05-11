@@ -16,12 +16,13 @@ type LoginScreenProps = {
     enterRoomFlow: () => void;
     joinRoomInternal: (room: string) => void;
     confirmDifficulty: (level: number) => void;
+    joinBattleRoyale: () => void;
 };
 
 export const LoginScreen = ({
     loginStep, isCreator, loginError, inputRoom, setInputRoom, setLoginError,
     settingScore, setSettingScore, startCpuFlow, joinRandom, joinFriend,
-    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty
+    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, joinBattleRoyale
 }: LoginScreenProps) => {
     return (
         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
@@ -84,6 +85,16 @@ export const LoginScreen = ({
                                 </div>
                             </div>
                             <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                        <button onClick={joinBattleRoyale} className="group w-full flex items-center justify-between px-6 py-3 rounded-2xl bg-white border-2 border-orange-100 hover:border-orange-500 hover:shadow-lg transition-all duration-300">
+                            <div className="flex items-center gap-4">
+                                <span className="text-3xl bg-orange-50 p-3 rounded-xl group-hover:scale-110 transition">⚔️</span>
+                                <div className="text-left">
+                                    <p className="text-xl font-bold text-gray-800 group-hover:text-orange-600 transition">バトルロイヤル</p>
+                                    <p className="text-sm text-gray-400 font-medium">4人で大乱闘</p>
+                                </div>
+                            </div>
+                            <svg className="w-6 h-6 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
                 </div>

@@ -27,6 +27,17 @@ interface Store {
     playerEffect: ObstructionType;
     opponentEffect: ObstructionType;
 
+    // バトロワ専用ステート
+    brOpponents: {
+        id: string;
+        score: number;
+        combo: number;
+        effect: ObstructionType;
+        selections: number[];
+        images: string[];
+    }[];
+    setBROpponents: (opponents: any[]) => void;
+
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
     startGame: (target: string, images: string[]) => void;
@@ -72,6 +83,9 @@ export const useGameStore = create<Store>((set) => ({
     opponentCombo: 0,
     playerEffect: null,
     opponentEffect: null,
+
+    brOpponents: [],
+    setBROpponents: (opponents) => set({ brOpponents: opponents }),
 
     setGameState: (state) => set({ gameState: state }),
     setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),

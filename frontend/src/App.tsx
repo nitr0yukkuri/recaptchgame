@@ -9,6 +9,7 @@ import { generateCpuProblem, getCorrectIndices, getRandomObstruction, sleep } fr
 import { LoginScreen } from './components/LoginScreen';
 import { WaitingScreen } from './components/WaitingScreen';
 import { GameScreen } from './components/GameScreen';
+import { BRGameScreen } from './components/BRGameScreen';
 import { ResultScreen } from './components/ResultScreen';
 
 // Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
@@ -35,7 +36,7 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [loginError, setLoginError] = useState('');
-    const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
+    const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | 'BATTLE_ROYALE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
     const [myScore, setMyScore] = useState<number>(0);
     const [isReloading, setIsReloading] = useState(false);
@@ -273,6 +274,23 @@ function App() {
     const joinFriend = () => {
         initAudio();
         setLoginStep('FRIEND');
+    };
+
+    const joinBattleRoyale = () => {
+        initAudio();
+        setGameMode('BATTLE_ROYALE');
+        // バックエンドが未実装のため、ダミーで即時開始させる
+        const myProb = generateCpuProblem();
+        const cpuProb = generateCpuProblem();
+        startGame(myProb.target, myProb.images);
+        updateCpuPattern(cpuProb.target, cpuProb.images);
+        useGameStore.getState().setBROpponents([
+            { id: 'CPU 1', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
+            { id: 'CPU 2', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
+            { id: 'CPU 3', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
+        ]);
+        setWinningScore(5);
+        setMyScore(0);
     };
 
     const createRoom = () => {
@@ -523,6 +541,7 @@ function App() {
                             enterRoomFlow={enterRoomFlow}
                             joinRoomInternal={joinRoomInternal}
                             confirmDifficulty={confirmDifficulty}
+                            joinBattleRoyale={joinBattleRoyale}
                         />
                     )}
 
@@ -530,11 +549,23 @@ function App() {
                         <WaitingScreen roomId={roomId} cancelWaiting={cancelWaiting} />
                     )}
 
-                    {gameState === 'PLAYING' && (
+                    {gameState === 'PLAYING' && gameMode !== 'BATTLE_ROYALE' && (
                         <GameScreen
                             myScore={myScore}
                             winningScore={winningScore}
                             gameMode={gameMode}
+                            isReloading={isReloading}
+                            isVerifying={isVerifying}
+                            handleImageClick={handleImageClick}
+                            handleReload={handleReload}
+                            handleVerify={handleVerify}
+                        />
+                    )}
+
+                    {gameState === 'PLAYING' && gameMode === 'BATTLE_ROYALE' && (
+                        <BRGameScreen
+                            myScore={myScore}
+                            winningScore={winningScore}
                             isReloading={isReloading}
                             isVerifying={isVerifying}
                             handleImageClick={handleImageClick}
