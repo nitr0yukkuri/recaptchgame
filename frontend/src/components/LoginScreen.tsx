@@ -90,12 +90,14 @@ export const LoginScreen = ({
             )}
 
             {loginStep === 'FRIEND' && (
-                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
+                <div className="flex flex-col items-center justify-start gap-6 h-full py-8">
                     <div className="text-center space-y-2">
                         <span className="bg-teal-50 text-teal-600 p-4 rounded-2xl text-4xl inline-block mb-2">🤝</span>
                         <h2 className="text-3xl font-bold text-gray-800">友達と対戦</h2>
                         <p className="text-gray-500 font-medium">メニューを選択</p>
                     </div>
+
+                    <p className="text-sm text-gray-400 text-center px-4">友達にIDを共有して対戦しよう</p>
 
                     <div className="w-full max-w-md space-y-4">
                         <button onClick={createRoom} className="group w-full flex items-center justify-between px-6 py-4 rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
@@ -157,9 +159,8 @@ export const LoginScreen = ({
             )}
 
             {loginStep === 'DIFFICULTY' && (
-                <div className="flex flex-col items-center justify-center gap-6 h-full py-4">
+                <div className="flex flex-col items-center justify-start gap-6 h-full py-8">
                     <div className="text-center space-y-2">
-                        <span className="bg-orange-100 text-orange-600 p-4 rounded-2xl text-4xl inline-block mb-2">⚡</span>
                         <h2 className="text-3xl font-black text-gray-800">設定を選択</h2>
                         <p className="text-gray-500 font-medium">チャレンジの難しさを選んでね</p>
                     </div>
