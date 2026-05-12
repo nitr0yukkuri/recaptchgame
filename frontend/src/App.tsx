@@ -36,8 +36,9 @@ function App() {
 
     const [inputRoom, setInputRoom] = useState('');
     const [loginError, setLoginError] = useState('');
-    const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | 'BATTLE_ROYALE' | null>(null);
-    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY'>('SELECT');
+    const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
+    const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY' | 'CPU_PLAYER_COUNT'>('SELECT');
+    const [cpuPlayerCount, setCpuPlayerCount] = useState<1 | 3 | 4>(1);
     const [myScore, setMyScore] = useState<number>(0);
     const [isReloading, setIsReloading] = useState(false);
     const [settingScore, setSettingScore] = useState(5);
@@ -85,48 +86,98 @@ function App() {
 
             const interval = setInterval(() => {
                 const store = useGameStore.getState();
-                if (store.opponentEffect) {
-                    if (Math.random() > 0.5) return;
-                }
-                const currentSelections = store.opponentSelections;
-                const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
-                const remaining = correctIndices.filter(i => !currentSelections.includes(i));
 
-                if (remaining.length > 0) {
-                    if (Math.random() > actionProb) {
-                        const next = remaining[Math.floor(Math.random() * remaining.length)];
-                        store.toggleOpponentSelection(next);
+                if (cpuPlayerCount === 1) {
+                    // 1vs1 の場合：既存のロジック
+                    if (store.opponentEffect) {
+                        if (Math.random() > 0.5) return;
+                    }
+                    const currentSelections = store.opponentSelections;
+                    const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
+                    const remaining = correctIndices.filter(i => !currentSelections.includes(i));
+
+                    if (remaining.length > 0) {
+                        if (Math.random() > actionProb) {
+                            const next = remaining[Math.floor(Math.random() * remaining.length)];
+                            store.toggleOpponentSelection(next);
+                        }
+                    } else {
+                        if (Math.random() > (1 - submitProb)) {
+                            store.updateOpponentScore(store.opponentScore + 1);
+                            store.resetOpponentSelections();
+                            const newCombo = store.opponentCombo + 1;
+                            store.setOpponentCombo(newCombo);
+                            if (newCombo >= 2) {
+                                store.setOpponentCombo(0);
+                                store.setPlayerEffect(getRandomObstruction());
+                            }
+                            const nextProb = generateCpuProblem(store.cpuTarget);
+                            store.updateCpuPattern(nextProb.target, nextProb.images);
+                        }
                     }
                 } else {
-                    if (Math.random() > (1 - submitProb)) {
-                        store.updateOpponentScore(store.opponentScore + 1);
-                        store.resetOpponentSelections();
-                        const newCombo = store.opponentCombo + 1;
-                        store.setOpponentCombo(newCombo);
-                        if (newCombo >= 2) {
-                            store.setOpponentCombo(0);
-                            store.setPlayerEffect(getRandomObstruction());
+                    // 複数プレイヤーの場合：各CPUを独立してシミュレーション
+                    store.brOpponents.forEach((opp, idx) => {
+                        if (opp.effect && Math.random() > 0.5) return;
+                        
+                        const currentSelections = opp.selections;
+                        const correctIndices = getCorrectIndices(opp.images, '');
+                        const remaining = correctIndices.filter(i => !currentSelections.includes(i));
+
+                        if (remaining.length > 0) {
+                            if (Math.random() > actionProb) {
+                                const next = remaining[Math.floor(Math.random() * remaining.length)];
+                                store.brOpponents[idx].selections = [...currentSelections, next];
+                            }
+                        } else {
+                            if (Math.random() > (1 - submitProb)) {
+                                store.brOpponents[idx].score = opp.score + 1;
+                                store.brOpponents[idx].selections = [];
+                                const newCombo = opp.combo + 1;
+                                store.brOpponents[idx].combo = newCombo;
+                                if (newCombo >= 2) {
+                                    store.brOpponents[idx].combo = 0;
+                                    store.setPlayerEffect(getRandomObstruction());
+                                }
+                                store.brOpponents[idx].images = generateCpuProblem().images;
+                            }
                         }
-                        const nextProb = generateCpuProblem(store.cpuTarget);
-                        store.updateCpuPattern(nextProb.target, nextProb.images);
-                    }
+                    });
+                    // brOpponents の変更をトリガー
+                    store.setBROpponents([...store.brOpponents]);
                 }
             }, intervalTime);
             return () => clearInterval(interval);
         }
-    }, [gameMode, gameState, cpuDifficulty]);
+    }, [gameMode, gameState, cpuDifficulty, cpuPlayerCount]);
 
     useEffect(() => {
         if (gameMode === 'CPU' && gameState === 'PLAYING') {
-            if (opponentScore >= winningScore) {
-                playLose();
-                endGame('cpu');
-            } else if (myScore >= winningScore) {
-                playWin();
-                endGame('human');
+            if (cpuPlayerCount === 1) {
+                // 1vs1 の場合
+                if (opponentScore >= winningScore) {
+                    playLose();
+                    endGame('cpu');
+                } else if (myScore >= winningScore) {
+                    playWin();
+                    endGame('human');
+                }
+            } else {
+                // 複数プレイヤーの場合
+                if (myScore >= winningScore) {
+                    playWin();
+                    endGame('human');
+                } else {
+                    const store = useGameStore.getState();
+                    const cpuWinner = store.brOpponents.find(opp => opp.score >= winningScore);
+                    if (cpuWinner) {
+                        playLose();
+                        endGame(cpuWinner.id);
+                    }
+                }
             }
         }
-    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose, winningScore]);
+    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose, winningScore, cpuPlayerCount]);
 
     useEffect(() => {
         if (lastMessage !== null) {
@@ -246,6 +297,11 @@ function App() {
     const startCpuFlow = () => {
         initAudio();
         setSettingScore(5);
+        setLoginStep('CPU_PLAYER_COUNT');
+    };
+
+    const confirmPlayerCount = (count: 1 | 3 | 4) => {
+        setCpuPlayerCount(count);
         setLoginStep('DIFFICULTY');
     };
 
@@ -260,6 +316,19 @@ function App() {
         const cpuProb = generateCpuProblem();
         startGame(myProb.target, myProb.images);
         updateCpuPattern(cpuProb.target, cpuProb.images);
+
+        // マルチプレイヤーモード（3人 or 4人）の場合、ダミーの対戦相手を生成
+        if (cpuPlayerCount > 1) {
+            const opponents = Array.from({ length: cpuPlayerCount - 1 }, (_, i) => ({
+                id: `CPU ${i + 1}`,
+                score: 0,
+                combo: 0,
+                effect: null as ObstructionType,
+                selections: [],
+                images: generateCpuProblem().images,
+            }));
+            useGameStore.getState().setBROpponents(opponents);
+        }
     };
 
     const joinRandom = () => {
@@ -276,22 +345,7 @@ function App() {
         setLoginStep('FRIEND');
     };
 
-    const joinBattleRoyale = () => {
-        initAudio();
-        setGameMode('BATTLE_ROYALE');
-        // バックエンドが未実装のため、ダミーで即時開始させる
-        const myProb = generateCpuProblem();
-        const cpuProb = generateCpuProblem();
-        startGame(myProb.target, myProb.images);
-        updateCpuPattern(cpuProb.target, cpuProb.images);
-        useGameStore.getState().setBROpponents([
-            { id: 'CPU 1', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
-            { id: 'CPU 2', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
-            { id: 'CPU 3', score: 0, combo: 0, effect: null, selections: [], images: generateCpuProblem().images },
-        ]);
-        setWinningScore(5);
-        setMyScore(0);
-    };
+
 
     const createRoom = () => {
         setIsCreator(true);
@@ -541,7 +595,8 @@ function App() {
                             enterRoomFlow={enterRoomFlow}
                             joinRoomInternal={joinRoomInternal}
                             confirmDifficulty={confirmDifficulty}
-                            joinBattleRoyale={joinBattleRoyale}
+                            confirmPlayerCount={confirmPlayerCount}
+                            cpuPlayerCount={cpuPlayerCount}
                         />
                     )}
 
@@ -549,7 +604,7 @@ function App() {
                         <WaitingScreen roomId={roomId} cancelWaiting={cancelWaiting} />
                     )}
 
-                    {gameState === 'PLAYING' && gameMode !== 'BATTLE_ROYALE' && (
+                    {gameState === 'PLAYING' && (cpuPlayerCount === 1 || gameMode === 'ONLINE') && (
                         <GameScreen
                             myScore={myScore}
                             winningScore={winningScore}
@@ -562,7 +617,7 @@ function App() {
                         />
                     )}
 
-                    {gameState === 'PLAYING' && gameMode === 'BATTLE_ROYALE' && (
+                    {gameState === 'PLAYING' && cpuPlayerCount > 1 && (
                         <BRGameScreen
                             myScore={myScore}
                             winningScore={winningScore}

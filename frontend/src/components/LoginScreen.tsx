@@ -1,7 +1,7 @@
 import { ScoreSelector } from './ScoreSelector';
 
 type LoginScreenProps = {
-    loginStep: 'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY';
+    loginStep: 'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY' | 'CPU_PLAYER_COUNT';
     isCreator: boolean;
     loginError: string;
     inputRoom: string;
@@ -16,13 +16,14 @@ type LoginScreenProps = {
     enterRoomFlow: () => void;
     joinRoomInternal: (room: string) => void;
     confirmDifficulty: (level: number) => void;
-    joinBattleRoyale: () => void;
+    confirmPlayerCount: (count: 1 | 3 | 4) => void;
+    cpuPlayerCount: 1 | 3 | 4;
 };
 
 export const LoginScreen = ({
     loginStep, isCreator, loginError, inputRoom, setInputRoom, setLoginError,
     settingScore, setSettingScore, startCpuFlow, joinRandom, joinFriend,
-    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, joinBattleRoyale
+    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, confirmPlayerCount, cpuPlayerCount
 }: LoginScreenProps) => {
     return (
         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-4">
@@ -85,16 +86,6 @@ export const LoginScreen = ({
                                 </div>
                             </div>
                             <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                        <button onClick={joinBattleRoyale} className="group w-full flex items-center justify-between px-6 py-3 rounded-2xl bg-white border-2 border-orange-100 hover:border-orange-500 hover:shadow-lg transition-all duration-300">
-                            <div className="flex items-center gap-4">
-                                <span className="text-3xl bg-orange-50 p-3 rounded-xl group-hover:scale-110 transition">⚔️</span>
-                                <div className="text-left">
-                                    <p className="text-xl font-bold text-gray-800 group-hover:text-orange-600 transition">バトルロイヤル</p>
-                                    <p className="text-sm text-gray-400 font-medium">4人で大乱闘</p>
-                                </div>
-                            </div>
-                            <svg className="w-6 h-6 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
                 </div>
@@ -166,6 +157,62 @@ export const LoginScreen = ({
                     >
                         {isCreator ? "部屋を作る" : "入室する"}
                     </button>
+                </div>
+            )}
+
+            {loginStep === 'CPU_PLAYER_COUNT' && (
+                <div className="flex flex-col items-center justify-center gap-6 py-8 mt-4">
+                    <div className="text-center space-y-2">
+                        <h2 className="text-3xl font-black text-gray-800">何人で対戦する？</h2>
+                        <p className="text-gray-500 font-medium">プレイヤー数を選択してね</p>
+                    </div>
+
+                    <div className="w-full max-w-md space-y-4">
+                        <button
+                            onClick={() => confirmPlayerCount(1)}
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
+                                cpuPlayerCount === 1
+                                    ? 'bg-green-50 border-green-500 shadow-lg'
+                                    : 'bg-white border-green-200 hover:border-green-500 hover:shadow-lg hover:-translate-y-1'
+                            }`}
+                        >
+                            <div className="bg-green-100 text-green-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
+                            <div className="text-left">
+                                <p className="text-xl font-bold text-green-600">1vs1</p>
+                                <p className="text-sm text-gray-400">CPU 1体と対戦</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => confirmPlayerCount(3)}
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
+                                cpuPlayerCount === 3
+                                    ? 'bg-orange-50 border-orange-500 shadow-lg'
+                                    : 'bg-white border-orange-200 hover:border-orange-500 hover:shadow-lg hover:-translate-y-1'
+                            }`}
+                        >
+                            <div className="bg-orange-100 text-orange-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
+                            <div className="text-left">
+                                <p className="text-xl font-bold text-orange-600">3人対戦</p>
+                                <p className="text-sm text-gray-400">CPU 2体と同時対戦</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => confirmPlayerCount(4)}
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
+                                cpuPlayerCount === 4
+                                    ? 'bg-red-50 border-red-500 shadow-lg'
+                                    : 'bg-white border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-1'
+                            }`}
+                        >
+                            <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">4</div>
+                            <div className="text-left">
+                                <p className="text-xl font-bold text-red-600">4人バトル</p>
+                                <p className="text-sm text-gray-400">CPU 3体と大乱闘</p>
+                            </div>
+                        </button>
+                    </div>
                 </div>
             )}
 

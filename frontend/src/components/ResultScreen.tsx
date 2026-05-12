@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useGameStore } from '../store';
 
 type ResultScreenProps = {
-    gameMode: 'CPU' | 'ONLINE' | 'BATTLE_ROYALE' | null;
+    gameMode: 'CPU' | 'ONLINE' | null;
 };
 
 export const ResultScreen = ({ gameMode }: ResultScreenProps) => {
