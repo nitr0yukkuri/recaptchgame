@@ -119,7 +119,7 @@ function App() {
                     // 複数プレイヤーの場合：各CPUを独立してシミュレーション
                     store.brOpponents.forEach((opp, idx) => {
                         if (opp.effect && Math.random() > 0.5) return;
-                        
+
                         const currentSelections = opp.selections;
                         const correctIndices = getCorrectIndices(opp.images, '');
                         const remaining = correctIndices.filter(i => !currentSelections.includes(i));

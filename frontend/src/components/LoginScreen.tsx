@@ -170,26 +170,24 @@ export const LoginScreen = ({
                     <div className="w-full max-w-md space-y-4">
                         <button
                             onClick={() => confirmPlayerCount(1)}
-                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
-                                cpuPlayerCount === 1
-                                    ? 'bg-green-50 border-green-500 shadow-lg'
-                                    : 'bg-white border-green-200 hover:border-green-500 hover:shadow-lg hover:-translate-y-1'
-                            }`}
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${cpuPlayerCount === 1
+                                    ? 'bg-white border-blue-500 shadow-lg'
+                                    : 'bg-white border-blue-200 hover:border-blue-500 hover:shadow-lg hover:-translate-y-1'
+                                }`}
                         >
-                            <div className="bg-green-100 text-green-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
+                            <div className="bg-blue-100 text-blue-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
                             <div className="text-left">
-                                <p className="text-xl font-bold text-green-600">1vs1</p>
+                                <p className="text-xl font-bold text-blue-600">1vs1</p>
                                 <p className="text-sm text-gray-400">CPU 1体と対戦</p>
                             </div>
                         </button>
 
                         <button
                             onClick={() => confirmPlayerCount(3)}
-                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
-                                cpuPlayerCount === 3
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${cpuPlayerCount === 3
                                     ? 'bg-orange-50 border-orange-500 shadow-lg'
                                     : 'bg-white border-orange-200 hover:border-orange-500 hover:shadow-lg hover:-translate-y-1'
-                            }`}
+                                }`}
                         >
                             <div className="bg-orange-100 text-orange-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
                             <div className="text-left">
@@ -200,11 +198,10 @@ export const LoginScreen = ({
 
                         <button
                             onClick={() => confirmPlayerCount(4)}
-                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${
-                                cpuPlayerCount === 4
+                            className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${cpuPlayerCount === 4
                                     ? 'bg-red-50 border-red-500 shadow-lg'
                                     : 'bg-white border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-1'
-                            }`}
+                                }`}
                         >
                             <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">4</div>
                             <div className="text-left">
