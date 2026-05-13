@@ -237,7 +237,17 @@ func NewWebSocketHandler(
 // HandleConnection はWebSocket接続を処理
 func (h *WebSocketHandler) HandleConnection(clientID string, conn *websocket.Conn) {
 	h.wsManager.RegisterConnection(clientID, conn)
+	// left フラグで重複退出処理を防ぐ
+	var left bool
 	defer func() {
+		if !left {
+			playerID, err := h.getPlayerIDByClientID(clientID)
+			if err == nil {
+				p := LeaveRoomPayload{PlayerID: playerID}
+				b, _ := json.Marshal(p)
+				h.handleLeaveRoom(clientID, b)
+			}
+		}
 		h.wsManager.UnregisterConnection(clientID)
 	}()
 
@@ -245,6 +255,10 @@ func (h *WebSocketHandler) HandleConnection(clientID string, conn *websocket.Con
 		var msg Message
 		if err := conn.ReadJSON(&msg); err != nil {
 			break
+		}
+		// LEAVE_ROOMを明示的に受信した場合はフラグを立てる
+		if msg.Type == "LEAVE_ROOM" {
+			left = true
 		}
 		h.handleMessage(clientID, conn, msg)
 	}
@@ -299,10 +313,17 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 	if output.RoomSize == 2 {
 		// ゲーム開始
 		startInput := usecase.StartGameInput{RoomID: output.ActualRoomID}
-		startOutput, _ := h.startGameUC.Execute(startInput)
+		startOutput, err := h.startGameUC.Execute(startInput)
+		if err != nil {
+			// 部屋の準備ができていない場合はゲームを開始しない
+			return
+		}
 
 		// ルーム内全員にゲーム開始を通知
-		room, _ := h.roomRepo.FindByID(output.ActualRoomID)
+		room, err := h.roomRepo.FindByID(output.ActualRoomID)
+		if err != nil {
+			return
+		}
 		players := []*domain.Player{room.Player1, room.Player2}
 		gameStates := []*domain.GameState{room.GameState1, room.GameState2}
 

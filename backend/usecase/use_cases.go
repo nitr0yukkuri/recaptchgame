@@ -73,14 +73,16 @@ type JoinRoomUseCase struct {
 	roomRepo    domain.RoomRepository
 	clientRepo  domain.ClientRepository
 	idGenerator domain.IDGenerator
+	roomGuard   *RoomExecutionGuard
 }
 
 // NewJoinRoomUseCase は新しいJoinRoomUseCaseを生成
-func NewJoinRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository, idGenerator domain.IDGenerator) *JoinRoomUseCase {
+func NewJoinRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository, idGenerator domain.IDGenerator, roomGuard *RoomExecutionGuard) *JoinRoomUseCase {
 	return &JoinRoomUseCase{
 		roomRepo:    roomRepo,
 		clientRepo:  clientRepo,
 		idGenerator: idGenerator,
+		roomGuard:   roomGuard,
 	}
 }
 
@@ -101,13 +103,21 @@ type JoinRoomOutput struct {
 
 // Execute はルーム参加を実行
 func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error) {
+	lockID := input.RoomID
+	if lockID == "RANDOM" {
+		lockID = "GLOBAL_RANDOM_LOCK"
+	}
+	unlock := uc.roomGuard.Lock(lockID)
+	defer unlock()
+
 	actualRoomID := input.RoomID
 	createdNewRoom := false
 
 	// RANDOMの場合は待機ルームを取得/作成
 	if input.RoomID == "RANDOM" {
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
-		if waitingRoom == nil || (waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != "") {
+		isFull := waitingRoom != nil && waitingRoom.Player1 != nil && waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != ""
+		if waitingRoom == nil || isFull {
 			// 新しいルームを作成
 			// ✅ IDGenerator を使用（DI）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
@@ -127,8 +137,10 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
 		uc.roomRepo.Save(room)
 	} else if !createdNewRoom {
-		// ルームが存在する場合、2番目のプレイヤーを設定
-		if room.Player2 == nil || room.Player2.ID == "" {
+		// ルームが存在する場合、空いているスロットにプレイヤーを設定
+		if room.Player1 == nil || room.Player1.ID == "" {
+			room.Player1 = domain.NewPlayer(input.PlayerID)
+		} else if room.Player2 == nil || room.Player2.ID == "" {
 			room.Player2 = domain.NewPlayer(input.PlayerID)
 		}
 	}
@@ -204,7 +216,15 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 	}
 
 	player := room.GetPlayerByID(input.PlayerID)
+	if player == nil {
+		return nil, fmt.Errorf("player not found")
+	}
+
 	gameState := room.GetGameStateByPlayerID(input.PlayerID)
+	if gameState == nil {
+		return nil, fmt.Errorf("game state not found")
+	}
+
 	problem := domain.NewProblem(gameState.Target, gameState.Images)
 
 	isCorrect := problem.VerifyAnswer(input.SelectedIndices)
@@ -328,13 +348,15 @@ func (uc *StartGameUseCase) Execute(input StartGameInput) (*StartGameOutput, err
 type LeaveRoomUseCase struct {
 	roomRepo   domain.RoomRepository
 	clientRepo domain.ClientRepository
+	roomGuard  *RoomExecutionGuard
 }
 
 // NewLeaveRoomUseCase は新しいLeaveRoomUseCaseを生成
-func NewLeaveRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository) *LeaveRoomUseCase {
+func NewLeaveRoomUseCase(roomRepo domain.RoomRepository, clientRepo domain.ClientRepository, roomGuard *RoomExecutionGuard) *LeaveRoomUseCase {
 	return &LeaveRoomUseCase{
 		roomRepo:   roomRepo,
 		clientRepo: clientRepo,
+		roomGuard:  roomGuard,
 	}
 }
 
@@ -348,15 +370,25 @@ type LeaveRoomInput struct {
 func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 	uc.clientRepo.RemoveClient(input.ClientID)
 
+	// 事前にルームを検索
 	room, err := uc.roomRepo.FindByPlayerID(input.PlayerID)
 	if err != nil {
 		return nil // ルームが見つからない場合は無視
 	}
 
+	unlock := uc.roomGuard.Lock(room.ID)
+	defer unlock()
+
+	// ロック取得後に再度取得（間に状態が変わっている可能性があるため）
+	room, err = uc.roomRepo.FindByPlayerID(input.PlayerID)
+	if err != nil {
+		return nil
+	}
+
 	// プレイヤーを削除
-	if room.Player1.ID == input.PlayerID {
+	if room.Player1 != nil && room.Player1.ID == input.PlayerID {
 		room.Player1 = nil
-	} else {
+	} else if room.Player2 != nil && room.Player2.ID == input.PlayerID {
 		room.Player2 = nil
 	}
 

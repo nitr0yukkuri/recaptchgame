@@ -9,10 +9,10 @@ import (
 
 // TestProblemGenerator は問題生成機能のテスト
 func TestProblemGenerator(t *testing.T) {
+	factory := domain.NewProblemFactory()
 	gen := NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
+		factory,
+		domain.GetAllTargets(),
 	)
 
 	// 複数回実行して、毎回異なるターゲットが選ばれることを確認
@@ -47,12 +47,12 @@ func TestProblemGenerator(t *testing.T) {
 func TestVerifyAnswer(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
+	factory := domain.NewProblemFactory()
 	problemGen := NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
+		factory,
+		domain.GetAllTargets(),
 	)
-	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.EffectTypes)
+	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.GetAllEffects(), NewRoomExecutionGuard())
 
 	// テスト用ルームを作成
 	room := domain.NewRoom("room1", "player1", "player2", 5)
@@ -112,7 +112,9 @@ func TestJoinRoom(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
 	clientRepo := infrastructure.NewMemoryClientRepository()
-	joinRoomUC := NewJoinRoomUseCase(roomRepo, clientRepo)
+	idGen := infrastructure.NewTimeBasedIDGenerator()
+	roomGuard := NewRoomExecutionGuard()
+	joinRoomUC := NewJoinRoomUseCase(roomRepo, clientRepo, idGen, roomGuard)
 
 	// テスト1: 最初のプレイヤーがルームに参加
 	input1 := JoinRoomInput{
@@ -158,7 +160,9 @@ func TestJoinRoomRandom(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
 	clientRepo := infrastructure.NewMemoryClientRepository()
-	joinRoomUC := NewJoinRoomUseCase(roomRepo, clientRepo)
+	idGen := infrastructure.NewTimeBasedIDGenerator()
+	roomGuard := NewRoomExecutionGuard()
+	joinRoomUC := NewJoinRoomUseCase(roomRepo, clientRepo, idGen, roomGuard)
 
 	// テスト: RANDOM参加（新規ルーム作成）
 	input1 := JoinRoomInput{
@@ -187,10 +191,10 @@ func TestJoinRoomRandom(t *testing.T) {
 func TestStartGame(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
+	factory := domain.NewProblemFactory()
 	problemGen := NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
+		factory,
+		domain.GetAllTargets(),
 	)
 	startGameUC := NewStartGameUseCase(roomRepo, problemGen)
 
@@ -241,7 +245,8 @@ func TestLeaveRoom(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
 	clientRepo := infrastructure.NewMemoryClientRepository()
-	leaveRoomUC := NewLeaveRoomUseCase(roomRepo, clientRepo)
+	roomGuard := NewRoomExecutionGuard()
+	leaveRoomUC := NewLeaveRoomUseCase(roomRepo, clientRepo, roomGuard)
 
 	// ルームを作成
 	room := domain.NewRoom("room1", "player1", "player2", 5)
@@ -280,12 +285,12 @@ func TestLeaveRoom(t *testing.T) {
 func TestComboAndObstruction(t *testing.T) {
 	// セットアップ
 	roomRepo := infrastructure.NewMemoryRoomRepository()
+	factory := domain.NewProblemFactory()
 	problemGen := NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
+		factory,
+		domain.GetAllTargets(),
 	)
-	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.EffectTypes)
+	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.GetAllEffects(), NewRoomExecutionGuard())
 
 	// ルームを作成
 	room := domain.NewRoom("room1", "player1", "player2", 5)
@@ -403,13 +408,13 @@ func TestDomainModels(t *testing.T) {
 
 // TestProblemVerification 問題検証の詳細テスト
 func TestProblemVerification(t *testing.T) {
+	factory := domain.NewProblemFactory()
 	gen := NewProblemGeneratorUseCase(
-		domain.Targets,
-		domain.AllImages,
-		domain.TargetSearchKeyMap,
+		factory,
+		domain.GetAllTargets(),
 	)
 
-	for _, target := range domain.Targets {
+	for _, target := range domain.GetAllTargets() {
 		problem, _ := gen.Execute("")
 		if problem.Target != target && len(problem.GetCorrectIndices()) > 0 {
 			// 正答インデックスが抽出できることを確認

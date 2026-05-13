@@ -56,10 +56,10 @@ func init() {
 	// ユースケース層の初期化（新フォーマット）
 	roomGuard := usecase.NewRoomExecutionGuard()
 	problemGeneratorUC = usecase.NewProblemGeneratorUseCase(problemFactory, domain.GetAllTargets())
-	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo, idGenerator)
+	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo, idGenerator, roomGuard)
 	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.GetAllEffects(), roomGuard)
 	startGameUC = usecase.NewStartGameUseCase(roomRepo, problemGeneratorUC)
-	leaveRoomUC = usecase.NewLeaveRoomUseCase(roomRepo, clientRepo)
+	leaveRoomUC = usecase.NewLeaveRoomUseCase(roomRepo, clientRepo, roomGuard)
 
 	// ハンドラー層の初期化
 	wsManager = handler.NewWebSocketManager()

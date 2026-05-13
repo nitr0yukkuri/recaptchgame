@@ -96,15 +96,15 @@ func (r *Room) Start() {
 
 // IsGameOver はゲームが終了したかどうか
 func (r *Room) IsGameOver() bool {
-	return r.Player1.Score >= r.WinningScore || r.Player2.Score >= r.WinningScore
+	return (r.Player1 != nil && r.Player1.Score >= r.WinningScore) || (r.Player2 != nil && r.Player2.Score >= r.WinningScore)
 }
 
 // GetWinner は勝者を返す。終了していない場合は空文字列
 func (r *Room) GetWinner() string {
-	if r.Player1.Score >= r.WinningScore {
+	if r.Player1 != nil && r.Player1.Score >= r.WinningScore {
 		return r.Player1.ID
 	}
-	if r.Player2.Score >= r.WinningScore {
+	if r.Player2 != nil && r.Player2.Score >= r.WinningScore {
 		return r.Player2.ID
 	}
 	return ""
@@ -112,26 +112,35 @@ func (r *Room) GetWinner() string {
 
 // GetPlayerByID はIDからプレイヤーを取得
 func (r *Room) GetPlayerByID(playerID string) *Player {
-	if r.Player1.ID == playerID {
+	if r.Player1 != nil && r.Player1.ID == playerID {
 		return r.Player1
 	}
-	return r.Player2
+	if r.Player2 != nil && r.Player2.ID == playerID {
+		return r.Player2
+	}
+	return nil
 }
 
 // GetGameStateByPlayerID はプレイヤーIDからゲーム状態を取得
 func (r *Room) GetGameStateByPlayerID(playerID string) *GameState {
-	if r.Player1.ID == playerID {
+	if r.Player1 != nil && r.Player1.ID == playerID {
 		return r.GameState1
 	}
-	return r.GameState2
+	if r.Player2 != nil && r.Player2.ID == playerID {
+		return r.GameState2
+	}
+	return nil
 }
 
 // GetOpponentGameState は対戦相手のゲーム状態を取得
 func (r *Room) GetOpponentGameState(playerID string) *GameState {
-	if r.Player1.ID == playerID {
+	if r.Player1 != nil && r.Player1.ID == playerID {
 		return r.GameState2
 	}
-	return r.GameState1
+	if r.Player2 != nil && r.Player2.ID == playerID {
+		return r.GameState1
+	}
+	return nil
 }
 
 // EvaluateComboAndApplyObstruction はコンボを評価して妨害発動判定を行う

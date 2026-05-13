@@ -208,22 +208,3 @@ func TestMultipleRooms(t *testing.T) {
 	}
 }
 
-// TestTargetSearchKeyMapping ターゲット検索キーマッピングのテスト
-func TestTargetSearchKeyMapping(t *testing.T) {
-	expectedMap := map[string]string{
-		"車":   "car",
-		"信号機": "shingouki",
-		"階段":  "kaidan",
-		"消火栓": "shoukasen",
-	}
-
-	for target, expected := range expectedMap {
-		actual, ok := TargetSearchKeyMap[target]
-		if !ok {
-			t.Errorf("expected target %s in map", target)
-		}
-		if actual != expected {
-			t.Errorf("expected search key %s for target %s, got %s", expected, target, actual)
-		}
-	}
-}
