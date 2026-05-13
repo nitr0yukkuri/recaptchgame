@@ -161,7 +161,7 @@ export const LoginScreen = ({
             )}
 
             {loginStep === 'CPU_PLAYER_COUNT' && (
-                <div className="flex flex-col items-center justify-center gap-6 py-8 mt-4">
+                <div className="flex flex-col items-center justify-center gap-6 py-4 mt-16">
                     <div className="text-center space-y-2">
                         <h2 className="text-3xl font-black text-gray-800">何人で対戦する？</h2>
                         <p className="text-gray-500 font-medium">プレイヤー数を選択してね</p>
