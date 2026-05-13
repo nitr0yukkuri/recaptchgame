@@ -275,7 +275,7 @@ function App() {
                         } else {
                             playLose();
                         }
-                        endGame(msg.payload.winner_id);
+                        endGame(msg.payload.winner_id, msg.payload.message === 'Opponent Disconnected');
                         break;
                     case 'VERIFY_FAILED':
                         setIsVerifying(false);

@@ -20,6 +20,7 @@ interface Store {
     opponentSelections: number[];
     mySelections: number[];
     winner: string | null;
+    disconnected: boolean; // 相手が切断したかどうか
     feedback: FeedbackType;
 
     playerCombo: number;
@@ -54,7 +55,7 @@ interface Store {
     resetOpponentSelections: () => void;
     toggleMySelection: (index: number) => void;
     resetMySelections: () => void;
-    endGame: (winner: string) => void;
+    endGame: (winner: string, disconnected?: boolean) => void;
     setFeedback: (feedback: FeedbackType) => void;
 
     setPlayerCombo: (count: number) => void;
@@ -77,6 +78,7 @@ export const useGameStore = create<Store>((set) => ({
     opponentSelections: [],
     mySelections: [],
     winner: null,
+    disconnected: false,
     feedback: null,
 
     playerCombo: 0,
@@ -97,6 +99,7 @@ export const useGameStore = create<Store>((set) => ({
         opponentSelections: [],
         mySelections: [],
         winner: null,
+        disconnected: false,
         feedback: null,
         playerCombo: 0,
         opponentCombo: 0,
@@ -124,7 +127,7 @@ export const useGameStore = create<Store>((set) => ({
         return { mySelections: selections };
     }),
     resetMySelections: () => set({ mySelections: [] }),
-    endGame: (winner) => set({ gameState: 'RESULT', winner }),
+    endGame: (winner, disconnected = false) => set({ gameState: 'RESULT', winner, disconnected }),
     setFeedback: (feedback) => set({ feedback }),
 
     setPlayerCombo: (count) => set({ playerCombo: count }),

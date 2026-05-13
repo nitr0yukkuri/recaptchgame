@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore } from '../store';
 import { OnionRain } from './OnionRain';
-import { parseSplitTileIndex } from '../utils/game';
+import { parseSplitTileIndex, resolveImageSrc } from '../utils/game';
 
 type GameScreenProps = {
     myScore: number;
@@ -41,20 +41,23 @@ const getSplitTileStyle = (tileIndex: number) => {
     };
 };
 
-const renderCaptchaImage = (img: string, tileIndex: number, className: string) => {
-    const splitTileIndex = parseSplitTileIndex(img);
+const renderCaptchaImage = (img: string, className: string) => {
+    const resolved = resolveImageSrc(img);
+    const splitTileIndex = parseSplitTileIndex(resolved);
 
     if (splitTileIndex === null) {
-        return <img src={img} alt="captcha" className={className} />;
+        return <img src={resolved} alt="captcha" className={className} />;
     }
 
+    // src から #tile= フラグメントを除いた純粋なパスを取得
+    const srcWithoutFragment = resolved.split('#')[0];
     return (
         <div className="relative w-full h-full overflow-hidden">
             <img
-                src={img}
+                src={srcWithoutFragment}
                 alt="captcha"
                 className={className}
-                style={getSplitTileStyle(tileIndex)}
+                style={getSplitTileStyle(splitTileIndex)}
             />
         </div>
     );
@@ -114,7 +117,7 @@ export const GameScreen = ({
                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                 >
                                     <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${mySelections.includes(idx) ? 'scale-90' : 'scale-100 group-hover:opacity-90'}`}>
-                                        {renderCaptchaImage(img, idx, 'w-full h-full object-cover aspect-square block')}
+                                        {renderCaptchaImage(img, 'w-full h-full object-cover aspect-square block')}
                                     </div>
 
                                     {mySelections.includes(idx) && (
@@ -175,7 +178,7 @@ export const GameScreen = ({
                                     className="relative aspect-square overflow-hidden bg-gray-300"
                                 >
                                     <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${opponentSelections.includes(idx) ? 'scale-90' : 'scale-100'}`}>
-                                        {renderCaptchaImage(img, idx, 'w-full h-full object-cover aspect-square block')}
+                                        {renderCaptchaImage(img, 'w-full h-full object-cover aspect-square block')}
                                     </div>
                                     {opponentSelections.includes(idx) && (
                                         <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-0.5 m-0.5 z-10">
