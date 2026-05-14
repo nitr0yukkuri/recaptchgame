@@ -298,7 +298,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 	}
 
 	output, err := h.joinRoomUC.Execute(input)
-	if err != nil {
+	if err != nil || output == nil {
 		return
 	}
 
