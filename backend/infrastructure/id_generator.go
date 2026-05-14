@@ -1,8 +1,7 @@
 package infrastructure
 
 import (
-	"fmt"
-	"time"
+	"math/rand"
 	"recaptchgame-backend/domain"
 )
 
@@ -14,7 +13,12 @@ func NewTimeBasedIDGenerator() domain.IDGenerator {
 	return &TimeBasedIDGenerator{}
 }
 
-// GenerateRoomID はルームIDを生成
+// GenerateRoomID は6文字のランダム英数字ルームIDを生成
 func (ig *TimeBasedIDGenerator) GenerateRoomID() string {
-	return "ROOM_" + fmt.Sprintf("%d", time.Now().UnixNano())
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	result := make([]byte, 6)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(result)
 }

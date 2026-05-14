@@ -6,7 +6,7 @@ type WaitingScreenProps = {
     cancelWaiting: () => void;
 };
 
-const ROOM_ID_PATTERN = /^(?:ROOM_[0-9]{10,20}|[A-Za-z0-9]{4,32})$/;
+const ROOM_ID_PATTERN = /^[A-Za-z0-9]{6}$/;
 
 const buildInviteUrl = (roomId: string) => {
     if (typeof window === 'undefined') {

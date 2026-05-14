@@ -21,7 +21,7 @@ const STATIC_WS_OPTIONS = {
     shouldReconnect: () => true,
 };
 
-const ROOM_ID_PATTERN = /^(?:ROOM_[0-9]{10,20}|[A-Za-z0-9]{4,32})$/;
+const ROOM_ID_PATTERN = /^[A-Za-z0-9]{6}$/;
 
 function App() {
     // ── グローバルストア（表示に必要なもののみ）──────────────
