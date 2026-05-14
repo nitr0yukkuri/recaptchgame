@@ -66,17 +66,10 @@ export const BRGameScreen = ({
 }: BRGameScreenProps) => {
     const {
         target, images, playerCombo, playerEffect, mySelections,
-        brOpponents, cpuImages // cpuImagesは仮のモック用
+        brOpponents, cpuImages
     } = useGameStore();
 
-    // デモ用にモックの対戦相手を3人生成（バックエンド通信ができるまでの仮データ）
-    // Use existing brOpponents if any were set by the app; otherwise fall back to 3 mock opponents for demo.
-    // Important: brOpponents may be length 2 for a 3-player match (player + 2 CPUs).
-    const opponents = brOpponents.length > 0 ? brOpponents : [
-        { id: 'Player 2', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
-        { id: 'Player 3', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
-        { id: 'Player 4', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
-    ];
+    const opponents = brOpponents;
 
     const oppLeft = opponents[0];
     const oppRight = opponents[1];

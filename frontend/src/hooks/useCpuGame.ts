@@ -80,6 +80,7 @@ export function useCpuGame({
             } else {
                 // BRモード CPU シミュレーション（完全 immutable）
                 let changed = false;
+                let brEffectToFire: ObstructionType = null;
                 const nextOpponents: BROpponent[] = store.brOpponents.map(opp => {
                     if (opp.effect && shouldSkipWithObstruction()) return opp;
 
@@ -97,9 +98,9 @@ export function useCpuGame({
                             const newCombo = opp.combo + 1;
                             const fired = newCombo >= 2;
                             if (fired) {
-                                const effect = getRandomObstruction();
-                                // BR複数人の場合は全員に妨害を付与
-                                fireBRObstruction(effect);
+                                if (!brEffectToFire) {
+                                    brEffectToFire = getRandomObstruction();
+                                }
                             }
                             const next = generateCpuProblem();
                             changed = true;
@@ -108,7 +109,13 @@ export function useCpuGame({
                         return opp;
                     }
                 });
-                if (changed) store.setBROpponents(nextOpponents);
+                if (changed) {
+                    store.setBROpponents(nextOpponents);
+                }
+                if (brEffectToFire) {
+                    // brOpponents更新の後に適用し、effect が上書きで消えるのを防ぐ
+                    fireBRObstruction(brEffectToFire);
+                }
             }
         }, intervalTime);
 
