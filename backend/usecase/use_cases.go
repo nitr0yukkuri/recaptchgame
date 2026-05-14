@@ -248,6 +248,7 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 		if player.Score >= room.WinningScore {
 			output.IsGameOver = true
 			output.Winner = player.ID
+			uc.roomRepo.Save(room)
 			return output, nil
 		}
 
