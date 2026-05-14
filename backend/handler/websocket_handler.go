@@ -98,6 +98,10 @@ func (m *WebSocketManager) UnregisterConnection(clientID string) {
 
 	if roomID != "" && m.roomToClients[roomID] != nil {
 		delete(m.roomToClients[roomID], clientID)
+		// ルーム内に誰もいなくなったらマップを削除
+		if len(m.roomToClients[roomID]) == 0 {
+			delete(m.roomToClients, roomID)
+		}
 	}
 	m.mu.Unlock()
 
