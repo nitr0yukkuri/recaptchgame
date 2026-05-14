@@ -620,6 +620,7 @@ func (h *WebSocketHandler) scheduleGracefulLeave(playerID string) {
 }
 
 func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message string) {
+	sessionID := h.getSessionIDByPlayerID(input.PlayerID)
 	room, _ := h.roomRepo.FindByPlayerID(input.PlayerID)
 	var opponentID string
 	if room != nil {
@@ -638,6 +639,13 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 		for _, cID := range h.wsManager.GetClientIDsByPlayerID(opponentID) {
 			_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
 		}
+	}
+
+	// sessionToPlayer から削除（メモリリーク防止）
+	if sessionID != "" {
+		h.sessionMu.Lock()
+		delete(h.sessionToPlayer, sessionID)
+		h.sessionMu.Unlock()
 	}
 }
 
