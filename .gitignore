@@ -1,9 +1,10 @@
 node_modules
 dist/
 frontend/dist/
-backend/recaptchagame
-backend/recaptchagame-backend.exe
-backend/game.exe
+backend/*.exe
+# Backend build outputs (binaries on all platforms)
+/backend/recaptchagame
+/backend/game
 .DS_Store
 *.swp
 *.swo
