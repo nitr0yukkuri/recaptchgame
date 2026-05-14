@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from './store';
@@ -20,6 +20,8 @@ const STATIC_WS_OPTIONS = {
     onOpen: () => console.log('Connected to Server'),
     shouldReconnect: () => true,
 };
+
+const ROOM_ID_PATTERN = /^(?:ROOM_[0-9]{10,20}|[A-Za-z0-9]{4,32})$/;
 
 function App() {
     // ── グローバルストア（表示に必要なもののみ）──────────────
@@ -177,6 +179,19 @@ function App() {
         setInputRoom('');
         setLoginError('');
     };
+
+    useEffect(() => {
+        if (gameState !== 'LOGIN') return;
+        if (typeof window === 'undefined') return;
+
+        const room = new URLSearchParams(window.location.search).get('room');
+        if (!room || !ROOM_ID_PATTERN.test(room)) return;
+
+        setIsCreator(false);
+        setLoginStep('FRIEND_INPUT');
+        setInputRoom(room);
+        setLoginError('');
+    }, [gameState]);
 
     // ── JSX ─────────────────────────────────────────────────
     return (
