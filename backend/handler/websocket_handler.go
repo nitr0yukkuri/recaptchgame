@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"recaptchgame-backend/domain"
@@ -59,9 +60,10 @@ func (c *clientConnection) close() {
 type WebSocketManager struct {
 	mu             sync.RWMutex
 	connections    map[string]*clientConnection // clientID -> connection state
-	clientToPlayer map[string]string          // clientID -> playerID
-	clientToRoom   map[string]string          // clientID -> roomID
-	roomToClients  map[string]map[string]bool // roomID -> map[clientID]bool
+	clientToPlayer map[string]string            // clientID -> playerID
+	clientToRoom   map[string]string            // clientID -> roomID
+	roomToClients  map[string]map[string]bool   // roomID -> map[clientID]bool
+	lastPongAt     map[string]time.Time
 }
 
 // NewWebSocketManager は新しいWebSocketManagerを生成
@@ -71,6 +73,7 @@ func NewWebSocketManager() *WebSocketManager {
 		clientToPlayer: make(map[string]string),
 		clientToRoom:   make(map[string]string),
 		roomToClients:  make(map[string]map[string]bool),
+		lastPongAt:     make(map[string]time.Time),
 	}
 }
 
@@ -80,6 +83,7 @@ func (m *WebSocketManager) RegisterConnection(clientID string, conn *websocket.C
 
 	m.mu.Lock()
 	m.connections[clientID] = client
+	m.lastPongAt[clientID] = time.Now()
 	m.mu.Unlock()
 
 	go m.writePump(clientID, client)
@@ -95,6 +99,7 @@ func (m *WebSocketManager) UnregisterConnection(clientID string) {
 	delete(m.clientToPlayer, clientID)
 	roomID := m.clientToRoom[clientID]
 	delete(m.clientToRoom, clientID)
+	delete(m.lastPongAt, clientID)
 
 	if roomID != "" && m.roomToClients[roomID] != nil {
 		delete(m.roomToClients[roomID], clientID)
@@ -175,6 +180,26 @@ func (m *WebSocketManager) GetPlayerID(clientID string) (string, bool) {
 	return playerID, ok
 }
 
+// TouchPong はクライアントの最終PONG時刻を更新
+func (m *WebSocketManager) TouchPong(clientID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.connections[clientID]; ok {
+		m.lastPongAt[clientID] = time.Now()
+	}
+}
+
+// IsPongTimedOut は最終PONGが閾値を超過しているか判定
+func (m *WebSocketManager) IsPongTimedOut(clientID string, timeout time.Duration) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	last, ok := m.lastPongAt[clientID]
+	if !ok {
+		return true
+	}
+	return time.Since(last) > timeout
+}
+
 // SendToClient は指定クライアントにメッセージ送信キュー経由で送る
 func (m *WebSocketManager) SendToClient(clientID string, msg Message) error {
 	m.mu.RLock()
@@ -216,12 +241,15 @@ func (m *WebSocketManager) writePump(clientID string, client *clientConnection) 
 
 // WebSocketHandler はWebSocket通信のハンドラー
 type WebSocketHandler struct {
-	wsManager      *WebSocketManager
-	joinRoomUC     *usecase.JoinRoomUseCase
-	verifyAnswerUC *usecase.VerifyAnswerUseCase
-	startGameUC    *usecase.StartGameUseCase
-	leaveRoomUC    *usecase.LeaveRoomUseCase
-	roomRepo       domain.RoomRepository
+	wsManager       *WebSocketManager
+	joinRoomUC      *usecase.JoinRoomUseCase
+	verifyAnswerUC  *usecase.VerifyAnswerUseCase
+	startGameUC     *usecase.StartGameUseCase
+	leaveRoomUC     *usecase.LeaveRoomUseCase
+	roomRepo        domain.RoomRepository
+	sessionMu       sync.Mutex
+	sessionToPlayer map[string]string
+	graceTimers     map[string]*time.Timer
 }
 
 // NewWebSocketHandler は新しいWebSocketHandlerを生成
@@ -234,27 +262,28 @@ func NewWebSocketHandler(
 	roomRepo domain.RoomRepository,
 ) *WebSocketHandler {
 	return &WebSocketHandler{
-		wsManager:      wsManager,
-		joinRoomUC:     joinRoomUC,
-		verifyAnswerUC: verifyAnswerUC,
-		startGameUC:    startGameUC,
-		leaveRoomUC:    leaveRoomUC,
-		roomRepo:       roomRepo,
+		wsManager:       wsManager,
+		joinRoomUC:      joinRoomUC,
+		verifyAnswerUC:  verifyAnswerUC,
+		startGameUC:     startGameUC,
+		leaveRoomUC:     leaveRoomUC,
+		roomRepo:        roomRepo,
+		sessionToPlayer: make(map[string]string),
+		graceTimers:     make(map[string]*time.Timer),
 	}
 }
 
 // HandleConnection はWebSocket接続を処理
 func (h *WebSocketHandler) HandleConnection(clientID string, conn *websocket.Conn) {
 	h.wsManager.RegisterConnection(clientID, conn)
+	go h.heartbeatPump(clientID)
 	// left フラグで重複退出処理を防ぐ
 	var left bool
 	defer func() {
 		if !left {
 			playerID, err := h.getPlayerIDByClientID(clientID)
 			if err == nil {
-				p := LeaveRoomPayload{PlayerID: playerID}
-				b, _ := json.Marshal(p)
-				h.handleLeaveRoom(clientID, b)
+				h.scheduleGracefulLeave(playerID)
 			}
 		}
 		h.wsManager.UnregisterConnection(clientID)
@@ -278,6 +307,8 @@ func (h *WebSocketHandler) handleMessage(clientID string, conn *websocket.Conn, 
 	switch msg.Type {
 	case "JOIN_ROOM":
 		h.handleJoinRoom(clientID, conn, msg.Payload)
+	case "PONG":
+		h.wsManager.TouchPong(clientID)
 	case "LEAVE_ROOM":
 		h.handleLeaveRoom(clientID, msg.Payload)
 	case "SELECT_IMAGE":
@@ -291,6 +322,70 @@ func (h *WebSocketHandler) handleMessage(clientID string, conn *websocket.Conn, 
 func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn, payload json.RawMessage) {
 	var p JoinRoomPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
+		return
+	}
+
+	sessionID := p.SessionID
+	if sessionID == "" {
+		sessionID = p.PlayerID
+	}
+	h.bindSession(sessionID, p.PlayerID)
+	h.cancelGracefulLeave(sessionID)
+
+	// 既存参加中のプレイヤーが同一セッションで再接続した場合は、参加処理を再実行せず復帰のみ行う
+	if room, err := h.roomRepo.FindByPlayerID(p.PlayerID); err == nil && room != nil {
+		h.wsManager.AssignClientToPlayer(clientID, p.PlayerID)
+		h.wsManager.AssignClientToRoom(clientID, room.ID)
+
+		assigned := RoomAssignedPayload{RoomID: room.ID, PlayerID: p.PlayerID}
+		bAssigned, _ := json.Marshal(assigned)
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "ROOM_ASSIGNED", Payload: bAssigned})
+
+		// 復帰時はルーム状態を再送して同期
+		if room.IsReady() {
+			player := room.GetPlayerByID(p.PlayerID)
+			gameState := room.GetGameStateByPlayerID(p.PlayerID)
+			if player != nil && gameState != nil {
+				var opponentImages []string
+				var opponentScore int
+				if room.Player1 != nil && room.Player1.ID == p.PlayerID && room.GameState2 != nil {
+					opponentImages = room.GameState2.Images
+					if room.Player2 != nil {
+						opponentScore = room.Player2.Score
+					}
+				} else if room.GameState1 != nil {
+					opponentImages = room.GameState1.Images
+					if room.Player1 != nil {
+						opponentScore = room.Player1.Score
+					}
+				}
+
+				gamePayload := GameStartPayload{
+					Target:               gameState.Target,
+					Images:               gameState.Images,
+					OpponentImages:       opponentImages,
+					WinningScore:         room.WinningScore,
+					MyCurrentScore:       player.Score,
+					OpponentCurrentScore: opponentScore,
+				}
+				bGame, _ := json.Marshal(gamePayload)
+				_ = h.wsManager.SendToClient(clientID, Message{Type: "GAME_START", Payload: bGame})
+
+				oppPayload := OpponentUpdatePayload{Images: opponentImages, Score: 0, Combo: 0}
+				if room.Player1 != nil && room.Player1.ID == p.PlayerID && room.Player2 != nil {
+					oppPayload.Score = room.Player2.Score
+					oppPayload.Combo = room.Player2.Combo
+				} else if room.Player1 != nil {
+					oppPayload.Score = room.Player1.Score
+					oppPayload.Combo = room.Player1.Combo
+				}
+				bOpp, _ := json.Marshal(oppPayload)
+				_ = h.wsManager.SendToClient(clientID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
+				return
+			}
+		}
+
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		return
 	}
 
@@ -348,10 +443,12 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 			}
 
 			gamePayload := GameStartPayload{
-				Target:         gameStates[i].Target,
-				Images:         gameStates[i].Images,
-				OpponentImages: opponentImages,
-				WinningScore:   startOutput.WinningScore,
+				Target:               gameStates[i].Target,
+				Images:               gameStates[i].Images,
+				OpponentImages:       opponentImages,
+				WinningScore:         startOutput.WinningScore,
+				MyCurrentScore:       0,
+				OpponentCurrentScore: 0,
 			}
 			b, _ := json.Marshal(gamePayload)
 
@@ -377,33 +474,7 @@ func (h *WebSocketHandler) handleLeaveRoom(clientID string, payload json.RawMess
 		PlayerID: p.PlayerID,
 	}
 
-	h.leaveRoomUC.Execute(input)
-
-	// ルームの相手に通知
-	roomID, ok := h.wsManager.GetRoomID(clientID)
-	if ok {
-		room, _ := h.roomRepo.FindByID(roomID)
-		if room != nil {
-			var opponentID string
-			if room.Player1 != nil && room.Player1.ID != p.PlayerID {
-				opponentID = room.Player1.ID
-			} else if room.Player2 != nil && room.Player2.ID != p.PlayerID {
-				opponentID = room.Player2.ID
-			}
-
-			if opponentID != "" {
-				res := GameResultPayload{
-					WinnerID: opponentID,
-					Message:  "Opponent Disconnected",
-				}
-				b, _ := json.Marshal(res)
-
-				for _, cID := range h.wsManager.GetClientIDsByPlayerID(opponentID) {
-					_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
-				}
-			}
-		}
-	}
+	h.leaveAndNotify(input, "Opponent Disconnected")
 }
 
 // handleSelectImage はSELECT_IMAGEメッセージを処理
@@ -502,6 +573,87 @@ func (h *WebSocketHandler) getPlayerIDByClientID(clientID string) (string, error
 	return "", fmt.Errorf("player id not found for client %s", clientID)
 }
 
+func (h *WebSocketHandler) bindSession(sessionID string, playerID string) {
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	h.sessionToPlayer[sessionID] = playerID
+}
+
+func (h *WebSocketHandler) getSessionIDByPlayerID(playerID string) string {
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	for sessionID, mappedPlayerID := range h.sessionToPlayer {
+		if mappedPlayerID == playerID {
+			return sessionID
+		}
+	}
+	return ""
+}
+
+func (h *WebSocketHandler) cancelGracefulLeave(sessionID string) {
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	if t, ok := h.graceTimers[sessionID]; ok {
+		t.Stop()
+		delete(h.graceTimers, sessionID)
+	}
+}
+
+func (h *WebSocketHandler) scheduleGracefulLeave(playerID string) {
+	sessionID := h.getSessionIDByPlayerID(playerID)
+	if sessionID == "" {
+		h.leaveAndNotify(usecase.LeaveRoomInput{ClientID: "", PlayerID: playerID}, "Opponent Disconnected")
+		return
+	}
+
+	h.sessionMu.Lock()
+	if t, ok := h.graceTimers[sessionID]; ok {
+		t.Stop()
+	}
+	h.graceTimers[sessionID] = time.AfterFunc(10*time.Second, func() {
+		h.leaveAndNotify(usecase.LeaveRoomInput{ClientID: "", PlayerID: playerID}, "Opponent Disconnected")
+		h.sessionMu.Lock()
+		delete(h.graceTimers, sessionID)
+		h.sessionMu.Unlock()
+	})
+	h.sessionMu.Unlock()
+}
+
+func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message string) {
+	room, _ := h.roomRepo.FindByPlayerID(input.PlayerID)
+	var opponentID string
+	if room != nil {
+		if room.Player1 != nil && room.Player1.ID != input.PlayerID {
+			opponentID = room.Player1.ID
+		} else if room.Player2 != nil && room.Player2.ID != input.PlayerID {
+			opponentID = room.Player2.ID
+		}
+	}
+
+	h.leaveRoomUC.Execute(input)
+
+	if opponentID != "" {
+		res := GameResultPayload{WinnerID: opponentID, Message: message}
+		b, _ := json.Marshal(res)
+		for _, cID := range h.wsManager.GetClientIDsByPlayerID(opponentID) {
+			_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
+		}
+	}
+}
+
+func (h *WebSocketHandler) heartbeatPump(clientID string) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if h.wsManager.IsPongTimedOut(clientID, 15*time.Second) {
+			h.wsManager.UnregisterConnection(clientID)
+			return
+		}
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "PING", Payload: json.RawMessage(`{}`)})
+	}
+}
+
 // Message はWebSocketメッセージ
 type Message struct {
 	Type    string          `json:"type"`
@@ -513,6 +665,7 @@ type JoinRoomPayload struct {
 	RoomID       string `json:"room_id"`
 	PlayerID     string `json:"player_id"`
 	WinningScore int    `json:"winning_score"`
+	SessionID    string `json:"session_id"`
 }
 
 type LeaveRoomPayload struct {
@@ -525,10 +678,12 @@ type RoomAssignedPayload struct {
 }
 
 type GameStartPayload struct {
-	Target         string   `json:"target"`
-	Images         []string `json:"images"`
-	OpponentImages []string `json:"opponent_images"`
-	WinningScore   int      `json:"winning_score"`
+	Target              string   `json:"target"`
+	Images              []string `json:"images"`
+	OpponentImages      []string `json:"opponent_images"`
+	WinningScore        int      `json:"winning_score"`
+	MyCurrentScore      int      `json:"my_current_score,omitempty"`
+	OpponentCurrentScore int      `json:"opponent_current_score,omitempty"`
 }
 
 type VerifyPayload struct {

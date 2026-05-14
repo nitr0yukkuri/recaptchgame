@@ -23,6 +23,17 @@ const STATIC_WS_OPTIONS = {
 
 const ROOM_ID_PATTERN = /^[A-Za-z0-9]{6}$/;
 
+const SESSION_STORAGE_KEY = 'recaptcha_game_session_id';
+
+function getOrCreateSessionID(): string {
+    if (typeof window === 'undefined') return 'session_server';
+    const existing = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (existing) return existing;
+    const created = `s_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(SESSION_STORAGE_KEY, created);
+    return created;
+}
+
 function App() {
     // ── グローバルストア（表示に必要なもののみ）──────────────
     const { gameState, roomId, playerId, playerEffect, opponentEffect, feedback } = useGameStore();
@@ -34,10 +45,11 @@ function App() {
     const [winningScore, setWinningScore] = useState(5);
     const [inputRoom, setInputRoom] = useState('');
     const [loginError, setLoginError] = useState('');
+    const [sessionID] = useState(getOrCreateSessionID());
 
     // ── サウンド・WebSocket ──────────────────────────────────
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
-    const { sendMessage, lastMessage } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
+    const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
     // ── 妨害エフェクト管理 ──────────────────────────────────
     const { brAttackEffect, fireBRObstruction } = useObstructionEffect({ playObstruction });
@@ -127,7 +139,7 @@ function App() {
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: 'RANDOM', player_id: playerId, winning_score: 5 },
+            payload: { room_id: 'RANDOM', player_id: playerId, winning_score: 5, session_id: sessionID },
         }));
     };
 
@@ -155,9 +167,21 @@ function App() {
         useGameStore.getState().setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: room, player_id: playerId, winning_score: settingScore },
+            payload: { room_id: room, player_id: playerId, winning_score: settingScore, session_id: sessionID },
         }));
     };
+
+    // WebSocket再接続時に同一セッションで復帰を試みる
+    useEffect(() => {
+        if (readyState !== 1) return;
+        if (gameMode !== 'ONLINE') return;
+        if (!roomId || !playerId) return;
+
+        sendMessage(JSON.stringify({
+            type: 'JOIN_ROOM',
+            payload: { room_id: roomId, player_id: playerId, winning_score: winningScore, session_id: sessionID },
+        }));
+    }, [readyState]);
 
     const leaveRoom = () => {
         stopMatching();

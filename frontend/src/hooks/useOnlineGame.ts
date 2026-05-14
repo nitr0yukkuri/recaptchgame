@@ -51,6 +51,10 @@ export function useOnlineGame({
             const store = useGameStore.getState();
 
             switch (msg.type) {
+                case 'PING':
+                    sendMessage(JSON.stringify({ type: 'PONG', payload: {} }));
+                    break;
+
                 case 'ROOM_ASSIGNED':
                     store.setRoomInfo(msg.payload.room_id, store.playerId);
                     setGameMode('ONLINE');
@@ -72,7 +76,7 @@ export function useOnlineGame({
                     if (msg.payload.winning_score) {
                         setWinningScore(msg.payload.winning_score);
                     }
-                    setMyScore(() => 0);
+                    setMyScore(() => msg.payload.my_current_score ?? 0);
                     setIsVerifying(false);
                     store.setPlayerCombo(0);
                     store.setOpponentCombo(0);
