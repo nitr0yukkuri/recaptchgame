@@ -58,7 +58,7 @@ func init() {
 	problemGeneratorUC = usecase.NewProblemGeneratorUseCase(problemFactory, domain.GetAllTargets())
 	joinRoomUC = usecase.NewJoinRoomUseCase(roomRepo, clientRepo, idGenerator, roomGuard)
 	verifyAnswerUC = usecase.NewVerifyAnswerUseCase(roomRepo, problemGeneratorUC, domain.GetAllEffects(), roomGuard)
-	startGameUC = usecase.NewStartGameUseCase(roomRepo, problemGeneratorUC)
+	startGameUC = usecase.NewStartGameUseCase(roomRepo, problemGeneratorUC, roomGuard)
 	leaveRoomUC = usecase.NewLeaveRoomUseCase(roomRepo, clientRepo, roomGuard)
 
 	// ハンドラー層の初期化

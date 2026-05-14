@@ -283,13 +283,15 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 type StartGameUseCase struct {
 	roomRepo   domain.RoomRepository
 	problemGen *ProblemGeneratorUseCase
+	roomGuard  *RoomExecutionGuard
 }
 
 // NewStartGameUseCase は新しいStartGameUseCaseを生成
-func NewStartGameUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase) *StartGameUseCase {
+func NewStartGameUseCase(roomRepo domain.RoomRepository, problemGen *ProblemGeneratorUseCase, roomGuard *RoomExecutionGuard) *StartGameUseCase {
 	return &StartGameUseCase{
 		roomRepo:   roomRepo,
 		problemGen: problemGen,
+		roomGuard:  roomGuard,
 	}
 }
 
@@ -311,6 +313,9 @@ type StartGameOutput struct {
 
 // Execute はゲーム開始を実行
 func (uc *StartGameUseCase) Execute(input StartGameInput) (*StartGameOutput, error) {
+	unlock := uc.roomGuard.Lock(input.RoomID)
+	defer unlock()
+
 	room, err := uc.roomRepo.FindByID(input.RoomID)
 	if err != nil {
 		return nil, err
