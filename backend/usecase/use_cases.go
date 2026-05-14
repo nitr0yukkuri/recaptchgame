@@ -142,6 +142,9 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			room.Player1 = domain.NewPlayer(input.PlayerID)
 		} else if room.Player2 == nil || room.Player2.ID == "" {
 			room.Player2 = domain.NewPlayer(input.PlayerID)
+		} else {
+			// ルームが満員（2人以上）の場合は参加不可
+			return nil, fmt.Errorf("room is full")
 		}
 	}
 
@@ -395,7 +398,11 @@ func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 	// ルームが空になったら削除
 	if room.Player1 == nil && room.Player2 == nil {
 		uc.roomRepo.Delete(room.ID)
-		uc.roomRepo.ClearWaitingRoom()
+		// 削除対象が現在の待機ルームと一致する場合のみクリア
+		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
+		if waitingRoom != nil && waitingRoom.ID == room.ID {
+			uc.roomRepo.ClearWaitingRoom()
+		}
 	} else {
 		uc.roomRepo.Save(room)
 	}

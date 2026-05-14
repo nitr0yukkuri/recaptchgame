@@ -83,19 +83,26 @@ function App() {
     };
 
     // ── 勝敗判定（CPU複数プレイヤー & 共通 myScore 監視）──────
-    // useCpuGame 内では opponentScore を監視。myScore は App.tsx で管理するため
-    // 自分の勝利条件はここでチェック。
-    if (gameMode === 'CPU' && gameState === 'PLAYING' && myScore >= winningScore) {
-        playWin();
-        useGameStore.getState().endGame('human');
-    }
-    if (gameMode === 'CPU' && gameState === 'PLAYING' && cpuPlayerCount > 1) {
-        const cpuWinner = useGameStore.getState().brOpponents.find(opp => opp.score >= winningScore);
-        if (cpuWinner) {
-            playLose();
-            useGameStore.getState().endGame(cpuWinner.id);
+    // useEffect 内で勝敗判定を実行（レンダリングサイクル違反を防止）
+    useEffect(() => {
+        if (gameMode !== 'CPU' || gameState !== 'PLAYING') return;
+
+        // 自分の勝利条件
+        if (myScore >= winningScore) {
+            playWin();
+            useGameStore.getState().endGame('human');
+            return;
         }
-    }
+
+        // 複数プレイヤーの場合、他のプレイヤーの勝利条件
+        if (cpuPlayerCount > 1) {
+            const cpuWinner = useGameStore.getState().brOpponents.find(opp => opp.score >= winningScore);
+            if (cpuWinner) {
+                playLose();
+                useGameStore.getState().endGame(cpuWinner.id);
+            }
+        }
+    }, [gameMode, gameState, myScore, cpuPlayerCount, winningScore, playWin, playLose]);
 
     // ── ログインフロー ───────────────────────────────────────
     const startCpuFlow = () => {

@@ -33,8 +33,13 @@ func (c *clientConnection) enqueue(msg Message) error {
 	if c.closed {
 		return errSendQueueClosed
 	}
-	c.send <- msg
-	return nil
+	select {
+	case c.send <- msg:
+		return nil
+	default:
+		// バッファが満杯の場合はスキップしてデッドロックを防止
+		return nil
+	}
 }
 
 func (c *clientConnection) close() {
