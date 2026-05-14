@@ -108,12 +108,18 @@ export const generateCpuProblem = (prevTarget?: string) => {
 export const getCorrectIndices = (imgs: string[], tgt: string) => {
     if (tgt === '信号機') {
         return imgs
-            .map((img, idx) => parseSplitTileIndex(img) && SIGNAL_SPLIT_CORRECT_TILES.includes(parseSplitTileIndex(img) as number) ? idx : -1)
+            .map((img, idx) => {
+                const tile = parseSplitTileIndex(img);
+                return (tile !== null && SIGNAL_SPLIT_CORRECT_TILES.includes(tile)) ? idx : -1;
+            })
             .filter(idx => idx !== -1);
     }
     if (tgt === '消火器') {
         return imgs
-            .map((img, idx) => parseSplitTileIndex(img) && EXTINGUISHER_SPLIT_CORRECT_TILES.includes(parseSplitTileIndex(img) as number) ? idx : -1)
+            .map((img, idx) => {
+                const tile = parseSplitTileIndex(img);
+                return (tile !== null && EXTINGUISHER_SPLIT_CORRECT_TILES.includes(tile)) ? idx : -1;
+            })
             .filter(idx => idx !== -1);
     }
 

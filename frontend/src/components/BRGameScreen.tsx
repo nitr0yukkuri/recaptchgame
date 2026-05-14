@@ -70,7 +70,9 @@ export const BRGameScreen = ({
     } = useGameStore();
 
     // デモ用にモックの対戦相手を3人生成（バックエンド通信ができるまでの仮データ）
-    const opponents = brOpponents.length >= 3 ? brOpponents : [
+    // Use existing brOpponents if any were set by the app; otherwise fall back to 3 mock opponents for demo.
+    // Important: brOpponents may be length 2 for a 3-player match (player + 2 CPUs).
+    const opponents = brOpponents.length > 0 ? brOpponents : [
         { id: 'Player 2', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
         { id: 'Player 3', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
         { id: 'Player 4', score: 0, combo: 0, effect: null, selections: [], images: cpuImages },
@@ -78,7 +80,7 @@ export const BRGameScreen = ({
 
     const oppLeft = opponents[0];
     const oppRight = opponents[1];
-    const oppBottom = opponents[2];
+    const oppBottom = opponents[2]; // may be undefined for 3-player matches
 
     const renderOpponent = (opp: any, title: string) => (
         <div className="flex flex-col justify-center items-center shrink-0 w-full md:w-auto">
@@ -87,7 +89,7 @@ export const BRGameScreen = ({
             <motion.div
                 variants={obstructionVariants}
                 animate={['SHAKE', 'SPIN', 'SKEW'].includes(opp.effect || '') ? (opp.effect as string) : 'NORMAL'}
-                className={`relative overflow-hidden bg-gray-100 rounded-sm p-1.5 flex flex-col items-center shadow-inner w-[140px] md:w-40 border border-gray-300 
+                className={`relative overflow-hidden bg-gray-100 rounded-sm p-1.5 flex flex-col items-center shadow-inner w-[120px] md:w-40 border border-gray-300 
                     ${opp.effect === 'BLUR' ? 'blur-[4px]' : ''} 
                     ${opp.effect === 'INVERT' ? 'invert' : ''}
                     ${opp.effect === 'GRAYSCALE' ? 'grayscale' : ''}
@@ -104,7 +106,7 @@ export const BRGameScreen = ({
                     {(opp.images || cpuImages).map((img: string, idx: number) => (
                         <div key={`opp-${idx}`} className="relative aspect-square overflow-hidden bg-gray-300">
                             <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${opp.selections.includes(idx) ? 'scale-90' : 'scale-100'}`}>
-                                {renderCaptchaImage(img, idx, 'w-full h-full object-cover aspect-square block')}
+                                {renderCaptchaImage(img, idx, 'w-full h-full object-contain sm:object-cover aspect-square block')}
                             </div>
                             {opp.selections.includes(idx) && (
                                 <div className="absolute top-0 left-0 bg-[#4285F4] rounded-full p-[1px] m-[1px] z-10">
@@ -130,13 +132,15 @@ export const BRGameScreen = ({
                 
                 {/* 上段（左の相手・自分・右の相手） */}
                 <div className="flex flex-row items-center justify-center gap-2 md:gap-12 w-full">
-                    {/* 左側の相手 */}
-                    <div className="hidden md:block mt-8">
-                        {renderOpponent(oppLeft, "ライバル 1")}
-                    </div>
+                    {/* 左側の相手 (存在する場合のみ表示) */}
+                    {oppLeft && (
+                        <div className="hidden md:block mt-8">
+                            {renderOpponent(oppLeft, "ライバル 1")}
+                        </div>
+                    )}
 
                     {/* 自分の画面（中央・特大） */}
-                    <div className="flex flex-col items-center w-full max-w-[380px] shrink-0 z-10">
+                    <div className="flex flex-col items-center w-full max-w-[320px] md:max-w-[380px] shrink-0 z-10">
                         <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
                         <motion.div
@@ -205,20 +209,29 @@ export const BRGameScreen = ({
                         </motion.div>
                     </div>
 
-                    {/* 右側の相手 */}
-                    <div className="mt-8">
-                        {renderOpponent(oppRight, "ライバル 2")}
-                    </div>
+                    {/* 右側の相手 (存在する場合のみ表示) */}
+                    {oppRight && (
+                        <div className="mt-8">
+                            {renderOpponent(oppRight, "ライバル 2")}
+                        </div>
+                    )}
                 </div>
 
                 {/* 下段（モバイルの場合は左の相手もここに並べる） */}
                 <div className="flex flex-row items-center justify-center gap-6 mt-4 md:mt-8 w-full">
-                    <div className="block md:hidden">
-                         {renderOpponent(oppLeft, "ライバル 1")}
-                    </div>
-                    <div>
-                        {renderOpponent(oppBottom, "ライバル 3")}
-                    </div>
+                    {/* モバイルでは左を下段に回す（存在する場合） */}
+                    {oppLeft && (
+                        <div className="block md:hidden">
+                            {renderOpponent(oppLeft, "ライバル 1")}
+                        </div>
+                    )}
+
+                    {/* 下段は oppBottom が存在する場合のみ表示（3人未満なら表示しない） */}
+                    {oppBottom && (
+                        <div>
+                            {renderOpponent(oppBottom, "ライバル 3")}
+                        </div>
+                    )}
                 </div>
 
             </div>
@@ -236,7 +249,11 @@ export const BRGameScreen = ({
                         ></div>
                     </div>
                     <div className="flex items-center gap-2">
-                        Top Rival: {Math.max(oppLeft.score, oppRight.score, oppBottom.score)}/{winningScore}
+                        {/* 安全にトップスコアを計算（oppBottom が undefined の場合に備える） */}
+                        {(() => {
+                            const top = opponents.length ? Math.max(...opponents.map(o => o.score)) : 0;
+                            return <>Top Rival: {top}/{winningScore}</>;
+                        })()}
                         <span className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-red-500 shadow-sm"></span>
                     </div>
                 </div>

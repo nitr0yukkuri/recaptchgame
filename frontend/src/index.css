@@ -25,3 +25,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #9aa0a6;
 }
+
+/* 小さい画面でのはみ出し防止のため画像を確実に収める */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Prevent horizontal overflow and ensure small screens don't cut content */
+html, body, #root {
+    overflow-x: hidden;
+}
+
+@media (max-width: 480px) {
+    /* keep grid cells from growing outside viewport */
+    .grid {
+        max-width: 100%;
+    }
+    /* allow aspect-square elements to scale within viewport */
+    .aspect-square {
+        max-width: 92vw;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}

@@ -83,7 +83,7 @@ export const GameScreen = ({
             </div>
 
             <div className="flex flex-col md:flex-row items-start justify-center gap-6 md:gap-24 w-full max-w-3xl mx-auto px-4">
-                <div className="flex flex-col items-center w-full max-w-[400px] shrink-0 z-10">
+                <div className="flex flex-col items-center w-full max-w-[320px] md:max-w-[400px] shrink-0 z-10">
                     <h3 className="text-xl md:text-2xl font-bold text-gray-700 mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
 
                     <motion.div
@@ -117,7 +117,7 @@ export const GameScreen = ({
                                     className="relative w-full h-full cursor-pointer overflow-hidden group bg-gray-100"
                                 >
                                     <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${mySelections.includes(idx) ? 'scale-90' : 'scale-100 group-hover:opacity-90'}`}>
-                                        {renderCaptchaImage(img, 'w-full h-full object-cover aspect-square block')}
+                                        {renderCaptchaImage(img, 'w-full h-full object-contain sm:object-cover aspect-square block')}
                                     </div>
 
                                     {mySelections.includes(idx) && (
@@ -158,7 +158,7 @@ export const GameScreen = ({
                     <motion.div
                         variants={obstructionVariants}
                         animate={['SHAKE', 'SPIN', 'SKEW'].includes(opponentEffect || '') ? (opponentEffect as string) : 'NORMAL'}
-                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner w-[200px] md:w-48 border border-gray-300 
+                        className={`relative overflow-hidden bg-gray-100 rounded-sm p-2 flex flex-col items-center shadow-inner w-[160px] md:w-48 border border-gray-300 
                             ${opponentEffect === 'BLUR' ? 'blur-[4px]' : ''} 
                             ${opponentEffect === 'INVERT' ? 'invert' : ''}
                             ${opponentEffect === 'GRAYSCALE' ? 'grayscale' : ''}
