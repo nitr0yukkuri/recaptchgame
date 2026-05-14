@@ -199,8 +199,8 @@ export const LoginScreen = ({
                         <button
                             onClick={() => confirmPlayerCount(4)}
                             className={`w-full group border-2 p-4 rounded-2xl flex items-center gap-4 transition-all duration-200 ${cpuPlayerCount === 4
-                                ? 'bg-white border-red-500 shadow-lg hover:-translate-y-1'
-                                : 'bg-white border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-1'
+                                ? 'bg-white border-red-300 shadow-lg hover:-translate-y-1'
+                                : 'bg-white border-red-200 hover:border-red-300 hover:shadow-lg hover:-translate-y-1'
                                 }`}
                         >
                             <div className="bg-red-100 text-red-600 font-black text-2xl w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">4</div>
