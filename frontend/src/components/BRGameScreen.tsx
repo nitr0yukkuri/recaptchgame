@@ -129,7 +129,7 @@ export const BRGameScreen = ({
 
             {/* クロス（十字）型レイアウト */}
             <div className="flex flex-col items-center justify-center w-full max-w-5xl mx-auto px-2 md:px-4">
-                
+
                 {/* 上段（左の相手・自分・右の相手） */}
                 <div className="flex flex-row items-center justify-center gap-2 md:gap-12 w-full">
                     {/* 左側の相手 (存在する場合のみ表示) */}
@@ -208,7 +208,7 @@ export const BRGameScreen = ({
                             </div>
                         </motion.div>
                     </div>
-                    
+
                     {/* 右側の相手 (存在する場合のみ表示) */}
                     {oppRight && (
                         <div className="mt-8">
@@ -216,7 +216,7 @@ export const BRGameScreen = ({
                         </div>
                     )}
                 </div>
-                
+
                 {/* 下段（モバイルの場合は左の相手もここに並べる） */}
                 <div className="flex flex-row items-center justify-center gap-6 mt-4 md:mt-8 w-full">
                     {/* モバイルでは左を下段に回す（存在する場合） */}
@@ -233,7 +233,7 @@ export const BRGameScreen = ({
                         </div>
                     )}
                 </div>
-                
+
             </div>
 
             <div className="w-full max-w-3xl mx-auto px-4 mt-6">
