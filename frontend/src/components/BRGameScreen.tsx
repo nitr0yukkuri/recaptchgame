@@ -121,7 +121,7 @@ export const BRGameScreen = ({
     );
 
     return (
-        <div className="flex flex-col h-full justify-start pt-8 pb-20 overflow-x-hidden">
+        <div className="flex flex-col h-full justify-start pt-8 pb-20 overflow-x-hidden overflow-y-auto min-h-0">
             <div className="bg-[#5B46F5] text-white px-5 py-3 rounded-2xl mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl z-20">
                 <p className="text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
                 <h2 className="text-xl md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
@@ -208,7 +208,7 @@ export const BRGameScreen = ({
                             </div>
                         </motion.div>
                     </div>
-
+                    
                     {/* 右側の相手 (存在する場合のみ表示) */}
                     {oppRight && (
                         <div className="mt-8">
@@ -216,7 +216,7 @@ export const BRGameScreen = ({
                         </div>
                     )}
                 </div>
-
+                
                 {/* 下段（モバイルの場合は左の相手もここに並べる） */}
                 <div className="flex flex-row items-center justify-center gap-6 mt-4 md:mt-8 w-full">
                     {/* モバイルでは左を下段に回す（存在する場合） */}
@@ -233,7 +233,7 @@ export const BRGameScreen = ({
                         </div>
                     )}
                 </div>
-
+                
             </div>
 
             <div className="w-full max-w-3xl mx-auto px-4 mt-6">
