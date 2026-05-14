@@ -1,10 +1,13 @@
 /// <reference types="vite/client" />
-import { useEffect, useState, useRef } from 'react';
+import { useState } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useGameStore, ObstructionType } from './store';
+import { useGameStore } from './store';
 import { useSound } from './useSound';
-import { generateCpuProblem, getCorrectIndices, getRandomObstruction, sleep } from './utils/game';
+
+import { useObstructionEffect } from './hooks/useObstructionEffect';
+import { useCpuGame } from './hooks/useCpuGame';
+import { useOnlineGame } from './hooks/useOnlineGame';
 
 import { LoginScreen } from './components/LoginScreen';
 import { WaitingScreen } from './components/WaitingScreen';
@@ -12,288 +15,87 @@ import { GameScreen } from './components/GameScreen';
 import { BRGameScreen } from './components/BRGameScreen';
 import { ResultScreen } from './components/ResultScreen';
 
-// Render環境変数 VITE_WS_URL があればそれを使用、なければlocalhost
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
-
 const STATIC_WS_OPTIONS = {
     onOpen: () => console.log('Connected to Server'),
     shouldReconnect: () => true,
 };
 
 function App() {
-    const {
-        gameState, roomId, playerId, target, images,
-        cpuDifficulty,
-        opponentScore, mySelections,
-        setGameState, setRoomInfo, startGame,
-        updateCpuPattern, updatePlayerPattern,
-        updateOpponentScore, toggleOpponentSelection,
-        resetOpponentSelections, toggleMySelection, resetMySelections, endGame,
-        feedback, setFeedback, setCpuDifficulty,
-        playerCombo, playerEffect, opponentEffect,
-        setPlayerCombo, setPlayerEffect, setOpponentEffect, setOpponentCombo
-    } = useGameStore();
+    // ── グローバルストア（表示に必要なもののみ）──────────────
+    const { gameState, roomId, playerId, playerEffect, opponentEffect, feedback } = useGameStore();
 
-    const [inputRoom, setInputRoom] = useState('');
-    const [loginError, setLoginError] = useState('');
+    // ── ローカル UI 状態 ────────────────────────────────────
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY' | 'CPU_PLAYER_COUNT'>('SELECT');
-    const [cpuPlayerCount, setCpuPlayerCount] = useState<1 | 3 | 4>(1);
-    const [myScore, setMyScore] = useState<number>(0);
-    const [isReloading, setIsReloading] = useState(false);
-    const [settingScore, setSettingScore] = useState(5);
+    const [myScore, setMyScore] = useState(0);
     const [winningScore, setWinningScore] = useState(5);
-    const [isVerifying, setIsVerifying] = useState(false);
-    const [startPopup, setStartPopup] = useState(false);
-    const [startMessage, setStartMessage] = useState('Start!');
-    const [isCreator, setIsCreator] = useState(false);
-    const isMatchingRef = useRef(false);
-    const prevMessageRef = useRef<MessageEvent<any> | null>(null);
+    const [inputRoom, setInputRoom] = useState('');
+    const [loginError, setLoginError] = useState('');
 
+    // ── サウンド・WebSocket ──────────────────────────────────
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
     const { sendMessage, lastMessage } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
-    useEffect(() => {
-        if (playerEffect) {
-            playObstruction();
-            const timer = setTimeout(() => setPlayerEffect(null), 3000);
-            return () => clearTimeout(timer);
+    // ── 妨害エフェクト管理 ──────────────────────────────────
+    const { brAttackEffect, fireBRObstruction } = useObstructionEffect({ playObstruction });
+
+    // ── CPU ゲームロジック ───────────────────────────────────
+    const {
+        settingScore, setSettingScore,
+        cpuPlayerCount, setCpuPlayerCount,
+        isReloading,
+        confirmDifficulty,
+        handleReload,
+        handleVerifyCpu,
+    } = useCpuGame({ gameMode, setMyScore, setWinningScore, fireBRObstruction, playSuccess, playError, playLose, playStart });
+
+    // ── オンラインゲームロジック ─────────────────────────────
+    const {
+        isVerifying, setIsVerifying,
+        startPopup, startMessage,
+        isCreator, setIsCreator,
+        handleVerifyOnline,
+        stopMatching,
+    } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart });
+
+    // ── ゲームアクション（モード共通の接続点）────────────────
+    const handleImageClick = (index: number) => {
+        if (isReloading || isVerifying) return;
+        useGameStore.getState().toggleMySelection(index);
+        if (gameMode === 'ONLINE') {
+            sendMessage(JSON.stringify({
+                type: 'SELECT_IMAGE',
+                payload: { room_id: roomId, player_id: playerId, image_index: index },
+            }));
         }
-    }, [playerEffect, setPlayerEffect]);
+    };
 
-    useEffect(() => {
-        if (opponentEffect) {
-            const timer = setTimeout(() => setOpponentEffect(null), 3000);
-            return () => clearTimeout(timer);
+    const handleVerify = () => {
+        if (isReloading || isVerifying) return;
+        if (gameMode === 'CPU') {
+            handleVerifyCpu(winningScore);
+        } else {
+            handleVerifyOnline();
         }
-    }, [opponentEffect, setOpponentEffect]);
+    };
 
-    useEffect(() => {
-        if (gameMode === 'CPU' && gameState === 'PLAYING') {
-            let intervalTime = 800;
-            let actionProb = 0.3;
-            let submitProb = 0.5;
-
-            if (cpuDifficulty === 1) {
-                intervalTime = 1200;
-                actionProb = 0.5;
-                submitProb = 0.3;
-            } else if (cpuDifficulty === 3) {
-                intervalTime = 700;
-                actionProb = 0.2;
-                submitProb = 0.55;
-            }
-
-            const interval = setInterval(() => {
-                const store = useGameStore.getState();
-
-                if (cpuPlayerCount === 1) {
-                    // 1vs1 の場合：既存のロジック
-                    if (store.opponentEffect) {
-                        if (Math.random() > 0.5) return;
-                    }
-                    const currentSelections = store.opponentSelections;
-                    const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
-                    const remaining = correctIndices.filter(i => !currentSelections.includes(i));
-
-                    if (remaining.length > 0) {
-                        if (Math.random() > actionProb) {
-                            const next = remaining[Math.floor(Math.random() * remaining.length)];
-                            store.toggleOpponentSelection(next);
-                        }
-                    } else {
-                        if (Math.random() > (1 - submitProb)) {
-                            store.updateOpponentScore(store.opponentScore + 1);
-                            store.resetOpponentSelections();
-                            const newCombo = store.opponentCombo + 1;
-                            store.setOpponentCombo(newCombo);
-                            if (newCombo >= 2) {
-                                store.setOpponentCombo(0);
-                                store.setPlayerEffect(getRandomObstruction());
-                            }
-                            const nextProb = generateCpuProblem(store.cpuTarget);
-                            store.updateCpuPattern(nextProb.target, nextProb.images);
-                        }
-                    }
-                } else {
-                    // 複数プレイヤーの場合：各CPUを独立してシミュレーション
-                    store.brOpponents.forEach((opp, idx) => {
-                        if (opp.effect && Math.random() > 0.5) return;
-
-                        const currentSelections = opp.selections;
-                        const correctIndices = getCorrectIndices(opp.images, '');
-                        const remaining = correctIndices.filter(i => !currentSelections.includes(i));
-
-                        if (remaining.length > 0) {
-                            if (Math.random() > actionProb) {
-                                const next = remaining[Math.floor(Math.random() * remaining.length)];
-                                store.brOpponents[idx].selections = [...currentSelections, next];
-                            }
-                        } else {
-                            if (Math.random() > (1 - submitProb)) {
-                                store.brOpponents[idx].score = opp.score + 1;
-                                store.brOpponents[idx].selections = [];
-                                const newCombo = opp.combo + 1;
-                                store.brOpponents[idx].combo = newCombo;
-                                if (newCombo >= 2) {
-                                    store.brOpponents[idx].combo = 0;
-                                    store.setPlayerEffect(getRandomObstruction());
-                                }
-                                store.brOpponents[idx].images = generateCpuProblem().images;
-                            }
-                        }
-                    });
-                    // brOpponents の変更をトリガー
-                    store.setBROpponents([...store.brOpponents]);
-                }
-            }, intervalTime);
-            return () => clearInterval(interval);
+    // ── 勝敗判定（CPU複数プレイヤー & 共通 myScore 監視）──────
+    // useCpuGame 内では opponentScore を監視。myScore は App.tsx で管理するため
+    // 自分の勝利条件はここでチェック。
+    if (gameMode === 'CPU' && gameState === 'PLAYING' && myScore >= winningScore) {
+        playWin();
+        useGameStore.getState().endGame('human');
+    }
+    if (gameMode === 'CPU' && gameState === 'PLAYING' && cpuPlayerCount > 1) {
+        const cpuWinner = useGameStore.getState().brOpponents.find(opp => opp.score >= winningScore);
+        if (cpuWinner) {
+            playLose();
+            useGameStore.getState().endGame(cpuWinner.id);
         }
-    }, [gameMode, gameState, cpuDifficulty, cpuPlayerCount]);
+    }
 
-    useEffect(() => {
-        if (gameMode === 'CPU' && gameState === 'PLAYING') {
-            if (cpuPlayerCount === 1) {
-                // 1vs1 の場合
-                if (opponentScore >= winningScore) {
-                    playLose();
-                    endGame('cpu');
-                } else if (myScore >= winningScore) {
-                    playWin();
-                    endGame('human');
-                }
-            } else {
-                // 複数プレイヤーの場合
-                if (myScore >= winningScore) {
-                    playWin();
-                    endGame('human');
-                } else {
-                    const store = useGameStore.getState();
-                    const cpuWinner = store.brOpponents.find(opp => opp.score >= winningScore);
-                    if (cpuWinner) {
-                        playLose();
-                        endGame(cpuWinner.id);
-                    }
-                }
-            }
-        }
-    }, [opponentScore, myScore, gameMode, gameState, endGame, playWin, playLose, winningScore, cpuPlayerCount]);
-
-    useEffect(() => {
-        if (lastMessage !== null) {
-            if (lastMessage === prevMessageRef.current) return;
-            prevMessageRef.current = lastMessage;
-
-            try {
-                const msg = JSON.parse(lastMessage.data);
-                switch (msg.type) {
-                    case 'ROOM_ASSIGNED':
-                        setRoomInfo(msg.payload.room_id, playerId);
-                        setGameMode('ONLINE');
-                        setGameState('WAITING');
-                        break;
-                    case 'STATUS_UPDATE':
-                        setGameState('WAITING');
-                        break;
-                    case 'GAME_START':
-                        if (isMatchingRef.current) return;
-                        isMatchingRef.current = true;
-                        setGameMode('ONLINE');
-
-                        startGame(msg.payload.target, msg.payload.images);
-                        if (msg.payload.opponent_images) {
-                            updateCpuPattern("", msg.payload.opponent_images);
-                        }
-                        if (msg.payload.winning_score) {
-                            setWinningScore(msg.payload.winning_score);
-                        }
-                        setMyScore(0);
-                        setIsVerifying(false);
-                        setPlayerCombo(0);
-                        setOpponentCombo(0);
-
-                        (async () => {
-                            setStartPopup(true);
-                            setStartMessage("マッチングしました！");
-                            playStart();
-                            await sleep(1500);
-                            if (!isMatchingRef.current) { setStartPopup(false); return; }
-                            setStartMessage("3");
-                            await sleep(1000);
-                            if (!isMatchingRef.current) { setStartPopup(false); return; }
-                            setStartMessage("2");
-                            await sleep(1000);
-                            if (!isMatchingRef.current) { setStartPopup(false); return; }
-                            setStartMessage("1");
-                            await sleep(1000);
-                            if (!isMatchingRef.current) { setStartPopup(false); return; }
-                            setStartMessage("START!");
-                            await sleep(500);
-                            if (!isMatchingRef.current) { setStartPopup(false); return; }
-                            setTimeout(() => setStartPopup(false), 500);
-                        })();
-                        break;
-
-                    case 'UPDATE_PATTERN':
-                        setIsVerifying(false);
-                        playSuccess();
-                        updatePlayerPattern(msg.payload.target, msg.payload.images);
-                        setFeedback('CORRECT');
-                        setMyScore(prev => prev + 1);
-                        setPlayerCombo(playerCombo + 1);
-                        setTimeout(() => setFeedback(null), 1000);
-                        break;
-
-                    case 'OPPONENT_UPDATE':
-                        updateCpuPattern("", msg.payload.images);
-                        updateOpponentScore(msg.payload.score);
-                        if (msg.payload.combo !== undefined) {
-                            setOpponentCombo(msg.payload.combo);
-                        }
-                        resetOpponentSelections();
-                        break;
-
-                    case 'OBSTRUCTION':
-                        if (msg.payload.attacker_id === playerId) {
-                            setOpponentEffect(msg.payload.effect as ObstructionType);
-                            setPlayerCombo(0);
-                        } else {
-                            setPlayerEffect(msg.payload.effect as ObstructionType);
-                            setOpponentCombo(0);
-                        }
-                        break;
-
-                    case 'OPPONENT_SELECT':
-                        if (msg.payload.player_id !== playerId) {
-                            toggleOpponentSelection(msg.payload.image_index);
-                        }
-                        break;
-                    case 'GAME_FINISHED':
-                        setIsVerifying(false);
-                        if (msg.payload.winner_id === playerId) {
-                            playWin();
-                        } else {
-                            playLose();
-                        }
-                        endGame(msg.payload.winner_id, msg.payload.message === 'Opponent Disconnected');
-                        break;
-                    case 'VERIFY_FAILED':
-                        setIsVerifying(false);
-                        if (feedback !== 'WRONG') {
-                            playError();
-                            setFeedback('WRONG');
-                            setPlayerCombo(0);
-                            setTimeout(() => setFeedback(null), 1000);
-                            resetMySelections();
-                        }
-                        break;
-                }
-            } catch (e) {
-                console.error("Failed to parse message:", e);
-            }
-        }
-    }, [lastMessage, setGameState, startGame, updateCpuPattern, updatePlayerPattern, updateOpponentScore, toggleOpponentSelection, resetOpponentSelections, resetMySelections, endGame, playerId, gameMode, setRoomInfo, setFeedback, setPlayerEffect, playError, playSuccess, playWin, playLose, playStart, feedback, playerCombo]);
-
+    // ── ログインフロー ───────────────────────────────────────
     const startCpuFlow = () => {
         initAudio();
         setSettingScore(5);
@@ -305,30 +107,10 @@ function App() {
         setLoginStep('DIFFICULTY');
     };
 
-    const confirmDifficulty = (level: number) => {
-        playStart();
-        setCpuDifficulty(level);
-        setWinningScore(settingScore);
+    const onConfirmDifficulty = (level: number) => {
         setGameMode('CPU');
-        setRoomInfo('LOCAL_CPU', playerId);
         setMyScore(0);
-        const myProb = generateCpuProblem();
-        const cpuProb = generateCpuProblem();
-        startGame(myProb.target, myProb.images);
-        updateCpuPattern(cpuProb.target, cpuProb.images);
-
-        // マルチプレイヤーモード（3人 or 4人）の場合、ダミーの対戦相手を生成
-        if (cpuPlayerCount > 1) {
-            const opponents = Array.from({ length: cpuPlayerCount - 1 }, (_, i) => ({
-                id: `CPU ${i + 1}`,
-                score: 0,
-                combo: 0,
-                effect: null as ObstructionType,
-                selections: [],
-                images: generateCpuProblem().images,
-            }));
-            useGameStore.getState().setBROpponents(opponents);
-        }
+        confirmDifficulty(level);
     };
 
     const joinRandom = () => {
@@ -336,7 +118,7 @@ function App() {
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: "RANDOM", player_id: playerId, winning_score: 5 }
+            payload: { room_id: 'RANDOM', player_id: playerId, winning_score: 5 },
         }));
     };
 
@@ -344,8 +126,6 @@ function App() {
         initAudio();
         setLoginStep('FRIEND');
     };
-
-
 
     const createRoom = () => {
         setIsCreator(true);
@@ -361,137 +141,52 @@ function App() {
     };
 
     const joinRoomInternal = (room: string) => {
-        if (!room) {
-            setLoginError("IDを入力してね");
-            return;
-        }
+        if (!room) { setLoginError('IDを入力してね'); return; }
         setGameMode('ONLINE');
-        setRoomInfo(room, playerId);
+        useGameStore.getState().setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
-            payload: { room_id: room, player_id: playerId, winning_score: settingScore }
+            payload: { room_id: room, player_id: playerId, winning_score: settingScore },
         }));
     };
 
-    const handleImageClick = (index: number) => {
-        if (isReloading || isVerifying) return;
-        toggleMySelection(index);
-        if (gameMode === 'ONLINE') {
+    const leaveRoom = () => {
+        stopMatching();
+        setIsVerifying(false);
+        if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
-                type: 'SELECT_IMAGE',
-                payload: { room_id: roomId, player_id: playerId, image_index: index }
+                type: 'LEAVE_ROOM',
+                payload: { room_id: roomId, player_id: playerId },
             }));
         }
-    };
-
-    const handleReload = () => {
-        if (isReloading || isVerifying) return;
-        setIsReloading(true);
-        resetMySelections();
-        setTimeout(() => {
-            if (gameMode === 'CPU') {
-                const nextProb = generateCpuProblem(target);
-                updatePlayerPattern(nextProb.target, nextProb.images);
-            }
-            setIsReloading(false);
-        }, 1000);
-    };
-
-    const handleVerify = () => {
-        if (isReloading || isVerifying) return;
-
-        if (gameMode === 'CPU') {
-            const correctIndices = getCorrectIndices(images, target);
-            const isCorrect = mySelections.length === correctIndices.length && mySelections.every(idx => correctIndices.includes(idx));
-
-            if (isCorrect) {
-                if (myScore + 1 < winningScore) {
-                    playSuccess();
-                    setFeedback('CORRECT');
-                    setTimeout(() => setFeedback(null), 1000);
-                }
-
-                setMyScore(prev => prev + 1);
-                resetMySelections();
-
-                const newCombo = playerCombo + 1;
-                setPlayerCombo(newCombo);
-                if (newCombo >= 2) {
-                    setPlayerCombo(0);
-                    setOpponentEffect(getRandomObstruction());
-                }
-
-                const nextProb = generateCpuProblem(target);
-                updatePlayerPattern(nextProb.target, nextProb.images);
-            } else {
-                playError();
-                setFeedback('WRONG');
-                setTimeout(() => setFeedback(null), 1000);
-                setPlayerCombo(0);
-                resetMySelections();
-            }
-        } else {
-            setIsVerifying(true);
-            sendMessage(JSON.stringify({
-                type: 'VERIFY',
-                payload: { room_id: roomId, player_id: playerId, selected_indices: mySelections }
-            }));
-
-            setTimeout(() => {
-                setIsVerifying(prev => {
-                    if (prev) return false;
-                    return prev;
-                });
-            }, 5000);
-        }
+        useGameStore.getState().setGameState('LOGIN');
+        setGameMode(null);
+        setMyScore(0);
     };
 
     const cancelWaiting = () => {
-        isMatchingRef.current = false;
-        setStartPopup(false);
-        setIsVerifying(false);
-
-        if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
-            sendMessage(JSON.stringify({
-                type: 'LEAVE_ROOM',
-                payload: { room_id: roomId, player_id: playerId }
-            }));
-        }
-        setGameState('LOGIN');
+        leaveRoom();
         setLoginStep(prev => prev === 'SELECT' ? 'SELECT' : 'FRIEND');
-        setGameMode(null);
         setInputRoom('');
         setLoginError('');
-        setMyScore(0);
     };
 
     const goHome = () => {
-        isMatchingRef.current = false;
-        setStartPopup(false);
-        setIsVerifying(false);
-
-        if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
-            sendMessage(JSON.stringify({
-                type: 'LEAVE_ROOM',
-                payload: { room_id: roomId, player_id: playerId }
-            }));
-        }
-        setGameState('LOGIN');
+        leaveRoom();
         setLoginStep('SELECT');
-        setGameMode(null);
         setInputRoom('');
         setLoginError('');
-        setMyScore(0);
     };
 
+    // ── JSX ─────────────────────────────────────────────────
     return (
         <div className="h-screen w-screen bg-white flex flex-col items-center font-sans text-gray-800 overflow-hidden relative">
+
+            {/* 妨害バナー群 */}
             <AnimatePresence>
                 {playerEffect && (
-                    <motion.div
-                        initial={{ y: -50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -50, opacity: 0 }}
+                    <motion.div key="player-effect"
+                        initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
                         className="fixed top-24 left-0 right-0 z-[60] flex justify-center pointer-events-none"
                     >
                         <div className="bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-red-200">
@@ -500,10 +195,8 @@ function App() {
                     </motion.div>
                 )}
                 {opponentEffect && (
-                    <motion.div
-                        initial={{ y: -50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -50, opacity: 0 }}
+                    <motion.div key="opponent-effect"
+                        initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
                         className="fixed top-36 left-0 right-0 z-[60] flex justify-center pointer-events-none"
                     >
                         <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
@@ -511,14 +204,23 @@ function App() {
                         </div>
                     </motion.div>
                 )}
+                {brAttackEffect && (
+                    <motion.div key="br-attack"
+                        initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
+                        className="fixed top-36 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+                    >
+                        <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
+                            ⚔️ 全員を妨害！: {brAttackEffect}
+                        </div>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
+            {/* カウントダウン演出 */}
             <AnimatePresence>
                 {startPopup && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 1.5 }}
+                        initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.5 }}
                         className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/40 pointer-events-auto"
                     >
                         <div className="bg-white p-12 rounded-3xl shadow-2xl flex flex-col items-center border-4 border-[#5B46F5] pointer-events-auto">
@@ -533,12 +235,11 @@ function App() {
                 )}
             </AnimatePresence>
 
+            {/* 正誤フィードバック */}
             <AnimatePresence>
                 {feedback && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.5 }}
+                        initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}
                         className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
                     >
                         {feedback === 'CORRECT' ? (
@@ -554,9 +255,9 @@ function App() {
                 )}
             </AnimatePresence>
 
+            {/* ホームボタン */}
             {(gameState !== 'LOGIN' || loginStep !== 'SELECT') && (
-                <button
-                    onClick={goHome}
+                <button onClick={goHome}
                     className="absolute top-2 left-2 z-[100] flex items-center gap-1 px-3 py-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition bg-white/80 backdrop-blur-sm shadow-sm cursor-pointer pointer-events-auto"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -569,11 +270,7 @@ function App() {
             <div className="w-full h-full max-w-4xl flex flex-col relative">
                 <div className="flex flex-col items-center mt-2 mb-0 shrink-0 z-40 pointer-events-none">
                     <h1 className="pointer-events-auto">
-                        <img
-                            src="/images/recaptch_logo.png"
-                            alt="reCAPTCHA ゲーム"
-                            className="h-20 md:h-32 w-auto"
-                        />
+                        <img src="/images/recaptch_logo.png" alt="reCAPTCHA ゲーム" className="h-20 md:h-32 w-auto" />
                     </h1>
                 </div>
 
@@ -594,7 +291,7 @@ function App() {
                             createRoom={createRoom}
                             enterRoomFlow={enterRoomFlow}
                             joinRoomInternal={joinRoomInternal}
-                            confirmDifficulty={confirmDifficulty}
+                            confirmDifficulty={onConfirmDifficulty}
                             confirmPlayerCount={confirmPlayerCount}
                             cpuPlayerCount={cpuPlayerCount}
                         />
@@ -617,7 +314,7 @@ function App() {
                         />
                     )}
 
-                    {gameState === 'PLAYING' && cpuPlayerCount > 1 && (
+                    {gameState === 'PLAYING' && gameMode === 'CPU' && cpuPlayerCount > 1 && (
                         <BRGameScreen
                             myScore={myScore}
                             winningScore={winningScore}

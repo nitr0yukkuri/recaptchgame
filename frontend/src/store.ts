@@ -5,6 +5,16 @@ export type FeedbackType = 'CORRECT' | 'WRONG' | null;
 // 妨害要素に GRAYSCALE, SEPIA, SKEW を追加
 export type ObstructionType = 'SHAKE' | 'SPIN' | 'BLUR' | 'INVERT' | 'ONION_RAIN' | 'GRAYSCALE' | 'SEPIA' | 'SKEW' | null;
 
+// バトロワ対戦相手の型
+export type BROpponent = {
+    id: string;
+    score: number;
+    combo: number;
+    effect: ObstructionType;
+    selections: number[];
+    images: string[];
+};
+
 interface Store {
     gameState: GameState;
     roomId: string;
@@ -29,15 +39,9 @@ interface Store {
     opponentEffect: ObstructionType;
 
     // バトロワ専用ステート
-    brOpponents: {
-        id: string;
-        score: number;
-        combo: number;
-        effect: ObstructionType;
-        selections: number[];
-        images: string[];
-    }[];
-    setBROpponents: (opponents: any[]) => void;
+    brOpponents: BROpponent[];
+    setBROpponents: (opponents: BROpponent[]) => void;
+    setBROpponentEffect: (id: string, effect: ObstructionType) => void;
 
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
@@ -88,6 +92,9 @@ export const useGameStore = create<Store>((set) => ({
 
     brOpponents: [],
     setBROpponents: (opponents) => set({ brOpponents: opponents }),
+    setBROpponentEffect: (id, effect) => set((state) => ({
+        brOpponents: state.brOpponents.map(opp => opp.id === id ? { ...opp, effect } : opp),
+    })),
 
     setGameState: (state) => set({ gameState: state }),
     setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),
