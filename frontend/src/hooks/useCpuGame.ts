@@ -36,33 +36,35 @@ export function useCpuGame({
 
     const { gameState, opponentScore } = useGameStore();
 
+    const shouldSkipWithObstruction = () => Math.random() < 0.95;
+
     // ── CPUゲームループ ──────────────────────────────────────
     useEffect(() => {
         if (gameMode !== 'CPU' || gameState !== 'PLAYING') return;
 
         const difficulty = useGameStore.getState().cpuDifficulty;
         let intervalTime = 800;
-        let actionProb = 0.3;
-        let submitProb = 0.5;
-        if (difficulty === 1) { intervalTime = 1200; actionProb = 0.5; submitProb = 0.3; }
-        else if (difficulty === 3) { intervalTime = 700; actionProb = 0.2; submitProb = 0.55; }
+        let actionProb = 0.35;
+        let submitProb = 0.35;
+        if (difficulty === 1) { intervalTime = 1400; actionProb = 0.6; submitProb = 0.2; }
+        else if (difficulty === 3) { intervalTime = 900; actionProb = 0.25; submitProb = 0.5; }
 
         const interval = setInterval(() => {
             const store = useGameStore.getState();
 
             if (cpuPlayerCount === 1) {
                 // 1vs1 CPU シミュレーション
-                if (store.opponentEffect && Math.random() > 0.5) return;
+                if (store.opponentEffect && shouldSkipWithObstruction()) return;
 
                 const correctIndices = getCorrectIndices(store.cpuImages, store.cpuTarget);
                 const remaining = correctIndices.filter(i => !store.opponentSelections.includes(i));
 
                 if (remaining.length > 0) {
-                    if (Math.random() > actionProb) {
+                    if (Math.random() < actionProb) {
                         store.toggleOpponentSelection(remaining[Math.floor(Math.random() * remaining.length)]);
                     }
                 } else {
-                    if (Math.random() > (1 - submitProb)) {
+                    if (Math.random() < submitProb) {
                         store.updateOpponentScore(store.opponentScore + 1);
                         store.resetOpponentSelections();
                         const newCombo = store.opponentCombo + 1;
@@ -79,25 +81,25 @@ export function useCpuGame({
                 // BRモード CPU シミュレーション（完全 immutable）
                 let changed = false;
                 const nextOpponents: BROpponent[] = store.brOpponents.map(opp => {
-                    if (opp.effect && Math.random() > 0.5) return opp;
+                    if (opp.effect && shouldSkipWithObstruction()) return opp;
 
-                    const correctIndices = getCorrectIndices(opp.images, opp.id);
+                    const correctIndices = getCorrectIndices(opp.images, opp.target);
                     const remaining = correctIndices.filter(i => !opp.selections.includes(i));
 
                     if (remaining.length > 0) {
-                        if (Math.random() > actionProb) {
+                        if (Math.random() < actionProb) {
                             changed = true;
                             return { ...opp, selections: [...opp.selections, remaining[Math.floor(Math.random() * remaining.length)]] };
                         }
                         return opp;
                     } else {
-                        if (Math.random() > (1 - submitProb)) {
+                        if (Math.random() < submitProb) {
                             const newCombo = opp.combo + 1;
                             const fired = newCombo >= 2;
                             if (fired) store.setPlayerEffect(getRandomObstruction());
                             const next = generateCpuProblem();
                             changed = true;
-                            return { ...opp, score: opp.score + 1, selections: [], combo: fired ? 0 : newCombo, images: next.images };
+                            return { ...opp, score: opp.score + 1, selections: [], combo: fired ? 0 : newCombo, images: next.images, target: next.target };
                         }
                         return opp;
                     }
@@ -133,14 +135,18 @@ export function useCpuGame({
         store.updateCpuPattern(cpuProb.target, cpuProb.images);
 
         if (cpuPlayerCount > 1) {
-            const opponents: BROpponent[] = Array.from({ length: cpuPlayerCount - 1 }, (_, i) => ({
-                id: `CPU ${i + 1}`,
-                score: 0,
-                combo: 0,
-                effect: null,
-                selections: [],
-                images: generateCpuProblem().images,
-            }));
+            const opponents: BROpponent[] = Array.from({ length: cpuPlayerCount - 1 }, (_, i) => {
+                const prob = generateCpuProblem();
+                return {
+                    id: `CPU ${i + 1}`,
+                    score: 0,
+                    combo: 0,
+                    effect: null,
+                    selections: [],
+                    images: prob.images,
+                    target: prob.target,
+                };
+            });
             store.setBROpponents(opponents);
         }
     };
