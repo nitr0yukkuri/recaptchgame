@@ -96,7 +96,11 @@ export function useCpuGame({
                         if (Math.random() < submitProb) {
                             const newCombo = opp.combo + 1;
                             const fired = newCombo >= 2;
-                            if (fired) store.setPlayerEffect(getRandomObstruction());
+                            if (fired) {
+                                const effect = getRandomObstruction();
+                                // BR複数人の場合は全員に妨害を付与
+                                fireBRObstruction(effect);
+                            }
                             const next = generateCpuProblem();
                             changed = true;
                             return { ...opp, score: opp.score + 1, selections: [], combo: fired ? 0 : newCombo, images: next.images, target: next.target };
