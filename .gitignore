@@ -1,1 +1,10 @@
 node_modules
+dist/
+frontend/dist/
+backend/recaptchagame
+backend/recaptchagame-backend.exe
+backend/game.exe
+.DS_Store
+*.swp
+*.swo
+*.tmp
