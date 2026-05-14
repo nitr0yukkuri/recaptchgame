@@ -13,6 +13,7 @@ export type BROpponent = {
     effect: ObstructionType;
     selections: number[];
     images: string[];
+    target: string;  // 現在の出題ターゲット（getCorrectIndices に渡す）
 };
 
 interface Store {
