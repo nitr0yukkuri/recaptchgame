@@ -144,14 +144,19 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			uc.roomRepo.SetWaitingRoom(room)
 		}
 	} else if !createdNewRoom {
-		// ルームが存在する場合、空いているスロットにプレイヤーを設定
-		if room.Player1 == nil || room.Player1.ID == "" {
-			room.Player1 = domain.NewPlayer(input.PlayerID)
-		} else if room.Player2 == nil || room.Player2.ID == "" {
-			room.Player2 = domain.NewPlayer(input.PlayerID)
+		// ルームが存在する場合、まず重複参加をチェックする
+		if (room.Player1 != nil && room.Player1.ID == input.PlayerID) || (room.Player2 != nil && room.Player2.ID == input.PlayerID) {
+			// 既に同一プレイヤーが参加中 => 再登録は行わない
 		} else {
-			// ルームが満員（2人以上）の場合は参加不可
-			return nil, fmt.Errorf("room is full")
+			// 空いているスロットにプレイヤーを設定
+			if room.Player1 == nil || room.Player1.ID == "" {
+				room.Player1 = domain.NewPlayer(input.PlayerID)
+			} else if room.Player2 == nil || room.Player2.ID == "" {
+				room.Player2 = domain.NewPlayer(input.PlayerID)
+			} else {
+				// ルームが満員（2人以上）の場合は参加不可
+				return nil, fmt.Errorf("room is full")
+			}
 		}
 	}
 
