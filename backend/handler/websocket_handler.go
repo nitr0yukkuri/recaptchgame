@@ -645,6 +645,7 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 	if sessionID != "" {
 		h.sessionMu.Lock()
 		delete(h.sessionToPlayer, sessionID)
+		delete(h.playerToSession, input.PlayerID)
 		h.sessionMu.Unlock()
 	}
 }
