@@ -12,11 +12,12 @@ import (
 type RoomExecutionGuard struct {
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+	counts map[string]int
 }
 
 // NewRoomExecutionGuard は新しいRoomExecutionGuardを生成
 func NewRoomExecutionGuard() *RoomExecutionGuard {
-	return &RoomExecutionGuard{locks: make(map[string]*sync.Mutex)}
+	return &RoomExecutionGuard{locks: make(map[string]*sync.Mutex), counts: make(map[string]int)}
 }
 
 // Lock は指定ルームのロックを取得し、解除関数を返す
@@ -27,11 +28,19 @@ func (g *RoomExecutionGuard) Lock(roomID string) func() {
 		lock = &sync.Mutex{}
 		g.locks[roomID] = lock
 	}
+	g.counts[roomID]++
 	g.mu.Unlock()
 
 	lock.Lock()
 	return func() {
 		lock.Unlock()
+		g.mu.Lock()
+		g.counts[roomID]--
+		if g.counts[roomID] == 0 {
+			delete(g.locks, roomID)
+			delete(g.counts, roomID)
+		}
+		g.mu.Unlock()
 	}
 }
 
