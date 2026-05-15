@@ -112,39 +112,37 @@ type JoinRoomOutput struct {
 
 // Execute はルーム参加を実行
 func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error) {
-	lockID := input.RoomID
-	if lockID == "RANDOM" {
-		lockID = "GLOBAL_RANDOM_LOCK"
-	}
-	unlock := uc.roomGuard.Lock(lockID)
-	defer unlock()
-
 	actualRoomID := input.RoomID
 	createdNewRoom := false
 
-	// RANDOMの場合は待機ルームを取得/作成
+	// RANDOMの場合はまずグローバルロックで待機ルームを決定/IDを生成する
 	if input.RoomID == "RANDOM" {
+		globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
 		isFull := waitingRoom != nil && waitingRoom.Player1 != nil && waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != ""
 		if waitingRoom == nil || isFull {
-			// 新しいルームを作成
-			// ✅ IDGenerator を使用（DI）
+			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
-			newRoom := domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
-			uc.roomRepo.Save(newRoom)
-			uc.roomRepo.SetWaitingRoom(newRoom)
 			createdNewRoom = true
 		} else {
 			actualRoomID = waitingRoom.ID
 		}
+		globalUnlock()
 	}
 
-	// ルームを取得
+	// 個別ルームのロックを取得して以降はそのルーム単位で排他制御する
+	unlock := uc.roomGuard.Lock(actualRoomID)
+	defer unlock()
+
+	// ルームを取得/作成
 	room, err := uc.roomRepo.FindByID(actualRoomID)
 	if err != nil {
-		// ルームが存在しない場合は作成
+		// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
 		room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
 		uc.roomRepo.Save(room)
+		if input.RoomID == "RANDOM" {
+			uc.roomRepo.SetWaitingRoom(room)
+		}
 	} else if !createdNewRoom {
 		// ルームが存在する場合、空いているスロットにプレイヤーを設定
 		if room.Player1 == nil || room.Player1.ID == "" {
