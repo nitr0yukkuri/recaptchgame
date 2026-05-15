@@ -249,6 +249,7 @@ type WebSocketHandler struct {
 	roomRepo        domain.RoomRepository
 	sessionMu       sync.Mutex
 	sessionToPlayer map[string]string
+	playerToSession map[string]string
 	graceTimers     map[string]*time.Timer
 }
 
@@ -269,6 +270,7 @@ func NewWebSocketHandler(
 		leaveRoomUC:     leaveRoomUC,
 		roomRepo:        roomRepo,
 		sessionToPlayer: make(map[string]string),
+		playerToSession: make(map[string]string),
 		graceTimers:     make(map[string]*time.Timer),
 	}
 }
@@ -577,17 +579,13 @@ func (h *WebSocketHandler) bindSession(sessionID string, playerID string) {
 	h.sessionMu.Lock()
 	defer h.sessionMu.Unlock()
 	h.sessionToPlayer[sessionID] = playerID
+	h.playerToSession[playerID] = sessionID
 }
 
 func (h *WebSocketHandler) getSessionIDByPlayerID(playerID string) string {
 	h.sessionMu.Lock()
 	defer h.sessionMu.Unlock()
-	for sessionID, mappedPlayerID := range h.sessionToPlayer {
-		if mappedPlayerID == playerID {
-			return sessionID
-		}
-	}
-	return ""
+	return h.playerToSession[playerID]
 }
 
 func (h *WebSocketHandler) cancelGracefulLeave(sessionID string) {
