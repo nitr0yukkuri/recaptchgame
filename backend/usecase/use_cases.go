@@ -130,34 +130,61 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		globalUnlock()
 	}
 
-	// 個別ルームのロックを取得して以降はそのルーム単位で排他制御する
-	unlock := uc.roomGuard.Lock(actualRoomID)
-	defer unlock()
+	// 個別ルームのロックを取りつつ、満員競合が起きた場合はRANDOMなら再試行する
+	for {
+		unlock := uc.roomGuard.Lock(actualRoomID)
 
-	// ルームを取得/作成
-	room, err := uc.roomRepo.FindByID(actualRoomID)
-	if err != nil {
-		// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
-		room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
-		uc.roomRepo.Save(room)
-		if input.RoomID == "RANDOM" {
-			uc.roomRepo.SetWaitingRoom(room)
-		}
-	} else if !createdNewRoom {
-		// ルームが存在する場合、まず重複参加をチェックする
-		if (room.Player1 != nil && room.Player1.ID == input.PlayerID) || (room.Player2 != nil && room.Player2.ID == input.PlayerID) {
-			// 既に同一プレイヤーが参加中 => 再登録は行わない
-		} else {
-			// 空いているスロットにプレイヤーを設定
-			if room.Player1 == nil || room.Player1.ID == "" {
-				room.Player1 = domain.NewPlayer(input.PlayerID)
-			} else if room.Player2 == nil || room.Player2.ID == "" {
-				room.Player2 = domain.NewPlayer(input.PlayerID)
-			} else {
-				// ルームが満員（2人以上）の場合は参加不可
-				return nil, fmt.Errorf("room is full")
+		room, err := uc.roomRepo.FindByID(actualRoomID)
+		if err != nil {
+			// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
+			room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
+			uc.roomRepo.Save(room)
+			if input.RoomID == "RANDOM" {
+				uc.roomRepo.SetWaitingRoom(room)
 			}
+			unlock()
+			break
 		}
+
+		// 既に同一プレイヤーがいる場合は再登録しない
+		if (room.Player1 != nil && room.Player1.ID == input.PlayerID) || (room.Player2 != nil && room.Player2.ID == input.PlayerID) {
+			unlock()
+			break
+		}
+
+		// 空きスロットがあれば参加
+		if room.Player1 == nil || room.Player1.ID == "" {
+			room.Player1 = domain.NewPlayer(input.PlayerID)
+			uc.roomRepo.Save(room)
+			unlock()
+			break
+		} else if room.Player2 == nil || room.Player2.ID == "" {
+			room.Player2 = domain.NewPlayer(input.PlayerID)
+			uc.roomRepo.Save(room)
+			unlock()
+			break
+		}
+
+		// ここに到達するのはルームが満員のとき
+		unlock()
+		if input.RoomID == "RANDOM" {
+			// 再試行: 新しい待機ルームを確保するためにグローバルロック下で再決定
+			globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
+			waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
+			// 他が既に待機ルームをセットしていればそれを使う
+			if waitingRoom != nil {
+				actualRoomID = waitingRoom.ID
+				globalUnlock()
+				continue
+			}
+			// 新しいルームIDを生成して再試行
+			actualRoomID = uc.idGenerator.GenerateRoomID()
+			createdNewRoom = true
+			globalUnlock()
+			continue
+		}
+
+		return nil, fmt.Errorf("room is full")
 	}
 
 	// クライアントを割り当て
