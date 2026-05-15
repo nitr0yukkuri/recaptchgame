@@ -198,7 +198,10 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	if room.Player1 != nil && room.Player1.ID != "" && room.Player2 != nil && room.Player2.ID != "" {
 		roomSize = 2
 		if input.RoomID == "RANDOM" {
-			uc.roomRepo.ClearWaitingRoom()
+			waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
+			if waitingRoom != nil && waitingRoom.ID == actualRoomID {
+				uc.roomRepo.ClearWaitingRoom()
+			}
 		}
 	}
 
