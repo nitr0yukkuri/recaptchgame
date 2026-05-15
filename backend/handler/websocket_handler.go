@@ -514,10 +514,12 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 	}
 
 	if output.IsCorrect {
-		// 正解：自分に新しい問題を送信
+		// 正解：自分に新しい問題と現在のスコア/コンボを送信して同期
 		updateMy := UpdatePatternPayload{
-			Target: output.NewTarget,
-			Images: output.NewImages,
+			Target:       output.NewTarget,
+			Images:       output.NewImages,
+			CurrentScore: output.CurrentScore,
+			CurrentCombo: output.CurrentCombo,
 		}
 		bMy, _ := json.Marshal(updateMy)
 		_ = h.wsManager.SendToClient(clientID, Message{Type: "UPDATE_PATTERN", Payload: bMy})
@@ -701,6 +703,8 @@ type VerifyPayload struct {
 type UpdatePatternPayload struct {
 	Target string   `json:"target"`
 	Images []string `json:"images"`
+	CurrentScore int `json:"current_score,omitempty"`
+	CurrentCombo int `json:"current_combo,omitempty"`
 }
 
 type OpponentUpdatePayload struct {

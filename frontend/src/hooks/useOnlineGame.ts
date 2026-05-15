@@ -104,9 +104,19 @@ export function useOnlineGame({
                     playSuccess();
                     store.updatePlayerPattern(msg.payload.target, msg.payload.images);
                     store.setFeedback('CORRECT');
-                    // stale closure 回避: getState() で最新 playerCombo を取得
-                    store.setPlayerCombo(useGameStore.getState().playerCombo + 1);
-                    setMyScore(prev => prev + 1);
+                    // サーバーが送る現在のスコア/コンボがあればそれを優先、なければ従来のローカル増分を行う
+                    if (msg.payload.current_combo !== undefined) {
+                        store.setPlayerCombo(msg.payload.current_combo);
+                    } else {
+                        store.setPlayerCombo(useGameStore.getState().playerCombo + 1);
+                    }
+
+                    if (msg.payload.current_score !== undefined) {
+                        setMyScore(() => msg.payload.current_score);
+                    } else {
+                        setMyScore(prev => prev + 1);
+                    }
+
                     setTimeout(() => store.setFeedback(null), 1000);
                     break;
 
