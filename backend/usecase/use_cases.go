@@ -113,7 +113,6 @@ type JoinRoomOutput struct {
 // Execute はルーム参加を実行
 func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error) {
 	actualRoomID := input.RoomID
-	createdNewRoom := false
 
 	// RANDOMの場合はまずグローバルロックで待機ルームを決定/IDを生成する
 	if input.RoomID == "RANDOM" {
@@ -123,7 +122,6 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		if waitingRoom == nil || isFull {
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
-			createdNewRoom = true
 		} else {
 			actualRoomID = waitingRoom.ID
 		}
@@ -168,23 +166,35 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		// ここに到達するのはルームが満員のとき
 		unlock()
 		if input.RoomID == "RANDOM" {
-			// 再試行: 新しい待機ルームを確保するためにグローバルロック下で再決定
+			// 再試行: グローバルロック下で待機ルームを再確認
 			globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
-			// 他が既に待機ルームをセットしていればそれを使う
 			if waitingRoom != nil {
-				actualRoomID = waitingRoom.ID
+				// 待機ルームがまだ有効（いずれかのスロットに空きがある）なら使う
+				if (waitingRoom.Player1 == nil || waitingRoom.Player1.ID == "") || (waitingRoom.Player2 == nil || waitingRoom.Player2.ID == "") {
+					actualRoomID = waitingRoom.ID
+					globalUnlock()
+					continue
+				}
+				// 待機ルームが既に満員に変わっていたらクリアして新規作成へ
+				uc.roomRepo.ClearWaitingRoom()
+				actualRoomID = uc.idGenerator.GenerateRoomID()
 				globalUnlock()
 				continue
 			}
-			// 新しいルームIDを生成して再試行
+			// 待機ルームが無ければ新規作成して再試行
 			actualRoomID = uc.idGenerator.GenerateRoomID()
-			createdNewRoom = true
 			globalUnlock()
 			continue
 		}
 
 		return nil, fmt.Errorf("room is full")
+	}
+
+	// ルームを最新の状態で取得
+	room, err := uc.roomRepo.FindByID(actualRoomID)
+	if err != nil {
+		return nil, err
 	}
 
 	// クライアントを割り当て
