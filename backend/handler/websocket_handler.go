@@ -490,6 +490,12 @@ func (h *WebSocketHandler) handleSelectImage(clientID string, payload json.RawMe
 	roomID, ok := h.wsManager.GetRoomID(clientID)
 	if ok {
 		for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
+			// 同一プレイヤーの別タブには送らない
+			if pid, ok := h.wsManager.GetPlayerID(cID); ok {
+				if pid == p.PlayerID {
+					continue
+				}
+			}
 			_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_SELECT", Payload: payload})
 		}
 	}
@@ -535,6 +541,12 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			bOpp, _ := json.Marshal(updateOpp)
 
 			for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
+				// 同一プレイヤーの別タブにはOPPONENT_UPDATEを送らない
+				if pid, ok := h.wsManager.GetPlayerID(cID); ok {
+					if pid == p.PlayerID {
+						continue
+					}
+				}
 				_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 			}
 
