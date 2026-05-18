@@ -73,7 +73,7 @@ function App() {
         stopMatching,
     } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart });
 
-    const [notice, setNotice] = useState<string | null>(null);
+    
 
     // ── ゲームアクション（モード共通の接続点）────────────────
     const handleImageClick = (index: number) => {
@@ -90,11 +90,7 @@ function App() {
     const handleVerify = () => {
         if (isReloading || isVerifying) return;
         const selections = useGameStore.getState().mySelections;
-        if (!selections || selections.length === 0) {
-            setNotice('画像を選んでね');
-            setTimeout(() => setNotice(null), 1400);
-            return;
-        }
+        if (!selections || selections.length === 0) return;
 
         if (gameMode === 'CPU') {
             handleVerifyCpu(winningScore);
@@ -271,21 +267,7 @@ function App() {
                 )}
             </AnimatePresence>
 
-            {/* 選択促しの通知 */}
-            <AnimatePresence>
-                {notice && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="fixed top-36 left-0 right-0 z-[75] flex justify-center pointer-events-none"
-                    >
-                        <div className="bg-white p-4 rounded-full shadow-lg text-gray-700 font-semibold">
-                            {notice}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            
 
             {/* カウントダウン演出 */}
             <AnimatePresence>
