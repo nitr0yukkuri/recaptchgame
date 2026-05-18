@@ -133,13 +133,11 @@ export function useOnlineGame({
                     if (msg.payload.attacker_id === store.playerId) {
                         store.setOpponentEffect(msg.payload.effect as ObstructionType);
                         store.setPlayerCombo(0);
-                        // 3秒後に相手のエフェクトを解除
-                        setTimeout(() => store.setOpponentEffect(null), 3000);
+                        // effect の解除は useObstructionEffect に一元管理
                     } else {
                         store.setPlayerEffect(msg.payload.effect as ObstructionType);
                         store.setOpponentCombo(0);
-                        // 3秒後に自分のエフェクトを解除
-                        setTimeout(() => store.setPlayerEffect(null), 3000);
+                        // effect の解除は useObstructionEffect に一元管理
                     }
                     break;
 
