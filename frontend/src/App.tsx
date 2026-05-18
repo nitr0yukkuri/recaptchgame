@@ -275,10 +275,10 @@ function App() {
             <AnimatePresence>
                 {notice && (
                     <motion.div
-                        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                        className="fixed top-32 left-0 right-0 z-[75] flex justify-center pointer-events-none"
+                        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 2 }} exit={{ opacity: 0, y: -6 }}
+                        className="fixed top-40 left-0 right-0 z-[75] flex justify-center pointer-events-none"
                     >
-                        <div className="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-full shadow text-yellow-700 font-semibold">
+                        <div className="px-2 py-1 text-yellow-500 font-semibold">
                             {notice}
                         </div>
                     </motion.div>
