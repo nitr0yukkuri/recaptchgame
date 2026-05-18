@@ -276,7 +276,7 @@ function App() {
                 {notice && (
                     <motion.div
                         initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 2 }} exit={{ opacity: 0, y: -6 }}
-                        className="fixed top-40 left-0 right-0 z-[75] flex justify-center pointer-events-none"
+                        className="fixed top-44 left-0 right-0 z-[75] flex justify-center pointer-events-none"
                     >
                         <div className="px-2 py-1 text-yellow-500 font-semibold">
                             {notice}
