@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState } from 'react';
+import { useGameController } from './hooks/useGameController';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from './store';
@@ -87,12 +88,13 @@ function App() {
         }
     };
 
+    const controller = useGameController();
     const handleVerify = () => {
         if (isReloading || isVerifying) return;
         const selections = useGameStore.getState().mySelections;
         if (!selections || selections.length === 0) {
             setNotice('画像を選んでね');
-            setTimeout(() => setNotice(null), 1400);
+            controller.scheduleNoticeHide(sessionID, () => setNotice(null), 1400);
             return;
         }
 
@@ -285,7 +287,7 @@ function App() {
                 )}
             </AnimatePresence>
 
-            
+
 
             {/* カウントダウン演出 */}
             <AnimatePresence>

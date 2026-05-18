@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useGameController } from '../hooks/useGameController';
 import { QRCodeSVG } from 'qrcode.react';
 
 type WaitingScreenProps = {
@@ -25,7 +26,8 @@ const buildInviteUrl = (roomId: string) => {
 
 export const WaitingScreen = ({ roomId, cancelWaiting }: WaitingScreenProps) => {
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-    const copyResetTimerRef = useRef<number | null>(null);
+    const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const controller = useGameController();
 
     const invite = useMemo(() => buildInviteUrl(roomId), [roomId]);
 
@@ -35,11 +37,9 @@ export const WaitingScreen = ({ roomId, cancelWaiting }: WaitingScreenProps) => 
 
     useEffect(() => {
         return () => {
-            if (copyResetTimerRef.current !== null) {
-                window.clearTimeout(copyResetTimerRef.current);
-            }
+            controller.clearNamed(`copyReset:${roomId}`);
         };
-    }, []);
+    }, [controller, roomId]);
 
     const handleCopy = async () => {
         if (!invite.url) {
@@ -63,9 +63,9 @@ export const WaitingScreen = ({ roomId, cancelWaiting }: WaitingScreenProps) => 
             }
             setCopyState('copied');
             if (copyResetTimerRef.current !== null) {
-                window.clearTimeout(copyResetTimerRef.current);
+                controller.clearNamed(`copyReset:${roomId}`);
             }
-            copyResetTimerRef.current = window.setTimeout(() => {
+            copyResetTimerRef.current = controller.scheduleCopyReset(roomId, () => {
                 setCopyState(prev => (prev === 'copied' ? 'idle' : prev));
             }, 1800);
         } catch {

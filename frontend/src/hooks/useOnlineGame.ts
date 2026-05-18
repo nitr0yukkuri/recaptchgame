@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore, ObstructionType } from '../store';
 import { sleep } from '../utils/game';
+import { useGameController } from './useGameController';
 
 interface UseOnlineGameOptions {
     sendMessage: (msg: string) => void;
@@ -37,6 +38,8 @@ export function useOnlineGame({
     const [startPopup, setStartPopup] = useState(false);
     const [startMessage, setStartMessage] = useState('Start!');
     const [isCreator, setIsCreator] = useState(false);
+
+    const controller = useGameController();
 
     const isMatchingRef = useRef(false);
     const prevMessageRef = useRef<MessageEvent<any> | null>(null);
@@ -95,7 +98,8 @@ export function useOnlineGame({
                         if (!isMatchingRef.current) { setStartPopup(false); return; }
                         setStartMessage('START!'); await sleep(500);
                         if (!isMatchingRef.current) { setStartPopup(false); return; }
-                        setTimeout(() => setStartPopup(false), 500);
+                        // schedule via controller (created once per hook)
+                        controller.scheduleStartPopupHide(store.playerId, () => setStartPopup(false), 500);
                     })();
                     break;
 
@@ -188,8 +192,8 @@ export function useOnlineGame({
             type: 'VERIFY',
             payload: { room_id: store.roomId, player_id: store.playerId, selected_indices: store.mySelections },
         }));
-        // タイムアウトフォールバック
-        setTimeout(() => setIsVerifying(prev => prev ? false : prev), 5000);
+        // タイムアウトフォールバック（コントローラで一元管理）
+        controller.scheduleVerifyFallback(store.playerId, () => setIsVerifying(prev => prev ? false : prev), 5000);
     };
 
     const stopMatching = () => {

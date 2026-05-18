@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGameStore, ObstructionType, BROpponent } from '../store';
 import { generateCpuProblem, getCorrectIndices, getRandomObstruction } from '../utils/game';
+import { useGameController } from './useGameController';
 
 interface UseCpuGameOptions {
     gameMode: 'CPU' | 'ONLINE' | null;
@@ -35,6 +36,8 @@ export function useCpuGame({
     const [isReloading, setIsReloading] = useState(false);
 
     const { gameState, opponentScore } = useGameStore();
+
+    const controller = useGameController();
 
     const shouldSkipWithObstruction = () => Math.random() < 0.95;
 
@@ -167,7 +170,7 @@ export function useCpuGame({
         if (isReloading) return;
         setIsReloading(true);
         useGameStore.getState().resetMySelections();
-        setTimeout(() => {
+        controller.scheduleReload(useGameStore.getState().playerId ?? 'local_reload', () => {
             const store = useGameStore.getState();
             const next = generateCpuProblem(store.target);
             store.updatePlayerPattern(next.target, next.images);
