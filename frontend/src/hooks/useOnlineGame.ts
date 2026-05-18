@@ -179,6 +179,12 @@ export function useOnlineGame({
     // ── 回答送信（オンライン用）──────────────────────────────
     const handleVerifyOnline = () => {
         const store = useGameStore.getState();
+        // Guard: do not send VERIFY when nothing is selected
+        if (!store.mySelections || store.mySelections.length === 0) {
+            console.warn('Attempted to VERIFY with no selections. Aborting.');
+            setIsVerifying(false);
+            return;
+        }
         setIsVerifying(true);
         sendMessage(JSON.stringify({
             type: 'VERIFY',
