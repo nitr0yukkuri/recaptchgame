@@ -26,8 +26,13 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
         if (!playerEffect) return;
         playObstruction();
         const t = setTimeout(() => setPlayerEffect(null), 3000);
-        // Safety fallback: if something prevents the 3s clear, ensure effect cleared within 10s
-        const fallback = setTimeout(() => setPlayerEffect(null), 10000);
+        // Safety fallback: if something prevents the 3s clear, ensure effect cleared within 4s
+        const fallback = setTimeout(() => {
+            if (useGameStore.getState().playerEffect) {
+                console.warn('playerEffect fallback cleared after 4s');
+                setPlayerEffect(null);
+            }
+        }, 4000);
         return () => {
             clearTimeout(t);
             clearTimeout(fallback);
@@ -38,7 +43,12 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
     useEffect(() => {
         if (!opponentEffect) return;
         const t = setTimeout(() => setOpponentEffect(null), 3000);
-        const fallback = setTimeout(() => setOpponentEffect(null), 10000);
+        const fallback = setTimeout(() => {
+            if (useGameStore.getState().opponentEffect) {
+                console.warn('opponentEffect fallback cleared after 4s');
+                setOpponentEffect(null);
+            }
+        }, 4000);
         return () => {
             clearTimeout(t);
             clearTimeout(fallback);
