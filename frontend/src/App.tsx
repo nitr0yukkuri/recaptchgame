@@ -89,15 +89,16 @@ function App() {
 
     const handleVerify = () => {
         if (isReloading || isVerifying) return;
+        const selections = useGameStore.getState().mySelections;
+        if (!selections || selections.length === 0) {
+            setNotice('画像を選んでね');
+            setTimeout(() => setNotice(null), 1400);
+            return;
+        }
+
         if (gameMode === 'CPU') {
             handleVerifyCpu(winningScore);
         } else {
-            const selections = useGameStore.getState().mySelections;
-            if (!selections || selections.length === 0) {
-                setNotice('画像を選んでね');
-                setTimeout(() => setNotice(null), 1400);
-                return;
-            }
             handleVerifyOnline();
         }
     };
