@@ -60,20 +60,28 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
      * 全brOpponentsにeffectをセットし、個別タイマーで3秒後にクリア。
      * バナーも3秒間表示。
      */
-    const fireBRObstruction = (effect: ObstructionType) => {
+    const fireBRObstruction = (effect: ObstructionType, attackerId?: string | null) => {
         const store = useGameStore.getState();
-        const updated = store.brOpponents.map(opp => ({ ...opp, effect }));
+
+        // Apply effect to all BR opponents except the attacker (if provided)
+        const updated = store.brOpponents.map(opp => ({ ...opp, effect: opp.id === attackerId ? opp.effect : effect }));
         store.setBROpponents(updated);
 
-        // 既存タイマーをリセットして再セット
+        // 既存タイマーをリセットして再セット（攻撃者にはタイマーを設定しない）
         const timers = brEffectTimersRef.current;
         updated.forEach(opp => {
+            if (opp.id === attackerId) return; // don't set/clear timer for attacker
             if (timers[opp.id]) clearTimeout(timers[opp.id]);
             timers[opp.id] = setTimeout(() => {
                 useGameStore.getState().setBROpponentEffect(opp.id, null);
                 delete timers[opp.id];
             }, 3000);
         });
+
+        // プレイヤーが攻撃者でない場合は自分にも effect を適用
+        if (store.playerId !== attackerId) {
+            store.setPlayerEffect(effect);
+        }
 
         // バナー表示
         setBRAttackEffect(effect);

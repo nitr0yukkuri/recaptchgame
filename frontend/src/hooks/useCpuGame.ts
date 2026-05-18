@@ -7,7 +7,7 @@ interface UseCpuGameOptions {
     gameMode: 'CPU' | 'ONLINE' | null;
     setMyScore: (fn: (prev: number) => number) => void;
     setWinningScore: (score: number) => void;
-    fireBRObstruction: (effect: ObstructionType) => void;
+    fireBRObstruction: (effect: ObstructionType, attackerId?: string | null) => void;
     playSuccess: () => void;
     playError: () => void;
     playLose: () => void;
@@ -84,6 +84,7 @@ export function useCpuGame({
                 // BRモード CPU シミュレーション（完全 immutable）
                 let changed = false;
                 let brEffectToFire: ObstructionType = null;
+                let brAttackerId: string | null = null;
                 const nextOpponents: BROpponent[] = store.brOpponents.map(opp => {
                     if (opp.effect && shouldSkipWithObstruction()) return opp;
 
@@ -103,6 +104,7 @@ export function useCpuGame({
                             if (fired) {
                                 if (!brEffectToFire) {
                                     brEffectToFire = getRandomObstruction();
+                                    brAttackerId = opp.id;
                                 }
                             }
                             const next = generateCpuProblem();
@@ -117,7 +119,7 @@ export function useCpuGame({
                 }
                 if (brEffectToFire) {
                     // brOpponents更新の後に適用し、effect が上書きで消えるのを防ぐ
-                    fireBRObstruction(brEffectToFire);
+                    fireBRObstruction(brEffectToFire, brAttackerId);
                 }
             }
         }, intervalTime);
@@ -202,15 +204,16 @@ export function useCpuGame({
             // コンボ判定（最新値を getState() で取得して stale closure 回避）
             const newCombo = useGameStore.getState().playerCombo + 1;
             store.setPlayerCombo(newCombo);
-            if (newCombo >= 2) {
-                store.setPlayerCombo(0);
-                const effect = getRandomObstruction();
-                if (cpuPlayerCount === 1) {
-                    store.setOpponentEffect(effect);
-                } else {
-                    fireBRObstruction(effect);
+                if (newCombo >= 2) {
+                    store.setPlayerCombo(0);
+                    const effect = getRandomObstruction();
+                    if (cpuPlayerCount === 1) {
+                        store.setOpponentEffect(effect);
+                    } else {
+                        // player is attacker; pass playerId so human isn't affected
+                        fireBRObstruction(effect, store.playerId);
+                    }
                 }
-            }
 
             const next = generateCpuProblem(store.target);
             store.updatePlayerPattern(next.target, next.images);
