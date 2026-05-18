@@ -73,6 +73,8 @@ function App() {
         stopMatching,
     } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart });
 
+    const [notice, setNotice] = useState<string | null>(null);
+
     // ── ゲームアクション（モード共通の接続点）────────────────
     const handleImageClick = (index: number) => {
         if (isReloading || isVerifying) return;
@@ -90,6 +92,12 @@ function App() {
         if (gameMode === 'CPU') {
             handleVerifyCpu(winningScore);
         } else {
+            const selections = useGameStore.getState().mySelections;
+            if (!selections || selections.length === 0) {
+                setNotice('画像を選んでね');
+                setTimeout(() => setNotice(null), 1400);
+                return;
+            }
             handleVerifyOnline();
         }
     };
@@ -257,6 +265,22 @@ function App() {
                     >
                         <div className="bg-blue-500 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-blue-200">
                             ⚔️ 全員を妨害！: {brAttackEffect}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 選択促しの通知 */}
+            <AnimatePresence>
+                {notice && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="fixed top-36 left-0 right-0 z-[75] flex justify-center pointer-events-none"
+                    >
+                        <div className="bg-white p-4 rounded-full shadow-lg text-gray-700 font-semibold">
+                            {notice}
                         </div>
                     </motion.div>
                 )}
