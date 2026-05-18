@@ -26,14 +26,23 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
         if (!playerEffect) return;
         playObstruction();
         const t = setTimeout(() => setPlayerEffect(null), 3000);
-        return () => clearTimeout(t);
+        // Safety fallback: if something prevents the 3s clear, ensure effect cleared within 10s
+        const fallback = setTimeout(() => setPlayerEffect(null), 10000);
+        return () => {
+            clearTimeout(t);
+            clearTimeout(fallback);
+        };
     }, [playerEffect, setPlayerEffect, playObstruction]);
 
     // opponentEffect → 3秒後クリア
     useEffect(() => {
         if (!opponentEffect) return;
         const t = setTimeout(() => setOpponentEffect(null), 3000);
-        return () => clearTimeout(t);
+        const fallback = setTimeout(() => setOpponentEffect(null), 10000);
+        return () => {
+            clearTimeout(t);
+            clearTimeout(fallback);
+        };
     }, [opponentEffect, setOpponentEffect]);
 
     /**
