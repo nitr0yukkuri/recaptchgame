@@ -20,6 +20,7 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
     // 自分がBR妨害発動したときのバナー用
     const [brAttackEffect, setBRAttackEffect] = useState<ObstructionType>(null);
     const brAttackBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const playerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // playerEffect → サウンド再生 + 3秒後クリア
     useEffect(() => {
@@ -55,6 +56,16 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
         };
     }, [opponentEffect, setOpponentEffect]);
 
+    // cleanup on unmount: clear any player/br timers
+    useEffect(() => {
+        return () => {
+            const timers = brEffectTimersRef.current;
+            Object.values(timers).forEach(t => clearTimeout(t));
+            if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
+            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
+        };
+    }, []);
+
     /**
      * BRモードで自分が妨害発動したとき呼ぶ。
      * 全brOpponentsにeffectをセットし、個別タイマーで3秒後にクリア。
@@ -80,7 +91,13 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
 
         // プレイヤーが攻撃者でない場合は自分にも effect を適用
         if (store.playerId !== attackerId) {
+            // apply effect and ensure a deterministic 3s clear (avoid races)
             store.setPlayerEffect(effect);
+            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
+            playerTimerRef.current = setTimeout(() => {
+                useGameStore.getState().setPlayerEffect(null);
+                playerTimerRef.current = null;
+            }, 3000);
         }
 
         // バナー表示
@@ -91,3 +108,4 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
 
     return { brAttackEffect, fireBRObstruction };
 }
+

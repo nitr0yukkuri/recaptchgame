@@ -204,16 +204,16 @@ export function useCpuGame({
             // コンボ判定（最新値を getState() で取得して stale closure 回避）
             const newCombo = useGameStore.getState().playerCombo + 1;
             store.setPlayerCombo(newCombo);
-                if (newCombo >= 2) {
-                    store.setPlayerCombo(0);
-                    const effect = getRandomObstruction();
-                    if (cpuPlayerCount === 1) {
-                        store.setOpponentEffect(effect);
-                    } else {
-                        // player is attacker; pass playerId so human isn't affected
-                        fireBRObstruction(effect, store.playerId);
-                    }
+            if (newCombo >= 2) {
+                store.setPlayerCombo(0);
+                const effect = getRandomObstruction();
+                if (cpuPlayerCount === 1) {
+                    store.setOpponentEffect(effect);
+                } else {
+                    // player is attacker; pass playerId so human isn't affected
+                    fireBRObstruction(effect, store.playerId);
                 }
+            }
 
             const next = generateCpuProblem(store.target);
             store.updatePlayerPattern(next.target, next.images);
