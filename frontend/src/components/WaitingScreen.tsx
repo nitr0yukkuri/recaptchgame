@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 type WaitingScreenProps = {
     roomId: string;
+    isRandomMatch?: boolean;
     cancelWaiting: () => void;
 };
 
@@ -24,7 +25,7 @@ const buildInviteUrl = (roomId: string) => {
     };
 };
 
-export const WaitingScreen = ({ roomId, cancelWaiting }: WaitingScreenProps) => {
+export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting }: WaitingScreenProps) => {
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const controller = useGameController();
@@ -72,6 +73,23 @@ export const WaitingScreen = ({ roomId, cancelWaiting }: WaitingScreenProps) => 
             setCopyState('error');
         }
     };
+
+    if (isRandomMatch) {
+        return (
+            <div className="text-center h-full flex flex-col items-center justify-center space-y-10">
+                <div className="animate-spin h-20 w-20 border-8 border-[#5B46F5] border-t-transparent rounded-full mx-auto"></div>
+                <div>
+                    <p className="text-3xl font-bold text-gray-700">対戦相手を待機中...</p>
+                </div>
+                <button
+                    onClick={cancelWaiting}
+                    className="inline-block px-8 py-3 text-gray-500 font-bold hover:text-white hover:bg-gray-400 rounded-full border-2 border-gray-300 transition cursor-pointer z-50 pointer-events-auto"
+                >
+                    キャンセル
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex items-center justify-center px-4 py-8">

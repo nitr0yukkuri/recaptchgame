@@ -41,6 +41,7 @@ function App() {
 
     // ── ローカル UI 状態 ────────────────────────────────────
     const [gameMode, setGameMode] = useState<'CPU' | 'ONLINE' | null>(null);
+    const [isRandomMatch, setIsRandomMatch] = useState(false);
     const [loginStep, setLoginStep] = useState<'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY' | 'CPU_PLAYER_COUNT'>('SELECT');
     const [myScore, setMyScore] = useState(0);
     const [winningScore, setWinningScore] = useState(5);
@@ -147,6 +148,7 @@ function App() {
 
     const joinRandom = () => {
         initAudio();
+        setIsRandomMatch(true);
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
             type: 'JOIN_ROOM',
@@ -163,12 +165,14 @@ function App() {
         setIsCreator(true);
         setSettingScore(5);
         setLoginError('');
+        setIsRandomMatch(false);
         setLoginStep('FRIEND_INPUT');
     };
 
     const enterRoomFlow = () => {
         setIsCreator(false);
         setLoginError('');
+        setIsRandomMatch(false);
         setLoginStep('FRIEND_INPUT');
     };
 
@@ -230,6 +234,7 @@ function App() {
         if (!room || !ROOM_ID_PATTERN.test(room)) return;
 
         setIsCreator(false);
+        setIsRandomMatch(false);
         setLoginStep('FRIEND_INPUT');
         setInputRoom(room);
         setLoginError('');
@@ -371,7 +376,7 @@ function App() {
                     )}
 
                     {gameState === 'WAITING' && (
-                        <WaitingScreen roomId={roomId} cancelWaiting={cancelWaiting} />
+                        <WaitingScreen roomId={roomId} isRandomMatch={isRandomMatch} cancelWaiting={cancelWaiting} />
                     )}
 
                     {gameState === 'PLAYING' && (cpuPlayerCount === 1 || gameMode === 'ONLINE') && (
