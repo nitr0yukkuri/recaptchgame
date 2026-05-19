@@ -61,7 +61,9 @@ export function useOnlineGame({
                 case 'ROOM_ASSIGNED':
                     store.setRoomInfo(msg.payload.room_id, store.playerId);
                     setGameMode('ONLINE');
-                    store.setGameState('WAITING');
+                    if (store.gameState !== 'PLAYING') {
+                        store.setGameState('WAITING');
+                    }
                     break;
 
                 case 'STATUS_UPDATE':
