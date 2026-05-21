@@ -346,9 +346,9 @@ function App() {
             )}
 
             <div className="w-full h-full max-w-4xl flex flex-col relative">
-                <div className="flex flex-col items-center mt-8 md:mt-12 lg:mt-16 mb-0 shrink-0 z-40 pointer-events-none">
+                <div className="flex flex-col items-center mt-2 sm:mt-6 md:mt-12 lg:mt-16 mb-0 shrink-0 z-40 pointer-events-none">
                     <h1 className="pointer-events-auto">
-                        <img src="/images/recaptch_logo.png" alt="reCAPTCHA ゲーム" className="h-20 md:h-32 w-auto" />
+                        <img src="/images/recaptch_logo.png" alt="reCAPTCHA ゲーム" className="h-10 sm:h-16 md:h-24 lg:h-32 w-auto" />
                     </h1>
                 </div>
 
