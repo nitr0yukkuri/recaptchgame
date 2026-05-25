@@ -175,7 +175,7 @@ export const LoginScreen = ({
                                 : 'bg-white border-blue-200 hover:border-blue-500 hover:shadow-md'
                                 }`}
                         >
-                            <div className="bg-blue-100 text-blue-600 font-black text-lg sm:text-xl w-8 h-8 sm:w-10 h-10 flex items-center justify-center rounded-full shrink-0">1</div>
+                            <div className="bg-blue-100 text-blue-600 font-black text-lg sm:text-xl w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full shrink-0">1</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-lg font-bold text-blue-600">1vs1</p>
                                 <p className="text-[10px] sm:text-xs text-gray-400 font-medium">CPU 1体と対戦</p>
@@ -189,7 +189,7 @@ export const LoginScreen = ({
                                 : 'bg-white border-orange-200 hover:border-orange-500 hover:shadow-md'
                                 }`}
                         >
-                            <div className="bg-orange-100 text-orange-600 font-black text-lg sm:text-xl w-8 h-8 sm:w-10 h-10 flex items-center justify-center rounded-full shrink-0">3</div>
+                            <div className="bg-orange-100 text-orange-600 font-black text-lg sm:text-xl w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full shrink-0">3</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-lg font-bold text-orange-600">3人対戦</p>
                                 <p className="text-[10px] sm:text-xs text-gray-400 font-medium">CPU 2体と同時対戦</p>
@@ -203,7 +203,7 @@ export const LoginScreen = ({
                                 : 'bg-white border-red-200 hover:border-red-300 hover:shadow-md'
                                 }`}
                         >
-                            <div className="bg-red-100 text-red-600 font-black text-lg sm:text-xl w-8 h-8 sm:w-10 h-10 flex items-center justify-center rounded-full shrink-0">4</div>
+                            <div className="bg-red-100 text-red-600 font-black text-lg sm:text-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shrink-0">4</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-lg font-bold text-red-600">4人バトル</p>
                                 <p className="text-[10px] sm:text-xs text-gray-400 font-medium">CPU 3体と大乱闘</p>
