@@ -1,8 +1,5 @@
 import React from 'react';
-// qrcode.react の型定義に default export が無いため、一時的に型チェックを抑制
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import QRCode from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 
 type Props = {
     roomId: string;
@@ -26,7 +23,7 @@ export const InviteQrModal: React.FC<Props> = ({ roomId, onClose }) => {
             <div className="bg-white rounded-lg p-4 w-[320px] max-w-[90%] text-center">
                 <h3 className="font-bold mb-2">招待リンク (友達対戦)</h3>
                 <div className="flex justify-center mb-2">
-                    <QRCode value={url} size={200} />
+                    <QRCodeSVG value={url} size={200} />
                 </div>
                 <p className="text-sm break-all mb-3">{url}</p>
                 <div className="flex gap-2 justify-center">
