@@ -209,19 +209,19 @@ export function useCpuGame({
             if (newCombo >= 2) {
                 store.setPlayerCombo(0);
                 const effect = getRandomObstruction();
-                    showBRAttack(effect);
+                showBRAttack(effect);
                 if (cpuPlayerCount === 1) {
                     store.setOpponentEffect(effect);
                 } else {
-                        // BRではライバル全員に同じ妨害を適用する
+                    // BRではライバル全員に同じ妨害を適用する
                     const latestOpponents = useGameStore.getState().brOpponents;
                     if (latestOpponents.length > 0) {
-                            latestOpponents.forEach(targetOpp => {
-                                store.setBROpponentEffect(targetOpp.id, effect);
-                                setTimeout(() => {
-                                    useGameStore.getState().setBROpponentEffect(targetOpp.id, null);
-                                }, 3000);
-                            });
+                        latestOpponents.forEach(targetOpp => {
+                            store.setBROpponentEffect(targetOpp.id, effect);
+                            setTimeout(() => {
+                                useGameStore.getState().setBROpponentEffect(targetOpp.id, null);
+                            }, 3000);
+                        });
                     }
                 }
             }
