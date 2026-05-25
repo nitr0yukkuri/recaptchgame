@@ -3,9 +3,6 @@ import { ObstructionType } from '../store';
 const SIGNAL_SPLIT_BASE_IMAGE = '/images/shingouki4.jpg';
 // 中段（左, 中央, 右）を正解タイルに設定（3x3 グリッドでのインデックス）
 const SIGNAL_SPLIT_CORRECT_TILES = [3, 4, 5];
-// 消火器（新規ターゲット）用の分割ベース画像と正解タイル（中列上中下）
-const EXTINGUISHER_SPLIT_BASE_IMAGE = '/images/shoukasen0.jpg';
-const EXTINGUISHER_SPLIT_CORRECT_TILES = [1, 4, 7];
 
 // バックエンドが送信する画像ID → フロントエンドの公開パスへの変換マップ
 const IMAGE_ID_TO_PATH: Record<string, string> = {
@@ -61,7 +58,7 @@ export const ONION_IMAGE = '/images/tamanegi5.png';
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const generateCpuProblem = (prevTarget?: string) => {
-    const targets = ['車', '信号機', '階段', '消火栓', '消火器'];
+    const targets = ['車', '信号機', '階段', '消火栓'];
     let newTarget = targets[Math.floor(Math.random() * targets.length)];
 
     if (prevTarget && targets.length > 1) {
@@ -76,13 +73,6 @@ export const generateCpuProblem = (prevTarget?: string) => {
             images: Array.from({ length: 9 }, (_, idx) => `${SIGNAL_SPLIT_BASE_IMAGE}#tile=${idx}`),
         };
     }
-    if (newTarget === '消火器') {
-        return {
-            target: newTarget,
-            images: Array.from({ length: 9 }, (_, idx) => `${EXTINGUISHER_SPLIT_BASE_IMAGE}#tile=${idx}`),
-        };
-    }
-
     let searchKey = '';
     if (newTarget === '車') searchKey = 'car';
     else if (newTarget === '階段') searchKey = 'kaidan';
@@ -114,15 +104,6 @@ export const getCorrectIndices = (imgs: string[], tgt: string) => {
             })
             .filter(idx => idx !== -1);
     }
-    if (tgt === '消火器') {
-        return imgs
-            .map((img, idx) => {
-                const tile = parseSplitTileIndex(img);
-                return (tile !== null && EXTINGUISHER_SPLIT_CORRECT_TILES.includes(tile)) ? idx : -1;
-            })
-            .filter(idx => idx !== -1);
-    }
-
     let searchKey = '';
     if (tgt === '車') searchKey = 'car';
     else if (tgt === '信号機') searchKey = 'shingouki';
