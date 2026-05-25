@@ -13,6 +13,7 @@ import (
 )
 
 var errSendQueueClosed = fmt.Errorf("send queue is closed")
+var errSendQueueFull = fmt.Errorf("send queue is full")
 
 type clientConnection struct {
 	conn   *websocket.Conn
@@ -39,8 +40,7 @@ func (c *clientConnection) enqueue(msg Message) error {
 	case c.send <- msg:
 		return nil
 	default:
-		// バッファが満杯の場合はスキップしてデッドロックを防止
-		return nil
+		return errSendQueueFull
 	}
 }
 
@@ -210,24 +210,28 @@ func (m *WebSocketManager) SendToClient(clientID string, msg Message) error {
 		return nil
 	}
 
-	return client.enqueue(msg)
+	if err := client.enqueue(msg); err != nil {
+		if err == errSendQueueFull {
+			m.UnregisterConnection(clientID)
+		}
+		return err
+	}
+	return nil
 }
 
 // SendToRoom はルーム内全員にメッセージ送信キュー経由で送る
 func (m *WebSocketManager) SendToRoom(roomID string, msg Message) {
 	m.mu.RLock()
-	var targets []*clientConnection
+	var targetIDs []string
 	if clients, ok := m.roomToClients[roomID]; ok {
 		for clientID := range clients {
-			if client, ok := m.connections[clientID]; ok {
-				targets = append(targets, client)
-			}
+			targetIDs = append(targetIDs, clientID)
 		}
 	}
 	m.mu.RUnlock()
 
-	for _, client := range targets {
-		_ = client.enqueue(msg)
+	for _, clientID := range targetIDs {
+		_ = m.SendToClient(clientID, msg)
 	}
 }
 
@@ -665,6 +669,18 @@ func (h *WebSocketHandler) scheduleGracefulLeave(playerID string) {
 		t.Stop()
 	}
 	h.graceTimers[sessionID] = time.AfterFunc(10*time.Second, func() {
+		if currentSessionID := h.getSessionIDByPlayerID(playerID); currentSessionID != sessionID {
+			h.sessionMu.Lock()
+			delete(h.graceTimers, sessionID)
+			h.sessionMu.Unlock()
+			return
+		}
+		if len(h.wsManager.GetClientIDsByPlayerID(playerID)) > 0 {
+			h.sessionMu.Lock()
+			delete(h.graceTimers, sessionID)
+			h.sessionMu.Unlock()
+			return
+		}
 		h.leaveAndNotify(usecase.LeaveRoomInput{ClientID: "", PlayerID: playerID}, "Opponent Disconnected")
 		h.sessionMu.Lock()
 		delete(h.graceTimers, sessionID)

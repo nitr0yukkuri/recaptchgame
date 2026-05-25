@@ -43,8 +43,16 @@ export function useOnlineGame({
 
     const controller = useGameController();
 
+    const isMountedRef = useRef(true);
     const isMatchingRef = useRef(false);
     const prevMessageRef = useRef<MessageEvent<any> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            isMountedRef.current = false;
+            isMatchingRef.current = false;
+        };
+    }, []);
 
     // ── WebSocket メッセージハンドラ ─────────────────────────
     useEffect(() => {
@@ -89,20 +97,22 @@ export function useOnlineGame({
                     store.setOpponentCombo(0);
 
                     (async () => {
+						if (!isMountedRef.current) return;
                         setStartPopup(true);
                         setStartMessage('マッチングしました！');
                         playStart();
                         await sleep(1500);
-                        if (!isMatchingRef.current) { setStartPopup(false); return; }
+                        if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         setStartMessage('3'); await sleep(1000);
-                        if (!isMatchingRef.current) { setStartPopup(false); return; }
+                        if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         setStartMessage('2'); await sleep(1000);
-                        if (!isMatchingRef.current) { setStartPopup(false); return; }
+                        if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         setStartMessage('1'); await sleep(1000);
-                        if (!isMatchingRef.current) { setStartPopup(false); return; }
+                        if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         setStartMessage('START!'); await sleep(500);
-                        if (!isMatchingRef.current) { setStartPopup(false); return; }
+                        if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         // schedule via controller (created once per hook)
+                        if (!isMountedRef.current) return;
                         controller.scheduleStartPopupHide(store.playerId, () => setStartPopup(false), 500);
                     })();
                     break;

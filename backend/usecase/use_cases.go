@@ -113,6 +113,8 @@ type JoinRoomOutput struct {
 // Execute はルーム参加を実行
 func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error) {
 	actualRoomID := input.RoomID
+	const maxRandomRetries = 3
+	randomRetries := 0
 
 	// RANDOMの場合はまずグローバルロックで待機ルームを決定/IDを生成する
 	if input.RoomID == "RANDOM" {
@@ -166,6 +168,10 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		// ここに到達するのはルームが満員のとき
 		unlock()
 		if input.RoomID == "RANDOM" {
+			if randomRetries >= maxRandomRetries {
+				return nil, fmt.Errorf("random room join retries exceeded")
+			}
+			randomRetries++
 			// 再試行: グローバルロック下で待機ルームを再確認
 			globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
@@ -317,7 +323,11 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 			output.CurrentCombo = player.Combo
 			output.SendObstruction = true
 			// ← エフェクト選択は「戦術的」なのでユースケース層に残す
-			output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
+			if len(uc.effectTypes) == 0 {
+				output.Effect = string(domain.EffectShake)
+			} else {
+				output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
+			}
 		}
 
 		uc.roomRepo.Save(room)
