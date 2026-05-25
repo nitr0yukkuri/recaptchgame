@@ -96,11 +96,15 @@ const (
 	EffectBlur      EffectType = "BLUR"
 	EffectInvert    EffectType = "INVERT"
 	EffectOnionRain EffectType = "ONION_RAIN"
+	EffectGrayscale EffectType = "GRAYSCALE"
+	EffectSepia     EffectType = "SEPIA"
+	EffectSkew      EffectType = "SKEW"
 )
 
 // GetAllEffects はすべてのエフェクトを返す
 func GetAllEffects() []string {
 	return []string{
 		string(EffectShake), string(EffectSpin), string(EffectBlur), string(EffectInvert), string(EffectOnionRain),
+		string(EffectGrayscale), string(EffectSepia), string(EffectSkew),
 	}
 }
