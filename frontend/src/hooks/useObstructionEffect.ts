@@ -74,14 +74,13 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
     const fireBRObstruction = (effect: ObstructionType, attackerId?: string | null) => {
         const store = useGameStore.getState();
 
-        // Apply effect to all BR opponents except the attacker (if provided)
-        const updated = store.brOpponents.map(opp => ({ ...opp, effect: opp.id === attackerId ? opp.effect : effect }));
+        // Apply effect to all BR opponents (including attacker)
+        const updated = store.brOpponents.map(opp => ({ ...opp, effect }));
         store.setBROpponents(updated);
 
         // 既存タイマーをリセットして再セット（攻撃者にはタイマーを設定しない）
         const timers = brEffectTimersRef.current;
         updated.forEach(opp => {
-            if (opp.id === attackerId) return; // don't set/clear timer for attacker
             if (timers[opp.id]) clearTimeout(timers[opp.id]);
             timers[opp.id] = setTimeout(() => {
                 useGameStore.getState().setBROpponentEffect(opp.id, null);
@@ -89,16 +88,13 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             }, 3000);
         });
 
-        // プレイヤーが攻撃者でない場合は自分にも effect を適用
-        if (store.playerId !== attackerId) {
-            // apply effect and ensure a deterministic 3s clear (avoid races)
-            store.setPlayerEffect(effect);
-            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
-            playerTimerRef.current = setTimeout(() => {
-                useGameStore.getState().setPlayerEffect(null);
-                playerTimerRef.current = null;
-            }, 3000);
-        }
+        // 全員に effect を適用（攻撃者も含む）
+        store.setPlayerEffect(effect);
+        if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
+        playerTimerRef.current = setTimeout(() => {
+            useGameStore.getState().setPlayerEffect(null);
+            playerTimerRef.current = null;
+        }, 3000);
 
         // バナー表示 (自分が攻撃者の片方の場合のみ「全員を妨害！」を表示)
         if (store.playerId === attackerId) {

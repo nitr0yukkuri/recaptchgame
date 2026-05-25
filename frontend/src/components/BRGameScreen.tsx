@@ -71,11 +71,7 @@ export const BRGameScreen = ({
         brOpponents, cpuImages
     } = useGameStore();
 
-    const handleGlobalObstruction = () => {
-        const effect = getRandomObstruction();
-        const attackerId = useGameStore.getState().playerId;
-        fireBRObstruction(effect, attackerId);
-    };
+    // 全員妨害ボタンは表示しない（UI上のみ削除）
 
     const opponents = brOpponents;
 
@@ -86,7 +82,7 @@ export const BRGameScreen = ({
     const renderOpponent = (opp: any, title: string) => (
         <div className="flex flex-col justify-center items-center shrink-0 w-auto">
             <h3 className="text-[10px] sm:text-xs md:text-lg font-bold text-gray-700 mb-0.5 md:mb-1 select-none">
-                {title} {opp.combo > 0 && <span className="text-orange-500">C:{opp.combo}</span>}
+                {title}
             </h3>
 
             <motion.div
@@ -128,14 +124,7 @@ export const BRGameScreen = ({
             <div className="bg-[#5B46F5] text-white px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl mb-2 md:mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl z-20">
                 <p className="text-[10px] md:text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
                 <h2 className="text-base md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
-                <div className="mt-2 flex justify-end">
-                    <button
-                        onClick={handleGlobalObstruction}
-                        className="text-sm bg-white/20 hover:bg-white/30 px-2 py-1 rounded-md border border-white/30"
-                    >
-                        全員妨害
-                    </button>
-                </div>
+                {/* 全員妨害ボタンは非表示 */}
             </div>
 
             {/* クロス（十字）型レイアウト */}
@@ -152,7 +141,7 @@ export const BRGameScreen = ({
 
                     {/* 自分の画面（中央・特大） */}
                     <div className="flex flex-col items-center w-full max-w-[200px] xs:max-w-[230px] sm:max-w-[280px] md:max-w-[380px] shrink-0 z-10">
-                        <h3 className="text-sm sm:text-lg md:text-2xl font-bold text-gray-700 mb-1 md:mb-2">自分 {playerCombo > 0 && <span className="text-orange-500">Combo: {playerCombo}</span>}</h3>
+                        <h3 className="text-sm sm:text-lg md:text-2xl font-bold text-gray-700 mb-1 md:mb-2">自分</h3>
 
                         <motion.div
                             variants={obstructionVariants}

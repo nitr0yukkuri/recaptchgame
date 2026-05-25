@@ -136,15 +136,13 @@ export function useOnlineGame({
                     break;
 
                 case 'OBSTRUCTION':
-                    if (msg.payload.attacker_id === store.playerId) {
-                        store.setOpponentEffect(msg.payload.effect as ObstructionType);
+                    // 全員に妨害を適用する（攻撃者含む）
+                    store.setPlayerEffect(msg.payload.effect as ObstructionType);
+                    // 攻撃者以外のプレイヤーはコンボをリセット
+                    if (msg.payload.attacker_id !== store.playerId) {
                         store.setPlayerCombo(0);
-                        // effect の解除は useObstructionEffect に一元管理
-                    } else {
-                        store.setPlayerEffect(msg.payload.effect as ObstructionType);
-                        store.setOpponentCombo(0);
-                        // effect の解除は useObstructionEffect に一元管理
                     }
+                    // effect の解除は useObstructionEffect に一元管理
                     break;
 
                 case 'OPPONENT_SELECT':
