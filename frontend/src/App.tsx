@@ -15,6 +15,7 @@ import { WaitingScreen } from './components/WaitingScreen';
 import { GameScreen } from './components/GameScreen';
 import { BRGameScreen } from './components/BRGameScreen';
 import { ResultScreen } from './components/ResultScreen';
+import InviteQrModal from './components/InviteQrModal';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 const STATIC_WS_OPTIONS = {
@@ -74,6 +75,8 @@ function App() {
         handleVerifyOnline,
         stopMatching,
     } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart });
+
+    const [showInviteModal, setShowInviteModal] = useState(false);
 
     const [notice, setNotice] = useState<string | null>(null);
 
@@ -239,6 +242,22 @@ function App() {
         setInputRoom(room);
         setLoginError('');
     }, [gameState]);
+
+    // 自動参加: URLにroomクエリがあれば自動で参加する（友達招待用）
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const room = new URLSearchParams(window.location.search).get('room');
+        if (!room || !ROOM_ID_PATTERN.test(room)) return;
+        // joinRoomInternal は定義済み上で呼べるように useEffect の外で定義されている
+        joinRoomInternal(room);
+    }, []);
+
+    // 招待QRの表示: ルーム作成者で roomId がセットされたら表示する
+    useEffect(() => {
+        if (roomId && isCreator) {
+            setShowInviteModal(true);
+        }
+    }, [roomId, isCreator]);
 
     // ── JSX ─────────────────────────────────────────────────
     return (
