@@ -556,11 +556,11 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 				// ルーム情報を取得して候補プレイヤーを抽出
 				if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
 					var candidates []string
-					for pid := range roomObj.Players {
-						if pid == p.PlayerID {
-							continue
-						}
-						candidates = append(candidates, pid)
+					if roomObj.Player1 != nil && roomObj.Player1.ID != p.PlayerID {
+						candidates = append(candidates, roomObj.Player1.ID)
+					}
+					if roomObj.Player2 != nil && roomObj.Player2.ID != p.PlayerID {
+						candidates = append(candidates, roomObj.Player2.ID)
 					}
 					if len(candidates) > 0 {
 						targetPlayer := candidates[rand.Intn(len(candidates))]
