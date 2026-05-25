@@ -131,7 +131,7 @@ export const LoginScreen = ({
                 <div className="space-y-4 sm:space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full py-4">
                     <div className="space-y-1 sm:space-y-2">
                         <h2 className="text-lg sm:text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
-                        <p className="text-xs sm:text-sm text-gray-400">{isCreator ? "好きなIDを入力してね" : "友達から教えてもらったIDを入力してね"}</p>
+                        <p className="text-xs sm:text-sm text-gray-400">{isCreator ? "文字数は6文字にしてね" : "友達から教えてもらったIDを入力してね"}</p>
                     </div>
 
                     <div className="relative">
