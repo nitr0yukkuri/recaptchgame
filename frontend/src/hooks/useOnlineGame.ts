@@ -14,6 +14,7 @@ interface UseOnlineGameOptions {
     playWin: () => void;
     playLose: () => void;
     playStart: () => void;
+    onObstructionFired?: (effect: ObstructionType, attackerId?: string) => void;
 }
 
 /**
@@ -33,6 +34,7 @@ export function useOnlineGame({
     playWin,
     playLose,
     playStart,
+    onObstructionFired,
 }: UseOnlineGameOptions) {
     const [isVerifying, setIsVerifying] = useState(false);
     const [startPopup, setStartPopup] = useState(false);
@@ -145,6 +147,16 @@ export function useOnlineGame({
                     // effect の解除は useObstructionEffect に一元管理
                     break;
 
+                case 'OBSTRUCTION_FIRED':
+                    // サーバから攻撃者へ発動確認が来る（UI表示用）
+                    try {
+                        const eff = msg.payload.effect as string;
+                        const aid = msg.payload.attacker_id as string;
+                        if (onObstructionFired) onObstructionFired(eff as ObstructionType, aid);
+                    } catch (e) {
+                        console.warn('Invalid OBSTRUCTION_FIRED payload', e);
+                    }
+                    break;
                 case 'OPPONENT_SELECT':
                     if (msg.payload.player_id !== store.playerId) {
                         store.toggleOpponentSelection(msg.payload.image_index);

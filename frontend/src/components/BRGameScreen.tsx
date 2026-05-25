@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { useGameStore, ObstructionType } from '../store';
 import { OnionRain } from './OnionRain';
-import { parseSplitTileIndex, getRandomObstruction } from '../utils/game';
+import { parseSplitTileIndex } from '../utils/game';
 
 type BRGameScreenProps = {
     myScore: number;
@@ -63,11 +63,11 @@ const renderCaptchaImage = (img: string, tileIndex: number, className: string) =
 export const BRGameScreen = ({
     myScore, winningScore,
     isReloading, isVerifying,
-    handleImageClick, handleReload, handleVerify
-    , fireBRObstruction
+    handleImageClick, handleReload, handleVerify,
+    fireBRObstruction: _fireBRObstruction
 }: BRGameScreenProps) => {
     const {
-        target, images, playerCombo, playerEffect, mySelections,
+        target, images, playerCombo: _playerCombo, playerEffect, mySelections,
         brOpponents, cpuImages
     } = useGameStore();
 

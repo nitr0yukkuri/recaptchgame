@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -550,14 +551,55 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 				_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
 			}
 
-			// 妨害エフェクト送信
+			// 妨害エフェクト送信: プレイヤー発の場合はランダムに1人の相手のみを標的にする
 			if output.SendObstruction {
-				obs := ObstructionPayload{
-					Effect:     output.Effect,
-					AttackerID: p.PlayerID,
+				// ルーム情報を取得して候補プレイヤーを抽出
+				if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
+					var candidates []string
+					for pid := range roomObj.Players {
+						if pid == p.PlayerID {
+							continue
+						}
+						candidates = append(candidates, pid)
+					}
+					if len(candidates) > 0 {
+						targetPlayer := candidates[rand.Intn(len(candidates))]
+						obs := ObstructionPayload{
+							Effect:     output.Effect,
+							AttackerID: p.PlayerID,
+						}
+						bObs, _ := json.Marshal(obs)
+						// 対象プレイヤーに紐づくクライアントへのみ送信
+						for _, cID := range h.wsManager.GetClientIDsByPlayerID(targetPlayer) {
+							_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION", Payload: bObs})
+						}
+						// 攻撃者には発動確認を送る（UI 表示用）
+						confirm := ObstructionPayload{
+							Effect:     output.Effect,
+							AttackerID: p.PlayerID,
+						}
+						bConfirm, _ := json.Marshal(confirm)
+						for _, cID := range h.wsManager.GetClientIDsByPlayerID(p.PlayerID) {
+							_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION_FIRED", Payload: bConfirm})
+						}
+					} else {
+						// fallback: ルーム内全員へ送信
+						obs := ObstructionPayload{
+							Effect:     output.Effect,
+							AttackerID: p.PlayerID,
+						}
+						bObs, _ := json.Marshal(obs)
+						h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
+					}
+				} else {
+					// room が取れない場合は従来の broadcast を行う
+					obs := ObstructionPayload{
+						Effect:     output.Effect,
+						AttackerID: p.PlayerID,
+					}
+					bObs, _ := json.Marshal(obs)
+					h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
 				}
-				bObs, _ := json.Marshal(obs)
-				h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
 			}
 		}
 

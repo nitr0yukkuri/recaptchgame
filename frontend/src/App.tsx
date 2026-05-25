@@ -55,7 +55,7 @@ function App() {
     const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
 
     // ── 妨害エフェクト管理 ──────────────────────────────────
-    const { fireBRObstruction } = useObstructionEffect({ playObstruction });
+    const { brAttackEffect, fireBRObstruction, showBRAttack } = useObstructionEffect({ playObstruction });
 
     // ── CPU ゲームロジック ───────────────────────────────────
     const {
@@ -74,7 +74,7 @@ function App() {
         isCreator, setIsCreator,
         handleVerifyOnline,
         stopMatching,
-    } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart });
+    } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart, onObstructionFired: showBRAttack });
 
     const [showInviteModal, setShowInviteModal] = useState(false);
 
@@ -286,6 +286,16 @@ function App() {
                         </div>
                     </motion.div>
                 )}
+                {brAttackEffect && (
+                    <motion.div key="br-attack-effect"
+                        initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -50, opacity: 0 }}
+                        className="fixed top-48 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+                    >
+                        <div className="bg-green-600 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-green-200">
+                            ✅ 妨害発動: {brAttackEffect}
+                        </div>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
             {/* 選択促し（黄色テキスト風の小さなバナー） */}
@@ -322,6 +332,10 @@ function App() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {showInviteModal && roomId && (
+                <InviteQrModal roomId={roomId} onClose={() => setShowInviteModal(false)} />
+            )}
 
             {/* 正誤フィードバック */}
             <AnimatePresence>

@@ -1,4 +1,7 @@
 import React from 'react';
+// qrcode.react の型定義に default export が無いため、一時的に型チェックを抑制
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import QRCode from 'qrcode.react';
 
 type Props = {

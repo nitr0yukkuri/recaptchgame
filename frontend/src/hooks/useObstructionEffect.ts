@@ -112,7 +112,12 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             brAttackBannerTimerRef.current = setTimeout(() => setBRAttackEffect(null), 3000);
         }
     };
+    const showBRAttack = (effect: ObstructionType) => {
+        setBRAttackEffect(effect);
+        if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
+        brAttackBannerTimerRef.current = setTimeout(() => setBRAttackEffect(null), 3000);
+    };
 
-    return { brAttackEffect, fireBRObstruction };
+    return { brAttackEffect, fireBRObstruction, showBRAttack };
 }
 
