@@ -100,10 +100,12 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             }, 3000);
         }
 
-        // バナー表示
-        setBRAttackEffect(effect);
-        if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
-        brAttackBannerTimerRef.current = setTimeout(() => setBRAttackEffect(null), 3000);
+        // バナー表示 (自分が攻撃者の片方の場合のみ「全員を妨害！」を表示)
+        if (store.playerId === attackerId) {
+            setBRAttackEffect(effect);
+            if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
+            brAttackBannerTimerRef.current = setTimeout(() => setBRAttackEffect(null), 3000);
+        }
     };
 
     return { brAttackEffect, fireBRObstruction };

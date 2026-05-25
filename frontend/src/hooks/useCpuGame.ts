@@ -210,8 +210,15 @@ export function useCpuGame({
                 if (cpuPlayerCount === 1) {
                     store.setOpponentEffect(effect);
                 } else {
-                    // player is attacker; pass playerId so human isn't affected
-                    fireBRObstruction(effect, store.playerId);
+                    // ランダムに1人のライバルだけ妨害（全員妨害しない）
+                    const latestOpponents = useGameStore.getState().brOpponents;
+                    if (latestOpponents.length > 0) {
+                        const targetOpp = latestOpponents[Math.floor(Math.random() * latestOpponents.length)];
+                        store.setBROpponentEffect(targetOpp.id, effect);
+                        setTimeout(() => {
+                            useGameStore.getState().setBROpponentEffect(targetOpp.id, null);
+                        }, 3000);
+                    }
                 }
             }
 

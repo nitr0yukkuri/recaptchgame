@@ -1,7 +1,7 @@
 import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { useGameStore } from '../store';
+import { useGameStore, ObstructionType } from '../store';
 import { OnionRain } from './OnionRain';
-import { parseSplitTileIndex } from '../utils/game';
+import { parseSplitTileIndex, getRandomObstruction } from '../utils/game';
 
 type BRGameScreenProps = {
     myScore: number;
@@ -11,6 +11,7 @@ type BRGameScreenProps = {
     handleImageClick: (index: number) => void;
     handleReload: () => void;
     handleVerify: () => void;
+    fireBRObstruction: (effect: ObstructionType, attackerId?: string | null) => void;
 };
 
 const obstructionVariants: Variants = {
@@ -63,11 +64,18 @@ export const BRGameScreen = ({
     myScore, winningScore,
     isReloading, isVerifying,
     handleImageClick, handleReload, handleVerify
+    , fireBRObstruction
 }: BRGameScreenProps) => {
     const {
         target, images, playerCombo, playerEffect, mySelections,
         brOpponents, cpuImages
     } = useGameStore();
+
+    const handleGlobalObstruction = () => {
+        const effect = getRandomObstruction();
+        const attackerId = useGameStore.getState().playerId;
+        fireBRObstruction(effect, attackerId);
+    };
 
     const opponents = brOpponents;
 
@@ -120,6 +128,14 @@ export const BRGameScreen = ({
             <div className="bg-[#5B46F5] text-white px-3 py-2 md:px-5 md:py-3 rounded-xl md:rounded-2xl mb-2 md:mb-4 shadow-md shrink-0 text-left flex flex-col justify-center mx-4 md:mx-auto w-auto md:w-full max-w-2xl z-20">
                 <p className="text-[10px] md:text-xs opacity-90 font-medium mb-0.5">以下の画像をすべて選択：</p>
                 <h2 className="text-base md:text-2xl font-bold uppercase tracking-wider leading-none">{target}</h2>
+                <div className="mt-2 flex justify-end">
+                    <button
+                        onClick={handleGlobalObstruction}
+                        className="text-sm bg-white/20 hover:bg-white/30 px-2 py-1 rounded-md border border-white/30"
+                    >
+                        全員妨害
+                    </button>
+                </div>
             </div>
 
             {/* クロス（十字）型レイアウト */}
