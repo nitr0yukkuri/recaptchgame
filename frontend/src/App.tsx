@@ -181,6 +181,7 @@ function App() {
 
     const joinRoomInternal = (room: string) => {
         if (!room) { setLoginError('IDを入力してね'); return; }
+        if (!ROOM_ID_PATTERN.test(room)) { setLoginError('6文字の英数字で入力してね'); return; }
         setGameMode('ONLINE');
         useGameStore.getState().setRoomInfo(room, playerId);
         sendMessage(JSON.stringify({

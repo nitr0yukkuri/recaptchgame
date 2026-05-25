@@ -131,7 +131,7 @@ export const LoginScreen = ({
                 <div className="space-y-4 sm:space-y-6 text-center flex-1 flex flex-col justify-center max-w-sm mx-auto w-full py-4">
                     <div className="space-y-1 sm:space-y-2">
                         <h2 className="text-lg sm:text-xl font-bold text-gray-700">{isCreator ? "ルームIDを決める" : "ルームIDを入力"}</h2>
-                        <p className="text-xs sm:text-sm text-gray-400">{isCreator ? "文字数は6文字にしてね" : "友達から教えてもらったIDを入力してね"}</p>
+                        <p className="text-xs sm:text-sm text-gray-400">{isCreator ? "英数字6文字を入力してね" : "友達から教えてもらった6文字のIDを入力してね"}</p>
                     </div>
 
                     <div className="relative">
@@ -143,7 +143,7 @@ export const LoginScreen = ({
                                 setInputRoom(e.target.value);
                                 if (loginError) setLoginError('');
                             }}
-                            placeholder="1234"
+                            placeholder="ABC123"
                             className="w-full text-2xl sm:text-3xl font-bold text-center py-2.5 sm:py-4 rounded-xl border-2 border-gray-200 bg-white focus:border-[#5B46F5] focus:ring-4 focus:ring-indigo-50/50 outline-none transition-all tracking-widest placeholder-gray-200 shadow-sm"
                             autoFocus
                         />
