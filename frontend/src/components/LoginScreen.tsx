@@ -17,7 +17,7 @@ type LoginScreenProps = {
     joinRoomInternal: (room: string) => void;
     confirmDifficulty: (level: number) => void;
     confirmPlayerCount: (count: 1 | 3 | 4) => void;
-    cpuPlayerCount: 1 | 3 | 4;
+    cpuPlayerCount: 0 | 1 | 3 | 4;
 };
 
 export const LoginScreen = ({

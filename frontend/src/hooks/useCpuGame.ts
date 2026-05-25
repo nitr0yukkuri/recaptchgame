@@ -32,7 +32,7 @@ export function useCpuGame({
     playStart,
 }: UseCpuGameOptions) {
     const [settingScore, setSettingScore] = useState(5);
-    const [cpuPlayerCount, setCpuPlayerCount] = useState<1 | 3 | 4>(1);
+    const [cpuPlayerCount, setCpuPlayerCount] = useState<0 | 1 | 3 | 4>(0);
     const [isReloading, setIsReloading] = useState(false);
 
     const { gameState, opponentScore } = useGameStore();

@@ -214,7 +214,7 @@ function App() {
         useGameStore.getState().setGameState('LOGIN');
         setGameMode(null);
         setMyScore(0);
-        setCpuPlayerCount(1);
+        setCpuPlayerCount(0);
     };
 
     const cancelWaiting = () => {
