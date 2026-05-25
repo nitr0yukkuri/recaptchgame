@@ -97,7 +97,7 @@ export function useOnlineGame({
                     store.setOpponentCombo(0);
 
                     (async () => {
-						if (!isMountedRef.current) return;
+                        if (!isMountedRef.current) return;
                         setStartPopup(true);
                         setStartMessage('マッチングしました！');
                         playStart();
