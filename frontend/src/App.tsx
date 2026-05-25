@@ -65,7 +65,7 @@ function App() {
         confirmDifficulty,
         handleReload,
         handleVerifyCpu,
-    } = useCpuGame({ gameMode, setMyScore, setWinningScore, fireBRObstruction, playSuccess, playError, playLose, playStart });
+    } = useCpuGame({ gameMode, setMyScore, setWinningScore, fireBRObstruction, showBRAttack, playSuccess, playError, playLose, playStart });
 
     // ── オンラインゲームロジック ─────────────────────────────
     const {
@@ -293,7 +293,7 @@ function App() {
                         className="fixed top-48 left-0 right-0 z-[60] flex justify-center pointer-events-none"
                     >
                         <div className="bg-green-600 text-white px-6 py-2 rounded-full font-bold shadow-lg shadow-green-200">
-                            ✅ 妨害発動: {brAttackEffect}
+                            妨害: {brAttackEffect}
                         </div>
                     </motion.div>
                 )}

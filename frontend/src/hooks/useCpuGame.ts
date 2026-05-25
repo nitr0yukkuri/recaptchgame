@@ -8,6 +8,7 @@ interface UseCpuGameOptions {
     setMyScore: (fn: (prev: number) => number) => void;
     setWinningScore: (score: number) => void;
     fireBRObstruction: (effect: ObstructionType, attackerId?: string | null) => void;
+    showBRAttack: (effect: ObstructionType) => void;
     playSuccess: () => void;
     playError: () => void;
     playLose: () => void;
@@ -26,6 +27,7 @@ export function useCpuGame({
     setMyScore,
     setWinningScore,
     fireBRObstruction,
+    showBRAttack,
     playSuccess,
     playError,
     playLose,
@@ -207,17 +209,19 @@ export function useCpuGame({
             if (newCombo >= 2) {
                 store.setPlayerCombo(0);
                 const effect = getRandomObstruction();
+                    showBRAttack(effect);
                 if (cpuPlayerCount === 1) {
                     store.setOpponentEffect(effect);
                 } else {
-                    // ランダムに1人のライバルだけ妨害（全員妨害しない）
+                        // BRではライバル全員に同じ妨害を適用する
                     const latestOpponents = useGameStore.getState().brOpponents;
                     if (latestOpponents.length > 0) {
-                        const targetOpp = latestOpponents[Math.floor(Math.random() * latestOpponents.length)];
-                        store.setBROpponentEffect(targetOpp.id, effect);
-                        setTimeout(() => {
-                            useGameStore.getState().setBROpponentEffect(targetOpp.id, null);
-                        }, 3000);
+                            latestOpponents.forEach(targetOpp => {
+                                store.setBROpponentEffect(targetOpp.id, effect);
+                                setTimeout(() => {
+                                    useGameStore.getState().setBROpponentEffect(targetOpp.id, null);
+                                }, 3000);
+                            });
                     }
                 }
             }
