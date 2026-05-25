@@ -8,7 +8,7 @@ import (
 
 const signalSplitBaseImage = "/images/shingouki4.jpg"
 
-var signalSplitCorrectTiles = []int{2, 5}
+var signalSplitCorrectTiles = []int{3, 4, 5}
 
 // ProblemFactory は問題を生成するドメインサービス
 // アルゴリズムはすべてドメイン層に封じ込める
