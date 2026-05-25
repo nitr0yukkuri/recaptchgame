@@ -227,7 +227,7 @@ export const LoginScreen = ({
                             onClick={() => confirmDifficulty(1)}
                             className="w-full group bg-white border-2 border-green-200 hover:border-green-500 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-3 sm:gap-4"
                         >
-                            <div className="bg-green-100 text-green-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
+                            <div className="bg-green-100 text-green-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">1</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-xl font-bold text-green-600">よわい</p>
                                 <p className="text-xs sm:text-sm text-gray-400">のんびりプレイ向け</p>
@@ -238,7 +238,7 @@ export const LoginScreen = ({
                             onClick={() => confirmDifficulty(2)}
                             className="w-full group bg-white border-2 border-orange-200 hover:border-orange-500 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-3 sm:gap-4"
                         >
-                            <div className="bg-orange-100 text-orange-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">2</div>
+                            <div className="bg-orange-100 text-orange-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">2</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-xl font-bold text-orange-600">ふつう</p>
                                 <p className="text-xs sm:text-sm text-gray-400">バランスの取れた難易度</p>
@@ -249,7 +249,7 @@ export const LoginScreen = ({
                             onClick={() => confirmDifficulty(3)}
                             className="w-full group bg-white border-2 border-red-200 hover:border-red-500 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-3 sm:gap-4"
                         >
-                            <div className="bg-red-100 text-red-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
+                            <div className="bg-red-100 text-red-600 font-black text-xl sm:text-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center rounded-full shrink-0 group-hover:scale-110 transition">3</div>
                             <div className="text-left">
                                 <p className="text-base sm:text-xl font-bold text-red-600">つよい</p>
                                 <p className="text-xs sm:text-sm text-gray-400">本気で挑戦したい人向け</p>
