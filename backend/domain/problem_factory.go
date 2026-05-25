@@ -69,6 +69,14 @@ func (pf *ProblemFactory) CreateProblem(target string) *Problem {
 		selected = append(selected, remaining[:needed]...)
 	}
 
+	// 万が一素材が不足しても9枚を保証する
+	for len(selected) < 9 {
+		if len(selected) == 0 {
+			break
+		}
+		selected = append(selected, selected[len(selected)%len(selected)])
+	}
+
 	// 最後にシャッフル
 	shuffleStrings(selected)
 

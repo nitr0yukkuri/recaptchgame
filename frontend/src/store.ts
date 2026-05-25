@@ -38,6 +38,8 @@ interface Store {
     opponentCombo: number;
     playerEffect: ObstructionType;
     opponentEffect: ObstructionType;
+    playerEffectToken: number;
+    opponentEffectToken: number;
 
     // バトロワ専用ステート
     brOpponents: BROpponent[];
@@ -90,6 +92,8 @@ export const useGameStore = create<Store>((set) => ({
     opponentCombo: 0,
     playerEffect: null,
     opponentEffect: null,
+    playerEffectToken: 0,
+    opponentEffectToken: 0,
 
     brOpponents: [],
     setBROpponents: (opponents) => set({ brOpponents: opponents }),
@@ -113,6 +117,8 @@ export const useGameStore = create<Store>((set) => ({
         opponentCombo: 0,
         playerEffect: null,
         opponentEffect: null,
+        playerEffectToken: 0,
+        opponentEffectToken: 0,
     }),
     updatePattern: (target, images) => set({ target, images, opponentSelections: [], mySelections: [] }),
     updateCpuPattern: (target, images) => set({ cpuTarget: target, cpuImages: images, opponentSelections: [] }),
@@ -140,6 +146,12 @@ export const useGameStore = create<Store>((set) => ({
 
     setPlayerCombo: (count) => set({ playerCombo: count }),
     setOpponentCombo: (count) => set({ opponentCombo: count }),
-    setPlayerEffect: (effect) => set({ playerEffect: effect }),
-    setOpponentEffect: (effect) => set({ opponentEffect: effect }),
+    setPlayerEffect: (effect) => set((state) => ({
+        playerEffect: effect,
+        playerEffectToken: effect ? state.playerEffectToken + 1 : state.playerEffectToken,
+    })),
+    setOpponentEffect: (effect) => set((state) => ({
+        opponentEffect: effect,
+        opponentEffectToken: effect ? state.opponentEffectToken + 1 : state.opponentEffectToken,
+    })),
 }));

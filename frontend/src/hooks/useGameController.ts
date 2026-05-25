@@ -1,27 +1,41 @@
+import { useEffect, useRef } from 'react';
+
 // Centralized timer/controller for small cross-cutting timers.
-const timers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function setNamedTimeout(key: string, fn: () => void, delay: number) {
-    if (timers.has(key)) {
-        clearTimeout(timers.get(key)!);
-    }
-    const t = setTimeout(() => {
-        timers.delete(key);
-        try { fn(); } catch (e) { console.error('timer callback error', e); }
-    }, delay);
-    timers.set(key, t);
-    return t;
-}
-
-function clearNamedTimeout(key: string) {
-    const t = timers.get(key);
-    if (t) {
-        clearTimeout(t);
-        timers.delete(key);
-    }
-}
 
 export function useGameController() {
+    const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    useEffect(() => {
+        return () => {
+            for (const timer of timersRef.current.values()) {
+                clearTimeout(timer);
+            }
+            timersRef.current.clear();
+        };
+    }, []);
+
+    const setNamedTimeout = (key: string, fn: () => void, delay: number) => {
+        const timers = timersRef.current;
+        if (timers.has(key)) {
+            clearTimeout(timers.get(key)!);
+        }
+        const t = setTimeout(() => {
+            timers.delete(key);
+            try { fn(); } catch (e) { console.error('timer callback error', e); }
+        }, delay);
+        timers.set(key, t);
+        return t;
+    };
+
+    const clearNamedTimeout = (key: string) => {
+        const timers = timersRef.current;
+        const t = timers.get(key);
+        if (t) {
+            clearTimeout(t);
+            timers.delete(key);
+        }
+    };
+
     return {
         // Generic named timer (overwrites same key)
         scheduleNamed: setNamedTimeout,
@@ -42,11 +56,5 @@ export function useGameController() {
 
         scheduleNoticeHide: (key: string, cb: () => void, delay = 1400) =>
             setNamedTimeout(`notice:${key}`, cb, delay),
-    };
-}
-
-export function clearAllTimersForPrefix(prefix: string) {
-    for (const key of Array.from(timers.keys())) {
-        if (key.startsWith(prefix)) clearNamedTimeout(key);
     }
 }

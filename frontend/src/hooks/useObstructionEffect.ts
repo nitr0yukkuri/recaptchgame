@@ -12,7 +12,7 @@ interface UseObstructionEffectOptions {
  * - 妨害発動バナー用ステート管理
  */
 export function useObstructionEffect({ playObstruction }: UseObstructionEffectOptions) {
-    const { playerEffect, opponentEffect, setPlayerEffect, setOpponentEffect } = useGameStore();
+    const { playerEffect, opponentEffect, playerEffectToken, opponentEffectToken, setPlayerEffect, setOpponentEffect } = useGameStore();
 
     // 各BROpponentのeffectクリア用タイマー (id → timer)
     const brEffectTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -20,16 +20,21 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
     // 自分がBR妨害発動したときのバナー用
     const [brAttackEffect, setBRAttackEffect] = useState<ObstructionType>(null);
     const brAttackBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const playerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // playerEffect → サウンド再生 + 3秒後クリア
     useEffect(() => {
         if (!playerEffect) return;
         playObstruction();
-        const t = setTimeout(() => setPlayerEffect(null), 3000);
+        const token = playerEffectToken;
+        const t = setTimeout(() => {
+            if (useGameStore.getState().playerEffectToken === token) {
+                setPlayerEffect(null);
+            }
+        }, 3000);
         // Safety fallback: if something prevents the 3s clear, ensure effect cleared within 4s
         const fallback = setTimeout(() => {
-            if (useGameStore.getState().playerEffect) {
+            const state = useGameStore.getState();
+            if (state.playerEffect && state.playerEffectToken === token) {
                 console.warn('playerEffect fallback cleared after 4s');
                 setPlayerEffect(null);
             }
@@ -38,14 +43,20 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             clearTimeout(t);
             clearTimeout(fallback);
         };
-    }, [playerEffect, setPlayerEffect, playObstruction]);
+    }, [playerEffect, playerEffectToken, setPlayerEffect, playObstruction]);
 
     // opponentEffect → 3秒後クリア
     useEffect(() => {
         if (!opponentEffect) return;
-        const t = setTimeout(() => setOpponentEffect(null), 3000);
+        const token = opponentEffectToken;
+        const t = setTimeout(() => {
+            if (useGameStore.getState().opponentEffectToken === token) {
+                setOpponentEffect(null);
+            }
+        }, 3000);
         const fallback = setTimeout(() => {
-            if (useGameStore.getState().opponentEffect) {
+            const state = useGameStore.getState();
+            if (state.opponentEffect && state.opponentEffectToken === token) {
                 console.warn('opponentEffect fallback cleared after 4s');
                 setOpponentEffect(null);
             }
@@ -54,7 +65,7 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             clearTimeout(t);
             clearTimeout(fallback);
         };
-    }, [opponentEffect, setOpponentEffect]);
+    }, [opponentEffect, opponentEffectToken, setOpponentEffect]);
 
     // cleanup on unmount: clear any player/br timers
     useEffect(() => {
@@ -62,7 +73,6 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             const timers = brEffectTimersRef.current;
             Object.values(timers).forEach(t => clearTimeout(t));
             if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
-            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
         };
     }, []);
 
@@ -85,8 +95,6 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
             if (timers[opp.id]) { clearTimeout(timers[opp.id]); delete timers[opp.id]; }
             // skip attacker: do not set effect timer for attacker
             if (attackerId && opp.id === attackerId) {
-                // ensure attacker has no lingering effect
-                useGameStore.getState().setBROpponentEffect(opp.id, null);
                 return;
             }
             timers[opp.id] = setTimeout(() => {
@@ -98,11 +106,6 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
         // 自分（local player）への effect は攻撃者なら適用しない
         if (!attackerId || store.playerId !== attackerId) {
             store.setPlayerEffect(effect);
-            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
-            playerTimerRef.current = setTimeout(() => {
-                useGameStore.getState().setPlayerEffect(null);
-                playerTimerRef.current = null;
-            }, 3000);
         }
 
         // バナー表示 (自分が攻撃者の片方の場合のみ表示)
