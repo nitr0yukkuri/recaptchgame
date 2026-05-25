@@ -349,7 +349,7 @@ function App() {
                     >
                         {feedback === 'CORRECT' ? (
                             <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
-                                <svg className="w-40 h-40 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                <svg className="w-40 h-40 text-green-500 translate-y-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                             </div>
                         ) : (
                             <div className="bg-white/90 p-12 rounded-full shadow-2xl backdrop-blur-sm">
