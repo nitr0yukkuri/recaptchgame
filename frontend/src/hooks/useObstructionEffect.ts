@@ -74,29 +74,38 @@ export function useObstructionEffect({ playObstruction }: UseObstructionEffectOp
     const fireBRObstruction = (effect: ObstructionType, attackerId?: string | null) => {
         const store = useGameStore.getState();
 
-        // Apply effect to all BR opponents (including attacker)
-        const updated = store.brOpponents.map(opp => ({ ...opp, effect }));
+        // Apply effect to BR opponents, but skip attacker if attackerId provided
+        const updated = store.brOpponents.map(opp => (attackerId && opp.id === attackerId) ? opp : { ...opp, effect });
         store.setBROpponents(updated);
 
         // 既存タイマーをリセットして再セット（攻撃者にはタイマーを設定しない）
         const timers = brEffectTimersRef.current;
         updated.forEach(opp => {
-            if (timers[opp.id]) clearTimeout(timers[opp.id]);
+            // clear any existing timer for this opponent
+            if (timers[opp.id]) { clearTimeout(timers[opp.id]); delete timers[opp.id]; }
+            // skip attacker: do not set effect timer for attacker
+            if (attackerId && opp.id === attackerId) {
+                // ensure attacker has no lingering effect
+                useGameStore.getState().setBROpponentEffect(opp.id, null);
+                return;
+            }
             timers[opp.id] = setTimeout(() => {
                 useGameStore.getState().setBROpponentEffect(opp.id, null);
                 delete timers[opp.id];
             }, 3000);
         });
 
-        // 全員に effect を適用（攻撃者も含む）
-        store.setPlayerEffect(effect);
-        if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
-        playerTimerRef.current = setTimeout(() => {
-            useGameStore.getState().setPlayerEffect(null);
-            playerTimerRef.current = null;
-        }, 3000);
+        // 自分（local player）への effect は攻撃者なら適用しない
+        if (!attackerId || store.playerId !== attackerId) {
+            store.setPlayerEffect(effect);
+            if (playerTimerRef.current) clearTimeout(playerTimerRef.current);
+            playerTimerRef.current = setTimeout(() => {
+                useGameStore.getState().setPlayerEffect(null);
+                playerTimerRef.current = null;
+            }, 3000);
+        }
 
-        // バナー表示 (自分が攻撃者の片方の場合のみ「全員を妨害！」を表示)
+        // バナー表示 (自分が攻撃者の片方の場合のみ表示)
         if (store.playerId === attackerId) {
             setBRAttackEffect(effect);
             if (brAttackBannerTimerRef.current) clearTimeout(brAttackBannerTimerRef.current);
