@@ -109,17 +109,10 @@ export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting }: 
                     </div>
 
                     {invite.url ? (
-                        <div className="mx-auto w-fit rounded-2xl bg-white p-2.5 sm:p-4 shadow-sm ring-1 ring-gray-100">
-                            <QRCodeSVG
-                                value={invite.url}
-                                size={256}
-                                style={{ width: '100%', height: 'auto', maxWidth: '140px', sm: { maxWidth: '180px' } } as any}
-                                level="M"
-                                bgColor="#FFFFFF"
-                                fgColor="#111827"
-                                includeMargin
-                                aria-label="ルーム参加用QRコード"
-                            />
+                        <div className="mx-auto flex justify-center">
+                            <div className="rounded-2xl bg-white p-2.5 sm:p-4 shadow-sm ring-1 ring-gray-100">
+                                <QRCodeSVG value={invite.url} className="w-36 h-36 sm:w-44 sm:h-44 block" />
+                            </div>
                         </div>
                     ) : (
                         <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm font-medium text-amber-800">

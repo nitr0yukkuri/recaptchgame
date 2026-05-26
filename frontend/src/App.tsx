@@ -247,14 +247,8 @@ function App() {
         setLoginError('');
     }, [gameState]);
 
-    // 自動参加: URLにroomクエリがあれば自動で参加する（友達招待用）
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const room = new URLSearchParams(window.location.search).get('room');
-        if (!room || !ROOM_ID_PATTERN.test(room)) return;
-        // joinRoomInternal は定義済み上で呼べるように useEffect の外で定義されている
-        joinRoomInternal(room);
-    }, []);
+    // URLにroomクエリがあれば自動で参加画面（FRIEND_INPUT）に進む処理は上の useEffect で行われるため、
+    // ここで即座に joinRoomInternal を呼ぶ処理（自動マッチング）は削除しました。
 
     // 招待QRの表示: ルーム作成者で roomId がセットされたら表示する
     useEffect(() => {
