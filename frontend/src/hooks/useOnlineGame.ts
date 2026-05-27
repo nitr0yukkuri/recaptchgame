@@ -84,14 +84,18 @@ export function useOnlineGame({
                     if (isMatchingRef.current) return;
                     isMatchingRef.current = true;
                     setGameMode('ONLINE');
-                    store.startGame(msg.payload.target, msg.payload.images);
-                    if (msg.payload.opponent_images) {
-                        store.updateCpuPattern('', msg.payload.opponent_images);
+
+                    const startPayload = msg.payload as any;
+                    // Immediately set up the game state so the GameScreen can render in the background
+                    store.startGame(startPayload.target, startPayload.images);
+                    // Apply opponent images (if any) and scoring info immediately so UI reflects opponent info
+                    if (startPayload.opponent_images) {
+                        store.updateCpuPattern('', startPayload.opponent_images);
                     }
-                    if (msg.payload.winning_score) {
-                        setWinningScore(msg.payload.winning_score);
+                    if (startPayload.winning_score) {
+                        setWinningScore(startPayload.winning_score);
                     }
-                    setMyScore(() => msg.payload.my_current_score ?? 0);
+                    setMyScore(() => startPayload.my_current_score ?? 0);
                     setIsVerifying(false);
                     store.setPlayerCombo(0);
                     store.setOpponentCombo(0);
@@ -111,6 +115,7 @@ export function useOnlineGame({
                         if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
                         setStartMessage('START!'); await sleep(500);
                         if (!isMatchingRef.current || !isMountedRef.current) { setStartPopup(false); return; }
+
                         // schedule via controller (created once per hook)
                         if (!isMountedRef.current) return;
                         controller.scheduleStartPopupHide(store.playerId, () => setStartPopup(false), 500);
