@@ -48,6 +48,7 @@ function App() {
     const [winningScore, setWinningScore] = useState(5);
     const [inputRoom, setInputRoom] = useState('');
     const [loginError, setLoginError] = useState('');
+    const [roomCapacity, setRoomCapacity] = useState<number>(2);
     const [sessionID] = useState(getOrCreateSessionID());
 
     // ── サウンド・WebSocket ──────────────────────────────────
@@ -186,10 +187,18 @@ function App() {
         if (!ROOM_ID_PATTERN.test(room)) { setLoginError('6文字の英数字で入力してね'); return; }
         setGameMode('ONLINE');
         useGameStore.getState().setRoomInfo(room, playerId);
-        sendMessage(JSON.stringify({
-            type: 'JOIN_ROOM',
-            payload: { room_id: room, player_id: playerId, winning_score: settingScore, session_id: sessionID },
-        }));
+        // If creator, include chosen capacity in payload
+        if (isCreator) {
+            sendMessage(JSON.stringify({
+                type: 'JOIN_ROOM',
+                payload: { room_id: room, player_id: playerId, winning_score: settingScore, session_id: sessionID, capacity: roomCapacity },
+            }));
+        } else {
+            sendMessage(JSON.stringify({
+                type: 'JOIN_ROOM',
+                payload: { room_id: room, player_id: playerId, winning_score: settingScore, session_id: sessionID },
+            }));
+        }
     };
 
     // WebSocket再接続時に同一セッションで復帰を試みる
@@ -393,6 +402,8 @@ function App() {
                             confirmDifficulty={onConfirmDifficulty}
                             confirmPlayerCount={confirmPlayerCount}
                             cpuPlayerCount={cpuPlayerCount}
+                            roomCapacity={roomCapacity}
+                            setRoomCapacity={setRoomCapacity}
                         />
                     )}
 

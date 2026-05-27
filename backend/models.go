@@ -18,6 +18,7 @@ type JoinRoomPayload struct {
 	RoomID       string `json:"room_id"`
 	PlayerID     string `json:"player_id"`
 	WinningScore int    `json:"winning_score"`
+	Capacity     int    `json:"capacity,omitempty"`
 }
 
 type RoomAssignedPayload struct {

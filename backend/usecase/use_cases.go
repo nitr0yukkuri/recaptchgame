@@ -101,6 +101,7 @@ type JoinRoomInput struct {
 	PlayerID     string
 	RoomID       string
 	WinningScore int
+	Capacity     int
 }
 
 // JoinRoomOutput はJoinRoomの出力
@@ -108,6 +109,7 @@ type JoinRoomOutput struct {
 	ActualRoomID  string
 	IsFirstPlayer bool
 	RoomSize      int
+	RoomCapacity  int
 }
 
 // Execute はルーム参加を実行
@@ -120,7 +122,10 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	if input.RoomID == "RANDOM" {
 		globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
-		isFull := waitingRoom != nil && waitingRoom.Player1 != nil && waitingRoom.Player1.ID != "" && waitingRoom.Player2 != nil && waitingRoom.Player2.ID != ""
+		isFull := false
+		if waitingRoom != nil {
+			isFull = waitingRoom.CountPlayers() >= waitingRoom.Capacity
+		}
 		if waitingRoom == nil || isFull {
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
@@ -137,7 +142,11 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		room, err := uc.roomRepo.FindByID(actualRoomID)
 		if err != nil {
 			// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
-			room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore)
+			cap := input.Capacity
+			if cap <= 0 {
+				cap = 2
+			}
+			room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, cap)
 			uc.roomRepo.Save(room)
 			if input.RoomID == "RANDOM" {
 				uc.roomRepo.SetWaitingRoom(room)
@@ -147,20 +156,32 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		}
 
 		// 既に同一プレイヤーがいる場合は再登録しない
-		if (room.Player1 != nil && room.Player1.ID == input.PlayerID) || (room.Player2 != nil && room.Player2.ID == input.PlayerID) {
+		if room.GetPlayerByID(input.PlayerID) != nil {
 			unlock()
 			break
 		}
 
 		// 空きスロットがあれば参加
+		joined := false
 		if room.Player1 == nil || room.Player1.ID == "" {
 			room.Player1 = domain.NewPlayer(input.PlayerID)
 			uc.roomRepo.Save(room)
-			unlock()
-			break
+			joined = true
 		} else if room.Player2 == nil || room.Player2.ID == "" {
 			room.Player2 = domain.NewPlayer(input.PlayerID)
 			uc.roomRepo.Save(room)
+			joined = true
+		} else {
+			for i := range room.ExtraPlayers {
+				if room.ExtraPlayers[i] == nil || room.ExtraPlayers[i].ID == "" {
+					room.ExtraPlayers[i] = domain.NewPlayer(input.PlayerID)
+					uc.roomRepo.Save(room)
+					joined = true
+					break
+				}
+			}
+		}
+		if joined {
 			unlock()
 			break
 		}
@@ -210,9 +231,8 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	uc.roomRepo.Save(room)
 
 	// ルームがいっぱいになったら待機ルームをクリア
-	roomSize := 1
-	if room.Player1 != nil && room.Player1.ID != "" && room.Player2 != nil && room.Player2.ID != "" {
-		roomSize = 2
+	roomSize := room.CountPlayers()
+	if roomSize >= room.Capacity {
 		if input.RoomID == "RANDOM" {
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom()
 			if waitingRoom != nil && waitingRoom.ID == actualRoomID {
@@ -225,6 +245,7 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		ActualRoomID:  actualRoomID,
 		IsFirstPlayer: true, // 簡略化
 		RoomSize:      roomSize,
+		RoomCapacity:  room.Capacity,
 	}, nil
 }
 
@@ -364,13 +385,7 @@ type StartGameInput struct {
 
 // StartGameOutput はStartGameの出力
 type StartGameOutput struct {
-	Player1Target         string
-	Player1Images         []string
-	Player1OpponentImages []string
-	Player2Target         string
-	Player2Images         []string
-	Player2OpponentImages []string
-	WinningScore          int
+	WinningScore int
 }
 
 // Execute はゲーム開始を実行
@@ -389,29 +404,49 @@ func (uc *StartGameUseCase) Execute(input StartGameInput) (*StartGameOutput, err
 
 	room.Start()
 
-	// 両プレイヤーに問題を生成
-	problem1, _ := uc.problemGen.Execute("")
-	problem2, _ := uc.problemGen.Execute("")
+	// Generate problems for each player slot (player1, player2, extra players)
+	// and reset scores
+	// Player1
+	problems := make([]*domain.Problem, 0)
+	for i := 0; i < room.Capacity; i++ {
+		p, _ := uc.problemGen.Execute("")
+		problems = append(problems, p)
+	}
 
-	room.GameState1.UpdateState(problem1.Target, problem1.Images)
-	room.GameState2.UpdateState(problem2.Target, problem2.Images)
+	// Assign problems to game states
+	if len(problems) > 0 {
+		room.GameState1.UpdateState(problems[0].Target, problems[0].Images)
+	}
+	if len(problems) > 1 {
+		room.GameState2.UpdateState(problems[1].Target, problems[1].Images)
+	}
+	for i := 2; i < len(problems); i++ {
+		idx := i - 2
+		if idx < len(room.ExtraGameStates) {
+			room.ExtraGameStates[idx].UpdateState(problems[i].Target, problems[i].Images)
+		}
+	}
 
-	// スコア/コンボをリセット
-	room.Player1.Score = 0
-	room.Player1.Combo = 0
-	room.Player2.Score = 0
-	room.Player2.Combo = 0
+	// Reset scores/combo for all players
+	if room.Player1 != nil {
+		room.Player1.Score = 0
+		room.Player1.Combo = 0
+	}
+	if room.Player2 != nil {
+		room.Player2.Score = 0
+		room.Player2.Combo = 0
+	}
+	for _, p := range room.ExtraPlayers {
+		if p != nil {
+			p.Score = 0
+			p.Combo = 0
+		}
+	}
 
 	uc.roomRepo.Save(room)
 
 	return &StartGameOutput{
-		Player1Target:         problem1.Target,
-		Player1Images:         problem1.Images,
-		Player1OpponentImages: problem2.Images,
-		Player2Target:         problem2.Target,
-		Player2Images:         problem2.Images,
-		Player2OpponentImages: problem1.Images,
-		WinningScore:          room.WinningScore,
+		WinningScore: room.WinningScore,
 	}, nil
 }
 
@@ -456,15 +491,22 @@ func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 		return nil
 	}
 
-	// プレイヤーを削除
+	// プレイヤーを削除（extra players を含む）
 	if room.Player1 != nil && room.Player1.ID == input.PlayerID {
 		room.Player1 = nil
 	} else if room.Player2 != nil && room.Player2.ID == input.PlayerID {
 		room.Player2 = nil
+	} else {
+		for i := range room.ExtraPlayers {
+			if room.ExtraPlayers[i] != nil && room.ExtraPlayers[i].ID == input.PlayerID {
+				room.ExtraPlayers[i] = nil
+				break
+			}
+		}
 	}
 
 	// ルームが空になったら削除
-	if room.Player1 == nil && room.Player2 == nil {
+	if room.CountPlayers() == 0 {
 		uc.roomRepo.Delete(room.ID)
 		// 削除対象が現在の待機ルームと一致する場合のみクリア
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom()

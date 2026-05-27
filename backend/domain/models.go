@@ -60,33 +60,52 @@ type Room struct {
 	GameState2   *GameState
 	WinningScore int
 	IsActive     bool
+	Capacity     int
+	ExtraPlayers []*Player
+	ExtraGameStates []*GameState
 }
 
 // NewRoom は新しいルームを生成
-func NewRoom(id string, player1ID string, player2ID string, winningScore int) *Room {
+func NewRoom(id string, player1ID string, player2ID string, winningScore int, capacity int) *Room {
 	if winningScore <= 0 {
 		winningScore = 5
 	}
+	if capacity <= 0 {
+		capacity = 2
+	}
 
 	var player2 *Player
+	var extraPlayers []*Player
+	var extraGameStates []*GameState
 	if player2ID != "" {
 		player2 = NewPlayer(player2ID)
 	}
+	// initialize extra slices if capacity > 2
+	if capacity > 2 {
+		extraPlayers = make([]*Player, capacity-2)
+		extraGameStates = make([]*GameState, capacity-2)
+		for i := range extraGameStates {
+			extraGameStates[i] = NewGameState("", []string{})
+		}
+	}
 
 	return &Room{
-		ID:           id,
-		Player1:      NewPlayer(player1ID),
-		Player2:      player2,
-		GameState1:   NewGameState("", []string{}),
-		GameState2:   NewGameState("", []string{}),
-		WinningScore: winningScore,
-		IsActive:     false,
+		ID:              id,
+		Player1:         NewPlayer(player1ID),
+		Player2:         player2,
+		GameState1:      NewGameState("", []string{}),
+		GameState2:      NewGameState("", []string{}),
+		WinningScore:    winningScore,
+		IsActive:        false,
+		Capacity:        capacity,
+		ExtraPlayers:    extraPlayers,
+		ExtraGameStates: extraGameStates,
 	}
 }
 
 // IsReady はルームが開始可能な状態かどうか
 func (r *Room) IsReady() bool {
-	return r.Player1 != nil && r.Player2 != nil && r.Player1.ID != "" && r.Player2.ID != ""
+	return r.CountPlayers() >= r.Capacity
 }
 
 // Start はゲームを開始
@@ -118,6 +137,11 @@ func (r *Room) GetPlayerByID(playerID string) *Player {
 	if r.Player2 != nil && r.Player2.ID == playerID {
 		return r.Player2
 	}
+	for _, p := range r.ExtraPlayers {
+		if p != nil && p.ID == playerID {
+			return p
+		}
+	}
 	return nil
 }
 
@@ -129,16 +153,48 @@ func (r *Room) GetGameStateByPlayerID(playerID string) *GameState {
 	if r.Player2 != nil && r.Player2.ID == playerID {
 		return r.GameState2
 	}
+	for i, p := range r.ExtraPlayers {
+		if p != nil && p.ID == playerID {
+			return r.ExtraGameStates[i]
+		}
+	}
 	return nil
 }
 
 // GetOpponentGameState は対戦相手のゲーム状態を取得
 func (r *Room) GetOpponentGameState(playerID string) *GameState {
+	// For multi-player, return the first other player's game state if exists
 	if r.Player1 != nil && r.Player1.ID == playerID {
-		return r.GameState2
+		if r.Player2 != nil {
+			return r.GameState2
+		}
+		if len(r.ExtraGameStates) > 0 {
+			return r.ExtraGameStates[0]
+		}
 	}
 	if r.Player2 != nil && r.Player2.ID == playerID {
-		return r.GameState1
+		if r.Player1 != nil {
+			return r.GameState1
+		}
+		if len(r.ExtraGameStates) > 0 {
+			return r.ExtraGameStates[0]
+		}
+	}
+	for i, p := range r.ExtraPlayers {
+		if p != nil && p.ID == playerID {
+			// return first non-self game state
+			if r.Player1 != nil {
+				return r.GameState1
+			}
+			if r.Player2 != nil {
+				return r.GameState2
+			}
+			for j := range r.ExtraGameStates {
+				if j != i {
+					return r.ExtraGameStates[j]
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -152,6 +208,23 @@ func (r *Room) EvaluateComboAndApplyObstruction(playerID string) bool {
 		return true // 妨害発動
 	}
 	return false
+}
+
+// CountPlayers returns number of non-nil players currently in the room
+func (r *Room) CountPlayers() int {
+	cnt := 0
+	if r.Player1 != nil && r.Player1.ID != "" {
+		cnt++
+	}
+	if r.Player2 != nil && r.Player2.ID != "" {
+		cnt++
+	}
+	for _, p := range r.ExtraPlayers {
+		if p != nil && p.ID != "" {
+			cnt++
+		}
+	}
+	return cnt
 }
 
 // Problem は問題を表すドメインエンティティ

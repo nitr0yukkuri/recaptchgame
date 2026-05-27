@@ -18,12 +18,15 @@ type LoginScreenProps = {
     confirmDifficulty: (level: number) => void;
     confirmPlayerCount: (count: 1 | 3 | 4) => void;
     cpuPlayerCount: 0 | 1 | 3 | 4;
+    roomCapacity: number;
+    setRoomCapacity: (n: number) => void;
 };
 
 export const LoginScreen = ({
     loginStep, isCreator, loginError, inputRoom, setInputRoom, setLoginError,
     settingScore, setSettingScore, startCpuFlow, joinRandom, joinFriend,
-    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, confirmPlayerCount, cpuPlayerCount
+    createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, confirmPlayerCount, cpuPlayerCount,
+    roomCapacity, setRoomCapacity
 }: LoginScreenProps) => {
     return (
         <div className="animate-fade-in w-full max-w-4xl mx-auto h-full flex flex-col p-2 sm:p-4">
@@ -150,6 +153,16 @@ export const LoginScreen = ({
                     </div>
 
                     {isCreator && <ScoreSelector settingScore={settingScore} setSettingScore={setSettingScore} />}
+                    {isCreator && (
+                        <div className="mt-3">
+                            <p className="text-xs sm:text-sm text-gray-400 mb-2">最大プレイヤー数を選択</p>
+                            <div className="flex gap-2 justify-center">
+                                {[2, 3, 4].map(n => (
+                                    <button key={n} onClick={() => setRoomCapacity(n)} className={`px-3 py-2 rounded-xl border-2 ${roomCapacity === n ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-gray-200'} text-sm font-bold`}>{n}人</button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <button
                         onClick={() => joinRoomInternal(inputRoom)}

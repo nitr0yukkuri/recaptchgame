@@ -61,6 +61,11 @@ func (r *MemoryRoomRepository) FindByPlayerID(playerID string) (*domain.Room, er
 			(room.Player2 != nil && room.Player2.ID == playerID) {
 			return room, nil
 		}
+		for _, p := range room.ExtraPlayers {
+			if p != nil && p.ID == playerID {
+				return room, nil
+			}
+		}
 	}
 	return nil, fmt.Errorf("room not found for player: %s", playerID)
 }
