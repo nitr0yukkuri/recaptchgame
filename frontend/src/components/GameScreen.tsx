@@ -88,7 +88,9 @@ export const GameScreen = ({
 
                     <motion.div
                         variants={obstructionVariants}
-                        animate={['SHAKE', 'SPIN', 'SKEW'].includes(playerEffect || '') ? (playerEffect as string) : 'NORMAL'}
+                        // プレイヤー側の画像が意図せず回転しないよう、
+                        // `SPIN` 効果はプレイヤー本体には適用しない（代わりに NORMAL を使う）
+                        animate={playerEffect === 'SPIN' ? 'NORMAL' : (['SHAKE', 'SPIN', 'SKEW'].includes(playerEffect || '') ? (playerEffect as string) : 'NORMAL')}
                         className={`relative overflow-hidden bg-white rounded-lg p-1 sm:p-2 shadow-sm w-full border border-gray-300 flex flex-col 
                             ${playerEffect === 'BLUR' ? 'blur-[4px]' : ''} 
                             ${playerEffect === 'INVERT' ? 'invert' : ''}

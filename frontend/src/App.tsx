@@ -406,7 +406,7 @@ function App() {
                             winningScore={winningScore}
                             gameMode={gameMode}
                             isReloading={isReloading}
-                            isVerifying={isVerifying}
+                            isVerifying={isVerifying || startPopup}
                             handleImageClick={handleImageClick}
                             handleReload={handleReload}
                             handleVerify={handleVerify}
