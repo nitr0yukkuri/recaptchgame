@@ -235,6 +235,20 @@ func (m *WebSocketManager) SendToRoom(roomID string, msg Message) {
 	}
 }
 
+// CloseAll は全ての接続をクローズして登録を解除します。
+func (m *WebSocketManager) CloseAll() {
+	m.mu.RLock()
+	ids := make([]string, 0, len(m.connections))
+	for id := range m.connections {
+		ids = append(ids, id)
+	}
+	m.mu.RUnlock()
+
+	for _, id := range ids {
+		m.UnregisterConnection(id)
+	}
+}
+
 func (m *WebSocketManager) writePump(clientID string, client *clientConnection) {
 	for msg := range client.send {
 		if err := client.conn.WriteJSON(msg); err != nil {

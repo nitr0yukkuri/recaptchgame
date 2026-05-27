@@ -15,7 +15,7 @@ import { WaitingScreen } from './components/WaitingScreen';
 import { GameScreen } from './components/GameScreen';
 import { BRGameScreen } from './components/BRGameScreen';
 import { ResultScreen } from './components/ResultScreen';
-import InviteQrModal from './components/InviteQrModal';
+import InviteQrModal from './components/InviteQrModal.tsx';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
 const STATIC_WS_OPTIONS = {
