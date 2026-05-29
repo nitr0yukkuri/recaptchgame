@@ -40,7 +40,7 @@ func TestPlayer(t *testing.T) {
 
 // TestRoom ルームエンティティのテスト
 func TestRoom(t *testing.T) {
-	room := NewRoom("room1", "player1", "player2", 5)
+	room := NewRoom("room1", "player1", "player2", 5, 2)
 
 	// 初期状態の確認
 	if room.ID != "room1" {
@@ -161,12 +161,12 @@ func TestProblem(t *testing.T) {
 // TestWinningScoreDefault デフォルトのWinningScore設定テスト
 func TestWinningScoreDefault(t *testing.T) {
 	// WinningScoreが0以下の場合、デフォルト値5が設定されるはず
-	room := NewRoom("room1", "player1", "player2", 0)
+	room := NewRoom("room1", "player1", "player2", 0, 2)
 	if room.WinningScore != 5 {
 		t.Errorf("expected default winning score 5, got %d", room.WinningScore)
 	}
 
-	room2 := NewRoom("room2", "player1", "player2", -1)
+	room2 := NewRoom("room2", "player1", "player2", -1, 2)
 	if room2.WinningScore != 5 {
 		t.Errorf("expected default winning score 5 for negative value, got %d", room2.WinningScore)
 	}
@@ -174,8 +174,8 @@ func TestWinningScoreDefault(t *testing.T) {
 
 // TestMultipleRooms 複数ルームのシナリオテスト
 func TestMultipleRooms(t *testing.T) {
-	room1 := NewRoom("room1", "player1", "player2", 3)
-	room2 := NewRoom("room2", "player3", "player4", 5)
+	room1 := NewRoom("room1", "player1", "player2", 3, 2)
+	room2 := NewRoom("room2", "player3", "player4", 5, 2)
 
 	// 各ルームが独立していることを確認
 	room1.Player1.IncreaseScore()

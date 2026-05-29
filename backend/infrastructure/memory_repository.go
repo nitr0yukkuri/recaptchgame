@@ -11,13 +11,14 @@ import (
 type MemoryRoomRepository struct {
 	mu          sync.RWMutex
 	rooms       map[string]*domain.Room
-	waitingRoom *domain.Room
+	waitingRooms map[int]*domain.Room
 }
 
 // NewMemoryRoomRepository は新しいMemoryRoomRepositoryを生成
 func NewMemoryRoomRepository() *MemoryRoomRepository {
 	return &MemoryRoomRepository{
-		rooms: make(map[string]*domain.Room),
+		rooms:        make(map[string]*domain.Room),
+		waitingRooms: make(map[int]*domain.Room),
 	}
 }
 
@@ -85,14 +86,15 @@ func (r *MemoryRoomRepository) ListActive() ([]*domain.Room, error) {
 }
 
 // GetWaitingRoom はマッチング待機中のルームを取得
-func (r *MemoryRoomRepository) GetWaitingRoom() (*domain.Room, error) {
+func (r *MemoryRoomRepository) GetWaitingRoom(capacity int) (*domain.Room, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.waitingRoom == nil {
+	waitingRoom, ok := r.waitingRooms[capacity]
+	if !ok || waitingRoom == nil {
 		return nil, fmt.Errorf("no waiting room")
 	}
-	return copyRoom(r.waitingRoom), nil
+	return copyRoom(waitingRoom), nil
 }
 
 // copyRoom makes a shallow copy of Room and its nested structs to avoid exposing
@@ -139,20 +141,23 @@ func copyRoom(src *domain.Room) *domain.Room {
 }
 
 // SetWaitingRoom はマッチング待機ルームを設定
-func (r *MemoryRoomRepository) SetWaitingRoom(room *domain.Room) error {
+func (r *MemoryRoomRepository) SetWaitingRoom(capacity int, room *domain.Room) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.waitingRoom = room
+	if capacity <= 0 {
+		capacity = room.Capacity
+	}
+	r.waitingRooms[capacity] = copyRoom(room)
 	return nil
 }
 
 // ClearWaitingRoom はマッチング待機ルームをクリア
-func (r *MemoryRoomRepository) ClearWaitingRoom() error {
+func (r *MemoryRoomRepository) ClearWaitingRoom(capacity int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.waitingRoom = nil
+	delete(r.waitingRooms, capacity)
 	return nil
 }
 

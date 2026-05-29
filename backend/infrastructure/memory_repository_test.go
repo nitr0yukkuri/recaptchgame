@@ -12,7 +12,7 @@ func TestMemoryRoomRepository(t *testing.T) {
 	repo := NewMemoryRoomRepository()
 
 	// テスト1: ルームを保存して取得
-	room := domain.NewRoom("room1", "player1", "player2", 5)
+	room := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	err := repo.Save(room)
 	if err != nil {
 		t.Fatalf("failed to save room: %v", err)
@@ -45,7 +45,7 @@ func TestMemoryRoomRepository(t *testing.T) {
 	}
 
 	// テスト4: プレイヤーIDからルームを検索
-	room1 := domain.NewRoom("room1", "player1", "player2", 5)
+	room1 := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	repo.Save(room1)
 
 	found, err7 := repo.FindByPlayerID("player1")
@@ -58,13 +58,13 @@ func TestMemoryRoomRepository(t *testing.T) {
 	}
 
 	// テスト5: 待機ルームの設定と取得
-	waitingRoom := domain.NewRoom("waiting", "player3", "", 5)
-	err3 := repo.SetWaitingRoom(waitingRoom)
+	waitingRoom := domain.NewRoom("waiting", "player3", "", 5, 2)
+	err3 := repo.SetWaitingRoom(2, waitingRoom)
 	if err3 != nil {
 		t.Fatalf("failed to set waiting room: %v", err3)
 	}
 
-	retrieved2, err4 := repo.GetWaitingRoom()
+	retrieved2, err4 := repo.GetWaitingRoom(2)
 	if err4 != nil {
 		t.Fatalf("failed to get waiting room: %v", err4)
 	}
@@ -73,19 +73,38 @@ func TestMemoryRoomRepository(t *testing.T) {
 		t.Errorf("expected waiting room, got %s", retrieved2.ID)
 	}
 
+	waitingRoom4 := domain.NewRoom("waiting4", "player4", "", 5, 4)
+	err3b := repo.SetWaitingRoom(4, waitingRoom4)
+	if err3b != nil {
+		t.Fatalf("failed to set waiting room for capacity 4: %v", err3b)
+	}
+
+	retrieved4, err4b := repo.GetWaitingRoom(4)
+	if err4b != nil {
+		t.Fatalf("failed to get waiting room for capacity 4: %v", err4b)
+	}
+
+	if retrieved4.ID != "waiting4" {
+		t.Errorf("expected waiting4 room, got %s", retrieved4.ID)
+	}
+
 	// テスト6: 待機ルームをクリア
-	err5 := repo.ClearWaitingRoom()
+	err5 := repo.ClearWaitingRoom(2)
 	if err5 != nil {
 		t.Fatalf("failed to clear waiting room: %v", err5)
 	}
 
-	_, err6 := repo.GetWaitingRoom()
+	_, err6 := repo.GetWaitingRoom(2)
 	if err6 == nil {
 		t.Errorf("expected error after clearing waiting room")
 	}
 
+	if _, err := repo.GetWaitingRoom(4); err != nil {
+		t.Errorf("expected capacity 4 waiting room to remain")
+	}
+
 	// テスト7: アクティブなルームをリスト
-	room2 := domain.NewRoom("room2", "player4", "player5", 5)
+	room2 := domain.NewRoom("room2", "player4", "player5", 5, 2)
 	repo.Save(room1)
 	repo.Save(room2)
 
@@ -183,7 +202,7 @@ func TestRepositoryConcurrency(t *testing.T) {
 			playerID := fmt.Sprintf("player%d", index)
 			clientID := fmt.Sprintf("client%d", index)
 
-			room := domain.NewRoom(roomID, playerID, "", 5)
+			room := domain.NewRoom(roomID, playerID, "", 5, 2)
 			roomRepo.Save(room)
 
 			clientRepo.AssignClient(clientID, playerID)
@@ -216,7 +235,7 @@ func TestRepositoryIsolation(t *testing.T) {
 	repo1 := NewMemoryRoomRepository()
 	repo2 := NewMemoryRoomRepository()
 
-	room1 := domain.NewRoom("room1", "player1", "player2", 5)
+	room1 := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	repo1.Save(room1)
 
 	// repo2は room1 を持っていない

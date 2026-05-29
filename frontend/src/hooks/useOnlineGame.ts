@@ -85,6 +85,16 @@ export function useOnlineGame({
                     }
                     break;
 
+                case 'JOIN_FAILED':
+                    setIsVerifying(false);
+                    isMatchingRef.current = false;
+                    setStartPopup(false);
+                    setGameMode(null);
+                    store.setRoomInfo('', store.playerId);
+                    store.setGameState('LOGIN');
+                    alert('部屋に入れませんでした');
+                    break;
+
                 case 'GAME_START':
                     // If we're already actively matching/playing, avoid double-handling.
                     // However, ignore a stale `isMatchingRef` if we're not in PLAYING state —

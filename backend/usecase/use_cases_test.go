@@ -55,7 +55,7 @@ func TestVerifyAnswer(t *testing.T) {
 	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.GetAllEffects(), NewRoomExecutionGuard())
 
 	// テスト用ルームを作成
-	room := domain.NewRoom("room1", "player1", "player2", 5)
+	room := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	problem1, _ := problemGen.Execute("")
 	problem2, _ := problemGen.Execute("")
 
@@ -196,10 +196,10 @@ func TestStartGame(t *testing.T) {
 		factory,
 		domain.GetAllTargets(),
 	)
-	startGameUC := NewStartGameUseCase(roomRepo, problemGen)
+	startGameUC := NewStartGameUseCase(roomRepo, problemGen, NewRoomExecutionGuard())
 
 	// ルームを作成
-	room := domain.NewRoom("room1", "player1", "player2", 5)
+	room := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	roomRepo.Save(room)
 
 	// ゲーム開始
@@ -212,29 +212,27 @@ func TestStartGame(t *testing.T) {
 		t.Fatalf("failed to start game: %v", err)
 	}
 
-	// 両プレイヤーにターゲットと画像が割り当てられていることを確認
-	if output.Player1Target == "" {
-		t.Errorf("expected player1 target, got empty")
-	}
-
-	if output.Player2Target == "" {
-		t.Errorf("expected player2 target, got empty")
-	}
-
-	if len(output.Player1Images) != 9 {
-		t.Errorf("expected 9 player1 images, got %d", len(output.Player1Images))
-	}
-
-	if len(output.Player2Images) != 9 {
-		t.Errorf("expected 9 player2 images, got %d", len(output.Player2Images))
-	}
-
 	if output.WinningScore != 5 {
 		t.Errorf("expected winning score 5, got %d", output.WinningScore)
 	}
 
+	// ルームの状態が更新されていることを確認
+	updatedRoom, err := roomRepo.FindByID("room1")
+	if err != nil {
+		t.Fatalf("failed to reload room: %v", err)
+	}
+	if !updatedRoom.IsActive {
+		t.Errorf("expected room to be active")
+	}
+	if updatedRoom.GameState1.Target == "" || updatedRoom.GameState2.Target == "" {
+		t.Errorf("expected both game states to be populated")
+	}
+	if len(updatedRoom.GameState1.Images) != 9 || len(updatedRoom.GameState2.Images) != 9 {
+		t.Errorf("expected both game states to have 9 images")
+	}
+
 	// ルームのスコアが0にリセットされていることを確認
-	updatedRoom, _ := roomRepo.FindByID("room1")
+	updatedRoom, _ = roomRepo.FindByID("room1")
 	if updatedRoom.Player1.Score != 0 || updatedRoom.Player2.Score != 0 {
 		t.Errorf("expected scores to be 0")
 	}
@@ -249,7 +247,11 @@ func TestLeaveRoom(t *testing.T) {
 	leaveRoomUC := NewLeaveRoomUseCase(roomRepo, clientRepo, roomGuard)
 
 	// ルームを作成
-	room := domain.NewRoom("room1", "player1", "player2", 5)
+	room := domain.NewRoom("room1", "player1", "player2", 5, 4)
+	room.ExtraPlayers[0] = domain.NewPlayer("player3")
+	room.ExtraPlayers[1] = domain.NewPlayer("player4")
+	room.ExtraGameStates[0] = domain.NewGameState("", []string{})
+	room.ExtraGameStates[1] = domain.NewGameState("", []string{})
 	roomRepo.Save(room)
 
 	// クライアントを割り当て
@@ -279,6 +281,9 @@ func TestLeaveRoom(t *testing.T) {
 	if updatedRoom.Player2 == nil {
 		t.Errorf("player2 should still exist")
 	}
+	if len(updatedRoom.ExtraPlayers) < 2 || updatedRoom.ExtraPlayers[0] == nil || updatedRoom.ExtraPlayers[1] == nil {
+		t.Errorf("extra players should still exist")
+	}
 }
 
 // TestComboAndObstruction はコンボと妨害のテスト
@@ -293,7 +298,7 @@ func TestComboAndObstruction(t *testing.T) {
 	verifyUC := NewVerifyAnswerUseCase(roomRepo, problemGen, domain.GetAllEffects(), NewRoomExecutionGuard())
 
 	// ルームを作成
-	room := domain.NewRoom("room1", "player1", "player2", 5)
+	room := domain.NewRoom("room1", "player1", "player2", 5, 2)
 	problem1, _ := problemGen.Execute("")
 
 	room.GameState1.UpdateState(problem1.Target, problem1.Images)
@@ -371,7 +376,7 @@ func TestDomainModels(t *testing.T) {
 	}
 
 	// Room テスト
-	room := domain.NewRoom("room1", "player1", "player2", 3)
+	room := domain.NewRoom("room1", "player1", "player2", 3, 2)
 	if !room.IsReady() {
 		t.Errorf("expected room to be ready")
 	}

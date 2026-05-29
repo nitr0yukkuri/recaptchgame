@@ -18,13 +18,13 @@ type RoomRepository interface {
 	ListActive() ([]*Room, error)
 
 	// GetWaitingRoom はマッチング待機中のルームを取得
-	GetWaitingRoom() (*Room, error)
+	GetWaitingRoom(capacity int) (*Room, error)
 
 	// SetWaitingRoom はマッチング待機ルームを設定
-	SetWaitingRoom(room *Room) error
+	SetWaitingRoom(capacity int, room *Room) error
 
 	// ClearWaitingRoom はマッチング待機ルームをクリア
-	ClearWaitingRoom() error
+	ClearWaitingRoom(capacity int) error
 }
 
 // ClientRepository はクライアント接続の管理インターフェース

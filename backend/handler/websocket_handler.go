@@ -128,6 +128,24 @@ func (m *WebSocketManager) AssignClientToRoom(clientID string, roomID string) {
 	m.roomToClients[roomID][clientID] = true
 }
 
+// RemoveClientAssociation はクライアントのルーム/プレイヤー関連付けを解除する
+func (m *WebSocketManager) RemoveClientAssociation(clientID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	roomID := m.clientToRoom[clientID]
+	delete(m.clientToRoom, clientID)
+	delete(m.clientToPlayer, clientID)
+	delete(m.lastPongAt, clientID)
+
+	if roomID != "" && m.roomToClients[roomID] != nil {
+		delete(m.roomToClients[roomID], clientID)
+		if len(m.roomToClients[roomID]) == 0 {
+			delete(m.roomToClients, roomID)
+		}
+	}
+}
+
 // AssignClientToPlayer はクライアントにプレイヤーIDを紐付ける
 func (m *WebSocketManager) AssignClientToPlayer(clientID string, playerID string) {
 	m.mu.Lock()
@@ -760,22 +778,52 @@ func (h *WebSocketHandler) scheduleGracefulLeave(playerID string) {
 func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message string) {
 	sessionID := h.getSessionIDByPlayerID(input.PlayerID)
 	room, _ := h.roomRepo.FindByPlayerID(input.PlayerID)
-	var opponentID string
+	var roomID string
 	if room != nil {
-		if room.Player1 != nil && room.Player1.ID != input.PlayerID {
-			opponentID = room.Player1.ID
-		} else if room.Player2 != nil && room.Player2.ID != input.PlayerID {
-			opponentID = room.Player2.ID
-		}
+		roomID = room.ID
 	}
+	clientIDs := h.wsManager.GetClientIDsByPlayerID(input.PlayerID)
 
 	h.leaveRoomUC.Execute(input)
 
-	if opponentID != "" {
-		res := GameResultPayload{WinnerID: opponentID, Message: message}
-		b, _ := json.Marshal(res)
-		for _, cID := range h.wsManager.GetClientIDsByPlayerID(opponentID) {
-			_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
+	for _, cID := range clientIDs {
+		h.wsManager.RemoveClientAssociation(cID)
+	}
+
+	if roomID != "" {
+		updatedRoom, err := h.roomRepo.FindByID(roomID)
+		if err == nil && updatedRoom != nil {
+			remaining := updatedRoom.CountPlayers()
+			if remaining >= 2 {
+				status := struct {
+					Message          string `json:"message"`
+					PlayerID         string `json:"player_id"`
+					RemainingPlayers int    `json:"remaining_players"`
+				}{Message: message, PlayerID: input.PlayerID, RemainingPlayers: remaining}
+				b, _ := json.Marshal(status)
+				h.broadcastToRoom(roomID, Message{Type: "STATUS_UPDATE", Payload: b})
+			} else if remaining == 1 {
+				var winnerID string
+				if updatedRoom.Player1 != nil && updatedRoom.Player1.ID != "" {
+					winnerID = updatedRoom.Player1.ID
+				} else if updatedRoom.Player2 != nil && updatedRoom.Player2.ID != "" {
+					winnerID = updatedRoom.Player2.ID
+				} else {
+					for _, p := range updatedRoom.ExtraPlayers {
+						if p != nil && p.ID != "" {
+							winnerID = p.ID
+							break
+						}
+					}
+				}
+				if winnerID != "" {
+					res := GameResultPayload{WinnerID: winnerID, Message: message}
+					b, _ := json.Marshal(res)
+					for _, cID := range h.wsManager.GetClientIDsByPlayerID(winnerID) {
+						_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
+					}
+				}
+			}
 		}
 	}
 
