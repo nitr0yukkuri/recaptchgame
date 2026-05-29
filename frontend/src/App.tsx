@@ -377,7 +377,7 @@ function App() {
                                 {startMessage}
                             </h2>
                             <p className="text-xl font-bold text-gray-600 mt-2">
-                                {startMessage === 'START!' ? 'Go!' : '準備完了'}
+                                {startMessage === 'START!' ? 'Go!' : '開始まで'}
                             </p>
                         </div>
                     </motion.div>
