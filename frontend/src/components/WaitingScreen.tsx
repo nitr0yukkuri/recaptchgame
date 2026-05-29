@@ -6,6 +6,7 @@ type WaitingScreenProps = {
     roomId: string;
     isRandomMatch?: boolean;
     cancelWaiting: () => void;
+    roomStatusInfo?: { capacity?: number; players?: string[] } | null;
 };
 
 const ROOM_ID_PATTERN = /^[A-Za-z0-9]{6}$/;
@@ -25,7 +26,7 @@ const buildInviteUrl = (roomId: string) => {
     };
 };
 
-export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting }: WaitingScreenProps) => {
+export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting, roomStatusInfo = null }: WaitingScreenProps) => {
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const controller = useGameController();
@@ -93,6 +94,13 @@ export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting }: 
 
     return (
         <div className="h-full flex items-center justify-center px-2 py-4 sm:px-4 sm:py-8">
+            {roomStatusInfo && (
+                <div className="absolute top-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
+                    <div className="text-sm text-gray-600 font-semibold bg-white/80 px-3 py-1 rounded-full shadow-sm pointer-events-auto">
+                        {`現在 ${roomStatusInfo.players?.length ?? 1} / ${roomStatusInfo.capacity ?? '?'} 人`}
+                    </div>
+                </div>
+            )}
             <div className="w-full max-w-xl rounded-3xl border border-gray-100 bg-white shadow-xl px-4 py-4 md:px-8 md:py-8 text-center space-y-4 sm:space-y-6">
                 <div className="space-y-2 sm:space-y-4">
                     <div className="mx-auto animate-spin h-10 w-10 sm:h-14 sm:w-14 md:h-20 md:w-20 border-4 md:border-8 border-[#5B46F5] border-t-transparent rounded-full"></div>

@@ -54,6 +54,7 @@ function App() {
     // ── サウンド・WebSocket ──────────────────────────────────
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
     const { sendMessage, lastMessage, readyState } = useWebSocket(WS_URL, STATIC_WS_OPTIONS);
+    const [roomStatusInfo, setRoomStatusInfo] = useState<{ capacity?: number; players?: string[] } | null>(null);
 
     // ── 妨害エフェクト管理 ──────────────────────────────────
     const { brAttackEffect, fireBRObstruction, showBRAttack } = useObstructionEffect({ playObstruction });
@@ -212,6 +213,27 @@ function App() {
             payload: { room_id: roomId, player_id: playerId, winning_score: winningScore, session_id: sessionID },
         }));
     }, [readyState]);
+
+    // WS受信から部屋の参加人数・定員情報を抽出して表示用に保持（バックエンドに変更は加えない）
+    useEffect(() => {
+        if (!lastMessage) return;
+        // プライベートマッチ以外（ランダムマッチ）のときは表示しない
+        if (isRandomMatch) return;
+        try {
+            const msg = JSON.parse(lastMessage.data as string);
+            // payload が { room: { capacity, players: [...] } } の形式で来る場合に対応
+            const payload = msg.payload || {};
+            const roomObj = payload.room || payload;
+            if (roomObj && (roomObj.capacity !== undefined || roomObj.players !== undefined)) {
+                const players = Array.isArray(roomObj.players)
+                    ? roomObj.players.map((p: any) => p.name || p.player_id || p.id || String(p))
+                    : undefined;
+                setRoomStatusInfo({ capacity: roomObj.capacity, players });
+            }
+        } catch (e) {
+            // ignore parse errors
+        }
+    }, [lastMessage, isRandomMatch]);
 
     const leaveRoom = () => {
         stopMatching();
@@ -408,7 +430,7 @@ function App() {
                     )}
 
                     {gameState === 'WAITING' && (
-                        <WaitingScreen roomId={roomId} isRandomMatch={isRandomMatch} cancelWaiting={cancelWaiting} />
+                        <WaitingScreen roomId={roomId} isRandomMatch={isRandomMatch} cancelWaiting={cancelWaiting} roomStatusInfo={roomStatusInfo} />
                     )}
 
                     {gameState === 'PLAYING' && (cpuPlayerCount === 1 || gameMode === 'ONLINE') && (
