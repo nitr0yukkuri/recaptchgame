@@ -80,7 +80,7 @@ export function useOnlineGame({
                     break;
 
                 case 'STATUS_UPDATE':
-                    if (store.gameState !== 'RESULT') {
+                    if (store.gameState !== 'RESULT' && store.gameState !== 'PLAYING') {
                         store.setGameState('WAITING');
                     }
                     break;
@@ -242,7 +242,7 @@ export function useOnlineGame({
             payload: { room_id: store.roomId, player_id: store.playerId, selected_indices: store.mySelections },
         }));
         // タイムアウトフォールバック（コントローラで一元管理）
-        controller.scheduleVerifyFallback(store.playerId, () => setIsVerifying(prev => prev ? false : prev), 5000);
+        controller.scheduleVerifyFallback(store.playerId, () => setIsVerifying(prev => prev ? false : prev), 1500);
     };
 
     const stopMatching = () => {
