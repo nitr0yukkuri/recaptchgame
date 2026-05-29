@@ -126,9 +126,9 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	if input.RoomID == "RANDOM" {
 		globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom(capacity)
-		isFull := waitingRoom != nil && waitingRoom.CountPlayers() >= waitingRoom.Capacity
-		if waitingRoom == nil || isFull {
-			if isFull {
+		isAvailable := waitingRoom != nil && !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity
+		if !isAvailable {
+			if waitingRoom != nil && waitingRoom.CountPlayers() >= waitingRoom.Capacity {
 				_ = uc.roomRepo.ClearWaitingRoom(capacity)
 			}
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
@@ -140,6 +140,7 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	}
 
 	// 個別ルームのロックを取りつつ、満員競合が起きた場合はRANDOMなら再試行する
+	var joinErr error
 	for {
 		// 保護ブロック内でロックを取得し、必ず defer で解除することで
 		// panic 発生時のロックリークを防ぐ（スコープも限定する）
@@ -163,6 +164,14 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			// 既に同一プレイヤーがいる場合は再登録しない
 			if room.GetPlayerByID(input.PlayerID) != nil {
 				joinedOrStopped = true
+				return
+			}
+
+			if room.IsActive {
+				if input.RoomID != "RANDOM" {
+					joinErr = fmt.Errorf("room is active")
+					return
+				}
 				return
 			}
 
@@ -198,6 +207,9 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		if joinedOrStopped {
 			break
 		}
+		if joinErr != nil {
+			return nil, joinErr
+		}
 
 		if input.RoomID == "RANDOM" {
 			if randomRetries >= maxRandomRetries {
@@ -208,8 +220,8 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom(capacity)
 			if waitingRoom != nil {
-				// 待機ルームがまだ有効（いずれかのスロットに空きがある）なら使う
-				if (waitingRoom.Player1 == nil || waitingRoom.Player1.ID == "") || (waitingRoom.Player2 == nil || waitingRoom.Player2.ID == "") {
+				// 待機ルームがまだ有効（定員未満かつ未開始）なら使う
+				if !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity {
 					actualRoomID = waitingRoom.ID
 					globalUnlock()
 					continue

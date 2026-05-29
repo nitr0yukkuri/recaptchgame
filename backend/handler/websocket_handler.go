@@ -611,7 +611,9 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			}
 			b, _ := json.Marshal(res)
 			h.broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
-			_ = h.roomRepo.Delete(p.RoomID)
+			if room, err := h.roomRepo.FindByID(p.RoomID); err == nil && room != nil {
+				h.cleanupFinishedRoom(room)
+			}
 			return
 		}
 
@@ -835,6 +837,38 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 		delete(h.playerToSession, input.PlayerID)
 		h.sessionMu.Unlock()
 	}
+}
+
+func (h *WebSocketHandler) cleanupFinishedRoom(room *domain.Room) {
+	playerIDs := make([]string, 0, room.CountPlayers())
+	if room.Player1 != nil && room.Player1.ID != "" {
+		playerIDs = append(playerIDs, room.Player1.ID)
+	}
+	if room.Player2 != nil && room.Player2.ID != "" {
+		playerIDs = append(playerIDs, room.Player2.ID)
+	}
+	for _, p := range room.ExtraPlayers {
+		if p != nil && p.ID != "" {
+			playerIDs = append(playerIDs, p.ID)
+		}
+	}
+
+	for _, playerID := range playerIDs {
+		clientIDs := h.wsManager.GetClientIDsByPlayerID(playerID)
+		for _, clientID := range clientIDs {
+			_ = h.leaveRoomUC.Execute(usecase.LeaveRoomInput{ClientID: clientID, PlayerID: playerID})
+			h.wsManager.RemoveClientAssociation(clientID)
+		}
+		sessionID := h.getSessionIDByPlayerID(playerID)
+		if sessionID != "" {
+			h.cancelGracefulLeave(sessionID)
+			h.sessionMu.Lock()
+			delete(h.sessionToPlayer, sessionID)
+			delete(h.playerToSession, playerID)
+			h.sessionMu.Unlock()
+		}
+	}
+	_ = h.roomRepo.Delete(room.ID)
 }
 
 func (h *WebSocketHandler) heartbeatPump(clientID string) {

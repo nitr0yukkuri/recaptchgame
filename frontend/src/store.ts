@@ -45,6 +45,7 @@ interface Store {
     brOpponents: BROpponent[];
     setBROpponents: (opponents: BROpponent[]) => void;
     setBROpponentEffect: (id: string, effect: ObstructionType) => void;
+    toggleBROpponentSelection: (id: string, index: number) => void;
 
     setGameState: (state: GameState) => void;
     setRoomInfo: (roomId: string, playerId: string) => void;
@@ -100,6 +101,15 @@ export const useGameStore = create<Store>((set) => ({
     setBROpponentEffect: (id, effect) => set((state) => ({
         brOpponents: state.brOpponents.map(opp => opp.id === id ? { ...opp, effect } : opp),
     })),
+    toggleBROpponentSelection: (id, index) => set((state) => ({
+        brOpponents: state.brOpponents.map(opp => {
+            if (opp.id !== id) return opp;
+            const selections = opp.selections.includes(index)
+                ? opp.selections.filter(i => i !== index)
+                : [...opp.selections, index];
+            return { ...opp, selections };
+        }),
+    })),
 
     setGameState: (state) => set({ gameState: state }),
     setRoomInfo: (roomId, playerId) => set({ roomId, playerId }),
@@ -119,6 +129,7 @@ export const useGameStore = create<Store>((set) => ({
         opponentEffect: null,
         playerEffectToken: 0,
         opponentEffectToken: 0,
+        brOpponents: [],
     }),
     updatePattern: (target, images) => set({
         target,
@@ -167,6 +178,7 @@ export const useGameStore = create<Store>((set) => ({
         playerEffectToken: 0,
         opponentEffectToken: 0,
         feedback: null,
+        brOpponents: [],
     }),
     setFeedback: (feedback) => set({ feedback }),
 

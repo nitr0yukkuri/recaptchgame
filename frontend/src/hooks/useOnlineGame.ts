@@ -220,7 +220,11 @@ export function useOnlineGame({
                     break;
                 case 'OPPONENT_SELECT':
                     if (msg.payload.player_id !== store.playerId) {
-                        store.toggleOpponentSelection(msg.payload.image_index);
+                        if (store.brOpponents.some(opp => opp.id === msg.payload.player_id)) {
+                            store.toggleBROpponentSelection(msg.payload.player_id, msg.payload.image_index);
+                        } else {
+                            store.toggleOpponentSelection(msg.payload.image_index);
+                        }
                     }
                     break;
 
@@ -244,10 +248,12 @@ export function useOnlineGame({
                     setIsVerifying(false);
                     // stale closure 回避: getState() で最新 feedback を取得
                     if (useGameStore.getState().feedback !== 'WRONG') {
+                        const feedbackKey = `verifyError:${store.playerId}`;
+                        controller.clearNamed(feedbackKey);
                         playError();
                         store.setFeedback('WRONG');
                         store.setPlayerCombo(0);
-                        setTimeout(() => store.setFeedback(null), 1000);
+                        controller.scheduleNamed(feedbackKey, () => store.setFeedback(null), 1000);
                         store.resetMySelections();
                     }
                     break;
