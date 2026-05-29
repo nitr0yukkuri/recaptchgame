@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { useEffect, useState } from 'react';
+import { useRef } from 'react';
 import { useGameController } from './hooks/useGameController';
 import useWebSocket from 'react-use-websocket';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,6 +97,8 @@ function App() {
     const [showInviteModal, setShowInviteModal] = useState(false);
 
     const [notice, setNotice] = useState<string | null>(null);
+    // suppress auto-join for short period after intentional leave/replay
+    const suppressAutoJoinRef = useRef(false);
 
     // ── ゲームアクション（モード共通の接続点）────────────────
     const handleImageClick = (index: number) => {
@@ -217,6 +220,7 @@ function App() {
 
     // WebSocket再接続時に同一セッションで復帰を試みる
     useEffect(() => {
+        if (suppressAutoJoinRef.current) return;
         if (readyState !== 1) return;
         if (gameMode !== 'ONLINE') return;
         if (!roomId || !playerId) return;
@@ -227,12 +231,17 @@ function App() {
         }));
     }, [readyState]);
 
+
     // ResultScreen の「もう一度プレイ」用ハンドラをグローバルに設定
     useEffect(() => {
         // attach a minimal handler so ResultScreen can trigger replay without reload
         (window as any).__onReplay = () => {
             stopMatching();
             setIsVerifying(false);
+            // Prevent the auto-join effect from immediately re-joining the same room.
+            suppressAutoJoinRef.current = true;
+            setTimeout(() => { suppressAutoJoinRef.current = false; }, 2000);
+
             if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
                 sendMessage(JSON.stringify({
                     type: 'LEAVE_ROOM',
