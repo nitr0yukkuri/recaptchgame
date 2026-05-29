@@ -579,6 +579,17 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 	}
 
 	if output.IsCorrect {
+		// ゲーム終了判定を最優先で行う
+		if output.IsGameOver {
+			res := GameResultPayload{
+				WinnerID: output.Winner,
+				Message:  "You are Human!",
+			}
+			b, _ := json.Marshal(res)
+			h.broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
+			return
+		}
+
 		// 正解：自分に新しい問題と現在のスコア/コンボを送信して同期
 		updateMy := UpdatePatternPayload{
 			Target:       output.NewTarget,
@@ -659,16 +670,6 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 					h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
 				}
 			}
-		}
-
-		// ゲーム終了判定
-		if output.IsGameOver {
-			res := GameResultPayload{
-				WinnerID: output.Winner,
-				Message:  "You are Human!",
-			}
-			b, _ := json.Marshal(res)
-			h.broadcastToRoom(roomID, Message{Type: "GAME_FINISHED", Payload: b})
 		}
 	} else {
 		// 不正解
