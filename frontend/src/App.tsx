@@ -95,6 +95,19 @@ function App() {
         return () => { document.body.style.overflow = prev || ''; };
     }, [startPopup]);
 
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') return;
+            if (gameMode !== 'ONLINE') return;
+            sendMessage(JSON.stringify({ type: 'PONG', payload: {} }));
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [gameMode, sendMessage]);
+
     const [showInviteModal, setShowInviteModal] = useState(false);
 
     const [notice, setNotice] = useState<string | null>(null);

@@ -611,6 +611,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			}
 			b, _ := json.Marshal(res)
 			h.broadcastToRoom(p.RoomID, Message{Type: "GAME_FINISHED", Payload: b})
+			_ = h.roomRepo.Delete(p.RoomID)
 			return
 		}
 
@@ -839,9 +840,10 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 func (h *WebSocketHandler) heartbeatPump(clientID string) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	const pongTimeout = 45 * time.Second
 
 	for range ticker.C {
-		if h.wsManager.IsPongTimedOut(clientID, 15*time.Second) {
+		if h.wsManager.IsPongTimedOut(clientID, pongTimeout) {
 			h.wsManager.UnregisterConnection(clientID)
 			return
 		}
