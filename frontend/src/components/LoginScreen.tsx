@@ -3,6 +3,7 @@ import { ScoreSelector } from './ScoreSelector';
 type LoginScreenProps = {
     loginStep: 'SELECT' | 'FRIEND' | 'FRIEND_INPUT' | 'WAITING' | 'DIFFICULTY' | 'CPU_PLAYER_COUNT';
     isCreator: boolean;
+    isConnecting: boolean;
     loginError: string;
     inputRoom: string;
     setInputRoom: (room: string) => void;
@@ -23,7 +24,7 @@ type LoginScreenProps = {
 };
 
 export const LoginScreen = ({
-    loginStep, isCreator, loginError, inputRoom, setInputRoom, setLoginError,
+    loginStep, isCreator, isConnecting, loginError, inputRoom, setInputRoom, setLoginError,
     settingScore, setSettingScore, startCpuFlow, joinRandom, joinFriend,
     createRoom, enterRoomFlow, joinRoomInternal, confirmDifficulty, confirmPlayerCount, cpuPlayerCount,
     roomCapacity, setRoomCapacity
@@ -70,7 +71,7 @@ export const LoginScreen = ({
                             </div>
                             <svg className="w-5 h-5 sm:w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
-                        <button onClick={joinRandom} className="group w-full flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={joinRandom} disabled={isConnecting} className={`group w-full flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-white border-2 border-pink-100 hover:border-pink-500 hover:shadow-lg transition-all duration-300 ${isConnecting ? 'opacity-50 cursor-not-allowed hover:border-pink-100 hover:shadow-none' : ''}`}>
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <span className="text-2xl sm:text-3xl bg-pink-50 p-2 sm:p-3 rounded-lg sm:rounded-xl group-hover:scale-110 transition">🌍</span>
                                 <div className="text-left">
@@ -80,7 +81,7 @@ export const LoginScreen = ({
                             </div>
                             <svg className="w-5 h-5 sm:w-6 h-6 text-gray-300 group-hover:text-pink-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
-                        <button onClick={joinFriend} className="group w-full flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={joinFriend} disabled={isConnecting} className={`group w-full flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300 ${isConnecting ? 'opacity-50 cursor-not-allowed hover:border-teal-100 hover:shadow-none' : ''}`}>
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <span className="text-2xl sm:text-3xl bg-teal-50 p-2 sm:p-3 rounded-lg sm:rounded-xl group-hover:scale-110 transition">🤝</span>
                                 <div className="text-left">
@@ -105,7 +106,7 @@ export const LoginScreen = ({
                     <p className="text-xs sm:text-sm text-gray-400 text-center px-4">友達にIDを共有して対戦しよう</p>
 
                     <div className="w-full max-w-md space-y-3 sm:space-y-4">
-                        <button onClick={createRoom} className="group w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={createRoom} disabled={isConnecting} className={`group w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg transition-all duration-300 ${isConnecting ? 'opacity-50 cursor-not-allowed hover:border-indigo-100 hover:shadow-none' : ''}`}>
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <span className="text-2xl sm:text-3xl bg-indigo-50 p-2 sm:p-3 rounded-lg sm:rounded-xl group-hover:scale-110 transition">🏠</span>
                                 <div className="text-left">
@@ -116,7 +117,7 @@ export const LoginScreen = ({
                             <svg className="w-5 h-5 sm:w-6 h-6 text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
 
-                        <button onClick={enterRoomFlow} className="group w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300">
+                        <button onClick={enterRoomFlow} disabled={isConnecting} className={`group w-full flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-white border-2 border-teal-100 hover:border-teal-500 hover:shadow-lg transition-all duration-300 ${isConnecting ? 'opacity-50 cursor-not-allowed hover:border-teal-100 hover:shadow-none' : ''}`}>
                             <div className="flex items-center gap-3 sm:gap-4">
                                 <span className="text-2xl sm:text-3xl bg-teal-50 p-2 sm:p-3 rounded-lg sm:rounded-xl group-hover:scale-110 transition">🔑</span>
                                 <div className="text-left">
@@ -166,7 +167,8 @@ export const LoginScreen = ({
 
                     <button
                         onClick={() => joinRoomInternal(inputRoom)}
-                        className="w-full bg-[#5B46F5] text-white text-base sm:text-lg font-bold py-2.5 sm:py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none"
+                        disabled={isConnecting}
+                        className={`w-full bg-[#5B46F5] text-white text-base sm:text-lg font-bold py-2.5 sm:py-4 rounded-xl hover:bg-indigo-700 hover:-translate-y-0.5 hover:shadow-lg transition-all active:scale-95 active:shadow-none ${isConnecting ? 'opacity-50 cursor-not-allowed hover:bg-[#5B46F5] hover:translate-y-0 hover:shadow-none' : ''}`}
                     >
                         {isCreator ? "部屋を作る" : "入室する"}
                     </button>

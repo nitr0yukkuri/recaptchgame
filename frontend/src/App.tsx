@@ -51,6 +51,7 @@ function App() {
     const [loginError, setLoginError] = useState('');
     const [roomCapacity, setRoomCapacity] = useState<number>(2);
     const [sessionID] = useState(getOrCreateSessionID());
+    const [isConnecting, setIsConnecting] = useState(false);
 
     // ── サウンド・WebSocket ──────────────────────────────────
     const { initAudio, playError, playSuccess, playWin, playLose, playObstruction, playStart } = useSound();
@@ -171,6 +172,7 @@ function App() {
 
     const joinRandom = () => {
         initAudio();
+        setIsConnecting(true);
         setIsRandomMatch(true);
         setGameMode('ONLINE');
         sendMessage(JSON.stringify({
@@ -202,6 +204,7 @@ function App() {
     const joinRoomInternal = (room: string) => {
         if (!room) { setLoginError('IDを入力してね'); return; }
         if (!ROOM_ID_PATTERN.test(room)) { setLoginError('6文字の英数字で入力してね'); return; }
+        setIsConnecting(true);
         setGameMode('ONLINE');
         useGameStore.getState().setRoomInfo(room, playerId);
         // If creator, include chosen capacity in payload
@@ -275,6 +278,9 @@ function App() {
         if (isRandomMatch) return;
         try {
             const msg = JSON.parse(lastMessage.data as string);
+            if (msg.type === 'ROOM_ASSIGNED' || msg.type === 'STATUS_UPDATE' || msg.type === 'JOIN_FAILED' || msg.type === 'GAME_START') {
+                setIsConnecting(false);
+            }
             // payload が { room: { capacity, players: [...] } } の形式で来る場合に対応
             const payload = msg.payload || {};
             const roomObj = payload.room || payload;
@@ -292,6 +298,7 @@ function App() {
     const leaveRoom = () => {
         stopMatching();
         setIsVerifying(false);
+        setIsConnecting(false);
         if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
             sendMessage(JSON.stringify({
                 type: 'LEAVE_ROOM',
@@ -467,6 +474,7 @@ function App() {
                             inputRoom={inputRoom}
                             setInputRoom={setInputRoom}
                             setLoginError={setLoginError}
+                            isConnecting={isConnecting}
                             settingScore={settingScore}
                             setSettingScore={setSettingScore}
                             startCpuFlow={startCpuFlow}
