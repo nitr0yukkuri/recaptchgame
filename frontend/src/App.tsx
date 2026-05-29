@@ -218,17 +218,24 @@ function App() {
     useEffect(() => {
         // attach a minimal handler so ResultScreen can trigger replay without reload
         (window as any).__onReplay = () => {
-            // If the last run was online (random match), rejoin random
-            if (isRandomMatch || gameMode === 'ONLINE') {
-                // reuse existing joinRandom logic
-                joinRandom();
-            } else {
-                // fallback: reload the page
-                window.location.reload();
+            stopMatching();
+            setIsVerifying(false);
+            if (gameMode === 'ONLINE' || (roomId && roomId !== 'LOCAL_CPU')) {
+                sendMessage(JSON.stringify({
+                    type: 'LEAVE_ROOM',
+                    payload: { room_id: roomId, player_id: playerId },
+                }));
             }
+            useGameStore.getState().setGameState('LOGIN');
+            setGameMode(null);
+            setMyScore(0);
+            setCpuPlayerCount(0);
+            setLoginStep('SELECT');
+            setInputRoom('');
+            setLoginError('');
         };
         return () => { delete (window as any).__onReplay; };
-    }, [isRandomMatch, gameMode, playerId, sessionID]);
+    }, [gameMode, roomId, playerId, sendMessage, stopMatching, setIsVerifying, setGameMode, setMyScore, setCpuPlayerCount, setLoginStep, setInputRoom, setLoginError]);
 
     // WS受信から部屋の参加人数・定員情報を抽出して表示用に保持（バックエンドに変更は加えない）
     useEffect(() => {
