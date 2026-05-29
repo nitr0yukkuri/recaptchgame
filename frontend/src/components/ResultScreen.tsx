@@ -4,6 +4,7 @@ import { useGameStore } from '../store';
 type ResultScreenProps = {
     gameMode: 'CPU' | 'ONLINE' | null;
     onReplay?: () => void;
+    onImmediateRematch?: () => void;
 };
 
 export const ResultScreen = ({ gameMode }: ResultScreenProps) => {
@@ -59,6 +60,15 @@ export const ResultScreen = ({ gameMode }: ResultScreenProps) => {
             >
                 もう一度プレイ
             </button>
+            {/* 即時再戦オプション（プライベートマッチ向け） */}
+            {gameMode === 'ONLINE' && (window as any).__onImmediateRematch && (
+                <button
+                    onClick={() => { try { (window as any).__onImmediateRematch(); } catch (e) { /* ignore */ } }}
+                    className="mt-3 px-6 py-2 sm:px-8 sm:py-3 bg-white text-gray-800 border border-gray-200 rounded-2xl font-semibold text-sm sm:text-base hover:bg-gray-50 transition"
+                >
+                    今すぐ再戦
+                </button>
+            )}
         </div>
     );
 };

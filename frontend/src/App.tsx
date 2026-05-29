@@ -256,6 +256,15 @@ function App() {
             setInputRoom('');
             setLoginError('');
         };
+        // attach immediate rematch handler (optional: used by ResultScreen)
+        (window as any).__onImmediateRematch = () => {
+            if (!roomId) return;
+            // send JOIN_ROOM to attempt immediate rejoin in private match
+            sendMessage(JSON.stringify({
+                type: 'JOIN_ROOM',
+                payload: { room_id: roomId, player_id: playerId, winning_score: winningScore, session_id: sessionID },
+            }));
+        };
         return () => { delete (window as any).__onReplay; };
     }, [gameMode, roomId, playerId, sendMessage, stopMatching, setIsVerifying, setGameMode, setMyScore, setCpuPlayerCount, setLoginStep, setInputRoom, setLoginError]);
 
