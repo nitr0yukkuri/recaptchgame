@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-    background-color: #cccccc; /* 背景を少し濃いグレーにしてポップアップを際立たせる */
+    background-color: #ffffff; /* white: rootのdivが一瞬縮小しても背景グレーが透けないようにする */
     color: #202124;
     font-family: 'Roboto', sans-serif;
     margin: 0;

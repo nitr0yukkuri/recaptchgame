@@ -71,13 +71,15 @@ export function useOnlineGame({
                 case 'ROOM_ASSIGNED':
                     store.setRoomInfo(msg.payload.room_id, store.playerId);
                     setGameMode('ONLINE');
-                    if (store.gameState !== 'PLAYING') {
+                    if (store.gameState !== 'PLAYING' && store.gameState !== 'RESULT') {
                         store.setGameState('WAITING');
                     }
                     break;
 
                 case 'STATUS_UPDATE':
-                    store.setGameState('WAITING');
+                    if (store.gameState !== 'RESULT') {
+                        store.setGameState('WAITING');
+                    }
                     break;
 
                 case 'GAME_START':
@@ -183,6 +185,8 @@ export function useOnlineGame({
 
                 case 'GAME_FINISHED':
                     setIsVerifying(false);
+                    isMatchingRef.current = false; // 次回マッチング時に GAME_START を正常処理できるようリセット
+                    setStartPopup(false);           // カウントダウン演出中でも即座に閉じる
                     if (msg.payload.winner_id === store.playerId) {
                         playWin();
                     } else {
