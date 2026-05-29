@@ -214,6 +214,22 @@ function App() {
         }));
     }, [readyState]);
 
+    // ResultScreen の「もう一度プレイ」用ハンドラをグローバルに設定
+    useEffect(() => {
+        // attach a minimal handler so ResultScreen can trigger replay without reload
+        (window as any).__onReplay = () => {
+            // If the last run was online (random match), rejoin random
+            if (isRandomMatch || gameMode === 'ONLINE') {
+                // reuse existing joinRandom logic
+                joinRandom();
+            } else {
+                // fallback: reload the page
+                window.location.reload();
+            }
+        };
+        return () => { delete (window as any).__onReplay; };
+    }, [isRandomMatch, gameMode, playerId, sessionID]);
+
     // WS受信から部屋の参加人数・定員情報を抽出して表示用に保持（バックエンドに変更は加えない）
     useEffect(() => {
         if (!lastMessage) return;

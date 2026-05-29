@@ -628,8 +628,14 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 						}
 						bObs, _ := json.Marshal(obs)
 						// 対象プレイヤーに紐づくクライアントへのみ送信
-						for _, cID := range h.wsManager.GetClientIDsByPlayerID(targetPlayer) {
-							_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION", Payload: bObs})
+						clientIDs := h.wsManager.GetClientIDsByPlayerID(targetPlayer)
+						if len(clientIDs) == 0 {
+							// 期待するクライアントが見つからない場合は安全策としてルーム全体へ送信
+							h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
+						} else {
+							for _, cID := range clientIDs {
+								_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION", Payload: bObs})
+							}
 						}
 						// 攻撃者には発動確認を送る（UI 表示用）
 						confirm := ObstructionPayload{

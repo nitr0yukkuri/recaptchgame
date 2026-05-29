@@ -3,6 +3,7 @@ import { useGameStore } from '../store';
 
 type ResultScreenProps = {
     gameMode: 'CPU' | 'ONLINE' | null;
+    onReplay?: () => void;
 };
 
 export const ResultScreen = ({ gameMode }: ResultScreenProps) => {
@@ -46,7 +47,14 @@ export const ResultScreen = ({ gameMode }: ResultScreenProps) => {
                 </motion.div>
             )}
             <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                    if (typeof (window as any).__onReplay === 'function') {
+                        (window as any).__onReplay();
+                    } else {
+                        // fallback: full reload if no handler provided
+                        window.location.reload();
+                    }
+                }}
                 className="px-6 py-3 sm:px-10 sm:py-5 bg-gray-900 text-white rounded-2xl font-bold text-base sm:text-xl hover:bg-black transition shadow-2xl"
             >
                 もう一度プレイ
