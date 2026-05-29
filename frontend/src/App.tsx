@@ -80,6 +80,19 @@ function App() {
         stopMatching,
     } = useOnlineGame({ sendMessage, lastMessage, setGameMode, setMyScore, setWinningScore, playSuccess, playError, playWin, playLose, playStart, onObstructionFired: showBRAttack });
 
+    // When startPopup (countdown modal) is shown, prevent page scrolling to avoid
+    // scroll/visual jitter on small screens. Restore overflow on hide.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const prev = document.body.style.overflow;
+        if (startPopup) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = prev || '';
+        }
+        return () => { document.body.style.overflow = prev || ''; };
+    }, [startPopup]);
+
     const [showInviteModal, setShowInviteModal] = useState(false);
 
     const [notice, setNotice] = useState<string | null>(null);
@@ -456,13 +469,13 @@ function App() {
                         <WaitingScreen roomId={roomId} isRandomMatch={isRandomMatch} cancelWaiting={cancelWaiting} roomStatusInfo={roomStatusInfo} />
                     )}
 
-                    {gameState === 'PLAYING' && (cpuPlayerCount === 1 || gameMode === 'ONLINE') && (
+                    {(gameState === 'PLAYING' || startPopup) && (cpuPlayerCount === 1 || gameMode === 'ONLINE') && (
                         <GameScreen
                             myScore={myScore}
                             winningScore={winningScore}
                             gameMode={gameMode}
                             isReloading={isReloading}
-                            isVerifying={isVerifying || startPopup}
+                            isVerifying={isVerifying}
                             handleImageClick={handleImageClick}
                             handleReload={handleReload}
                             handleVerify={handleVerify}

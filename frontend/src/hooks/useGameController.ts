@@ -1,47 +1,58 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 // Centralized timer/controller for small cross-cutting timers.
+// NOTE: multiple React components were each creating independent controllers
+// which prevented clearing timers from other contexts. To keep minimal changes
+// we provide a hook that returns a singleton controller shared across the app.
+
+type TimerMap = Map<string, ReturnType<typeof setTimeout>>;
+
+const globalTimers: TimerMap = new Map();
+
+function clearAllTimers(map: TimerMap) {
+    for (const t of map.values()) {
+        clearTimeout(t);
+    }
+    map.clear();
+}
+
+// ensure timers are cleaned on page unload to avoid leaks in dev/hmr
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => clearAllTimers(globalTimers));
+}
 
 export function useGameController() {
-    const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
     useEffect(() => {
         return () => {
-            for (const timer of timersRef.current.values()) {
-                clearTimeout(timer);
-            }
-            timersRef.current.clear();
+            // do not clear all timers on each component unmount; timers are global
+            // but ensure any noop here keeps parity with previous hook semantics.
         };
     }, []);
 
     const setNamedTimeout = (key: string, fn: () => void, delay: number) => {
-        const timers = timersRef.current;
-        if (timers.has(key)) {
-            clearTimeout(timers.get(key)!);
+        if (globalTimers.has(key)) {
+            clearTimeout(globalTimers.get(key)!);
         }
         const t = setTimeout(() => {
-            timers.delete(key);
+            globalTimers.delete(key);
             try { fn(); } catch (e) { console.error('timer callback error', e); }
         }, delay);
-        timers.set(key, t);
+        globalTimers.set(key, t);
         return t;
     };
 
     const clearNamedTimeout = (key: string) => {
-        const timers = timersRef.current;
-        const t = timers.get(key);
+        const t = globalTimers.get(key);
         if (t) {
             clearTimeout(t);
-            timers.delete(key);
+            globalTimers.delete(key);
         }
     };
 
     return {
-        // Generic named timer (overwrites same key)
         scheduleNamed: setNamedTimeout,
         clearNamed: clearNamedTimeout,
 
-        // Helpers for common named timers
         scheduleStartPopupHide: (playerId: string, cb: () => void, delay = 500) =>
             setNamedTimeout(`startPopup:${playerId}`, cb, delay),
 
@@ -56,5 +67,8 @@ export function useGameController() {
 
         scheduleNoticeHide: (key: string, cb: () => void, delay = 1400) =>
             setNamedTimeout(`notice:${key}`, cb, delay),
-    }
+
+        // Diagnostics / test helper
+        _clearAll: () => clearAllTimers(globalTimers),
+    };
 }

@@ -86,7 +86,10 @@ export function useOnlineGame({
                     break;
 
                 case 'GAME_START':
-                    if (isMatchingRef.current) return;
+                    // If we're already actively matching/playing, avoid double-handling.
+                    // However, ignore a stale `isMatchingRef` if we're not in PLAYING state —
+                    // this allows reconnect scenarios where GAME_START may arrive again.
+                    if (isMatchingRef.current && useGameStore.getState().gameState === 'PLAYING') return;
                     isMatchingRef.current = true;
                     setGameMode('ONLINE');
 
@@ -106,6 +109,11 @@ export function useOnlineGame({
                     store.setOpponentCombo(0);
 
                     (async () => {
+                        // Clear any previous BR obstruction timers carried over
+                        // from a prior match to avoid cross-match leakage.
+                        Object.values(brObstructionTimersRef.current).forEach(t => clearTimeout(t));
+                        brObstructionTimersRef.current = {};
+
                         if (!isMountedRef.current) return;
                         setStartPopup(true);
                         setStartMessage('マッチングしました！');
@@ -208,7 +216,11 @@ export function useOnlineGame({
 
                 case 'GAME_FINISHED':
                     setIsVerifying(false);
-                    isMatchingRef.current = false; // 次回マッチング時に GAME_START を正常処理できるようリセット
+                    // Clear any BR timers to avoid effects persisting into next match
+                    Object.values(brObstructionTimersRef.current).forEach(t => clearTimeout(t));
+                    brObstructionTimersRef.current = {};
+
+                    isMatchingRef.current = false; // allow next GAME_START to be processed
                     setStartPopup(false);           // カウントダウン演出中でも即座に閉じる
                     if (msg.payload.winner_id === store.playerId) {
                         playWin();

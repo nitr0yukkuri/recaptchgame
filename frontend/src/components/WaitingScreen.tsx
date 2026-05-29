@@ -50,20 +50,30 @@ export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting, ro
         }
 
         try {
-            if (navigator.clipboard?.writeText) {
+            // Prefer async Clipboard API when available.
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                 await navigator.clipboard.writeText(invite.url);
+                setCopyState('copied');
             } else {
+                // Fallback: try textarea + execCommand. Some browsers (old iOS) may still fail.
                 const textarea = document.createElement('textarea');
                 textarea.value = invite.url;
                 textarea.readOnly = true;
                 textarea.style.position = 'fixed';
                 textarea.style.left = '-9999px';
+                textarea.style.top = '0';
+                // iOS Safari workaround: allow selection
+                (textarea.style as any).webkitUserSelect = 'text';
                 document.body.appendChild(textarea);
                 textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
+                try {
+                    const ok = document.execCommand('copy');
+                    if (!ok) throw new Error('execCommand failed');
+                    setCopyState('copied');
+                } finally {
+                    document.body.removeChild(textarea);
+                }
             }
-            setCopyState('copied');
             if (copyResetTimerRef.current !== null) {
                 controller.clearNamed(`copyReset:${roomId}`);
             }
@@ -72,6 +82,12 @@ export const WaitingScreen = ({ roomId, isRandomMatch = false, cancelWaiting, ro
             }, 1800);
         } catch {
             setCopyState('error');
+            // Give user an actionable fallback for restrictive browsers (iOS Safari, etc.)
+            try {
+                // show quick instruction; do not block automated flows
+                // eslint-disable-next-line no-alert
+                alert('コピーに失敗しました。URLを長押しして手動でコピーしてください。');
+            } catch (e) { /* ignore */ }
         }
     };
 
