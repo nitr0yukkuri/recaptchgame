@@ -10,8 +10,8 @@ import (
 
 // RoomExecutionGuard はルーム単位で処理を直列化する
 type RoomExecutionGuard struct {
-	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	mu     sync.Mutex
+	locks  map[string]*sync.Mutex
 	counts map[string]int
 }
 
@@ -128,11 +128,12 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom(capacity)
 		isAvailable := waitingRoom != nil && !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity
 		if !isAvailable {
-			if waitingRoom != nil && waitingRoom.CountPlayers() >= waitingRoom.Capacity {
-				_ = uc.roomRepo.ClearWaitingRoom(capacity)
-			}
+			_ = uc.roomRepo.ClearWaitingRoom(capacity)
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
+			room := domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, capacity)
+			_ = uc.roomRepo.Save(room)
+			_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
 		} else {
 			actualRoomID = waitingRoom.ID
 		}

@@ -380,66 +380,60 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 		bAssigned, _ := json.Marshal(assigned)
 		_ = h.wsManager.SendToClient(clientID, Message{Type: "ROOM_ASSIGNED", Payload: bAssigned})
 
-			// 復帰時はルーム状態を再送して同期
-			if room.IsReady() {
-				player := room.GetPlayerByID(p.PlayerID)
-				gameState := room.GetGameStateByPlayerID(p.PlayerID)
-				if player != nil && gameState != nil {
-					// get first opponent game state (if any)
-					opponentGS := room.GetOpponentGameState(p.PlayerID)
-					var opponentImages []string
-					var opponentScore int
-					if opponentGS != nil {
-						opponentImages = opponentGS.Images
-						// try to find opponent player to get score
-						// iterate players
-						if room.Player1 != nil && room.Player1.ID != p.PlayerID {
-							opponentScore = room.Player1.Score
-						} else if room.Player2 != nil && room.Player2.ID != p.PlayerID {
-							opponentScore = room.Player2.Score
-						} else {
-							for _, op := range room.ExtraPlayers {
-								if op != nil && op.ID != p.PlayerID {
-									opponentScore = op.Score
-									break
-								}
-							}
-						}
-					}
-
-					gamePayload := GameStartPayload{
-						Target:               gameState.Target,
-						Images:               gameState.Images,
-						OpponentImages:       opponentImages,
-						WinningScore:         room.WinningScore,
-						MyCurrentScore:       player.Score,
-						OpponentCurrentScore: opponentScore,
-					}
-					bGame, _ := json.Marshal(gamePayload)
-					_ = h.wsManager.SendToClient(clientID, Message{Type: "GAME_START", Payload: bGame})
-
-					oppPayload := OpponentUpdatePayload{Images: opponentImages, Score: 0, Combo: 0}
-					// set opponent score/combo if possible
+		// 復帰時はルーム状態を再送して同期
+		if room.IsReady() {
+			player := room.GetPlayerByID(p.PlayerID)
+			gameState := room.GetGameStateByPlayerID(p.PlayerID)
+			if player != nil && gameState != nil {
+				// get first opponent game state (if any)
+				opponentGS := room.GetOpponentGameState(p.PlayerID)
+				var opponentImages []string
+				var opponentScore int
+				if opponentGS != nil {
+					opponentImages = opponentGS.Images
+					// try to find opponent player to get score
+					// iterate players
 					if room.Player1 != nil && room.Player1.ID != p.PlayerID {
-						oppPayload.Score = room.Player1.Score
-						oppPayload.Combo = room.Player1.Combo
+						opponentScore = room.Player1.Score
 					} else if room.Player2 != nil && room.Player2.ID != p.PlayerID {
-						oppPayload.Score = room.Player2.Score
-						oppPayload.Combo = room.Player2.Combo
+						opponentScore = room.Player2.Score
 					} else {
 						for _, op := range room.ExtraPlayers {
 							if op != nil && op.ID != p.PlayerID {
-								oppPayload.Score = op.Score
-								oppPayload.Combo = op.Combo
+								opponentScore = op.Score
 								break
 							}
 						}
 					}
-					bOpp, _ := json.Marshal(oppPayload)
-					_ = h.wsManager.SendToClient(clientID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
-					return
 				}
+
+				brOpponents := h.buildBROpponentSnapshots(room, player.ID)
+				if len(opponentImages) == 0 && len(brOpponents) > 0 {
+					opponentImages = brOpponents[0].Images
+					opponentScore = brOpponents[0].Score
+				}
+				gamePayload := GameStartPayload{
+					Target:               gameState.Target,
+					Images:               gameState.Images,
+					OpponentImages:       opponentImages,
+					WinningScore:         room.WinningScore,
+					MyCurrentScore:       player.Score,
+					OpponentCurrentScore: opponentScore,
+					BROpponents:          brOpponents,
+				}
+				bGame, _ := json.Marshal(gamePayload)
+				_ = h.wsManager.SendToClient(clientID, Message{Type: "GAME_START", Payload: bGame})
+
+				oppPayload := OpponentUpdatePayload{Images: opponentImages, Score: opponentScore, Combo: 0, BROpponents: brOpponents}
+				if len(brOpponents) > 0 {
+					oppPayload.Score = brOpponents[0].Score
+					oppPayload.Combo = brOpponents[0].Combo
+				}
+				bOpp, _ := json.Marshal(oppPayload)
+				_ = h.wsManager.SendToClient(clientID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
+				return
 			}
+		}
 
 		_ = h.wsManager.SendToClient(clientID, Message{Type: "STATUS_UPDATE", Payload: json.RawMessage(`{"status": "waiting_for_opponent"}`)})
 		return
@@ -456,7 +450,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 	output, err := h.joinRoomUC.Execute(input)
 	if err != nil || output == nil {
 		// join に失敗したことをクライアントへ通知してUIが固まらないようにする
-		errMsg := struct{
+		errMsg := struct {
 			Message string `json:"message"`
 		}{Message: "JOIN_FAILED"}
 		bErr, _ := json.Marshal(errMsg)
@@ -529,6 +523,11 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 				WinningScore:         startOutput.WinningScore,
 				MyCurrentScore:       0,
 				OpponentCurrentScore: 0,
+				BROpponents:          h.buildBROpponentSnapshots(room, player.ID),
+			}
+			if len(gamePayload.BROpponents) > 0 {
+				gamePayload.OpponentImages = gamePayload.BROpponents[0].Images
+				gamePayload.OpponentCurrentScore = gamePayload.BROpponents[0].Score
 			}
 			// If we have a target for this slot, include it
 			if i < len(gameStates) && gameStates[i] != nil {
@@ -634,6 +633,9 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 				Images: output.NewImages,
 				Score:  output.CurrentScore,
 				Combo:  output.CurrentCombo,
+			}
+			if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
+				updateOpp.BROpponents = h.buildBROpponentSnapshots(roomObj, p.PlayerID)
 			}
 			bOpp, _ := json.Marshal(updateOpp)
 
@@ -780,6 +782,7 @@ func (h *WebSocketHandler) scheduleGracefulLeave(playerID string) {
 
 func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message string) {
 	sessionID := h.getSessionIDByPlayerID(input.PlayerID)
+	h.cancelGracefulLeave(sessionID)
 	room, _ := h.roomRepo.FindByPlayerID(input.PlayerID)
 	var roomID string
 	if room != nil {
@@ -825,6 +828,7 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 					for _, cID := range h.wsManager.GetClientIDsByPlayerID(winnerID) {
 						_ = h.wsManager.SendToClient(cID, Message{Type: "GAME_FINISHED", Payload: b})
 					}
+					h.cleanupFinishedRoom(updatedRoom)
 				}
 			}
 		}
@@ -871,6 +875,38 @@ func (h *WebSocketHandler) cleanupFinishedRoom(room *domain.Room) {
 	_ = h.roomRepo.Delete(room.ID)
 }
 
+func (h *WebSocketHandler) buildBROpponentSnapshots(room *domain.Room, playerID string) []BROpponentPayload {
+	snapshots := make([]BROpponentPayload, 0, room.CountPlayers())
+	appendSnapshot := func(player *domain.Player, gameState *domain.GameState) {
+		if player == nil || player.ID == "" || player.ID == playerID {
+			return
+		}
+		snapshot := BROpponentPayload{
+			PlayerID:   player.ID,
+			Score:      player.Score,
+			Combo:      player.Combo,
+			Selections: []int{},
+		}
+		if gameState != nil {
+			snapshot.Target = gameState.Target
+			snapshot.Images = append([]string(nil), gameState.Images...)
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+
+	appendSnapshot(room.Player1, room.GameState1)
+	appendSnapshot(room.Player2, room.GameState2)
+	for i, player := range room.ExtraPlayers {
+		var gameState *domain.GameState
+		if i < len(room.ExtraGameStates) {
+			gameState = room.ExtraGameStates[i]
+		}
+		appendSnapshot(player, gameState)
+	}
+
+	return snapshots
+}
+
 func (h *WebSocketHandler) heartbeatPump(clientID string) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -910,12 +946,13 @@ type RoomAssignedPayload struct {
 }
 
 type GameStartPayload struct {
-	Target              string   `json:"target"`
-	Images              []string `json:"images"`
-	OpponentImages      []string `json:"opponent_images"`
-	WinningScore        int      `json:"winning_score"`
-	MyCurrentScore      int      `json:"my_current_score,omitempty"`
-	OpponentCurrentScore int      `json:"opponent_current_score,omitempty"`
+	Target               string              `json:"target"`
+	Images               []string            `json:"images"`
+	OpponentImages       []string            `json:"opponent_images"`
+	WinningScore         int                 `json:"winning_score"`
+	MyCurrentScore       int                 `json:"my_current_score,omitempty"`
+	OpponentCurrentScore int                 `json:"opponent_current_score,omitempty"`
+	BROpponents          []BROpponentPayload `json:"br_opponents,omitempty"`
 }
 
 type VerifyPayload struct {
@@ -925,16 +962,26 @@ type VerifyPayload struct {
 }
 
 type UpdatePatternPayload struct {
-	Target string   `json:"target"`
-	Images []string `json:"images"`
-	CurrentScore int `json:"current_score,omitempty"`
-	CurrentCombo int `json:"current_combo,omitempty"`
+	Target       string   `json:"target"`
+	Images       []string `json:"images"`
+	CurrentScore int      `json:"current_score,omitempty"`
+	CurrentCombo int      `json:"current_combo,omitempty"`
 }
 
 type OpponentUpdatePayload struct {
-	Images []string `json:"images"`
-	Score  int      `json:"score"`
-	Combo  int      `json:"combo"`
+	Images      []string            `json:"images"`
+	Score       int                 `json:"score"`
+	Combo       int                 `json:"combo"`
+	BROpponents []BROpponentPayload `json:"br_opponents,omitempty"`
+}
+
+type BROpponentPayload struct {
+	PlayerID   string   `json:"player_id"`
+	Target     string   `json:"target"`
+	Images     []string `json:"images"`
+	Score      int      `json:"score"`
+	Combo      int      `json:"combo"`
+	Selections []int    `json:"selections"`
 }
 
 type SelectImagePayload struct {

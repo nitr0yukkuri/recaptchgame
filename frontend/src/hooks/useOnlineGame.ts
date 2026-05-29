@@ -80,6 +80,12 @@ export function useOnlineGame({
                     break;
 
                 case 'STATUS_UPDATE':
+                    if (store.gameState === 'PLAYING') {
+                        if (msg.payload?.message === 'Opponent Disconnected' && msg.payload?.player_id) {
+                            store.setBROpponents(store.brOpponents.filter(opp => opp.id !== msg.payload.player_id));
+                        }
+                        break;
+                    }
                     if (store.gameState !== 'RESULT' && store.gameState !== 'PLAYING') {
                         store.setGameState('WAITING');
                     }
@@ -96,19 +102,30 @@ export function useOnlineGame({
                     break;
 
                 case 'GAME_START':
+                    const startPayload = msg.payload as any;
                     // If we're already actively matching/playing, avoid double-handling.
                     // However, ignore a stale `isMatchingRef` if we're not in PLAYING state —
                     // this allows reconnect scenarios where GAME_START may arrive again.
-                    if (isMatchingRef.current && useGameStore.getState().gameState === 'PLAYING') return;
+                    if (isMatchingRef.current && useGameStore.getState().gameState === 'PLAYING' && !startPayload.br_opponents) return;
                     isMatchingRef.current = true;
                     setGameMode('ONLINE');
 
-                    const startPayload = msg.payload as any;
                     // Immediately set up the game state so the GameScreen can render in the background
                     store.startGame(startPayload.target, startPayload.images);
                     // Apply opponent images (if any) and scoring info immediately so UI reflects opponent info
                     if (startPayload.opponent_images) {
                         store.updateCpuPattern('', startPayload.opponent_images);
+                    }
+                    if (Array.isArray(startPayload.br_opponents)) {
+                        store.setBROpponents(startPayload.br_opponents.map((opp: any) => ({
+                            id: opp.player_id,
+                            score: opp.score ?? 0,
+                            combo: opp.combo ?? 0,
+                            effect: null,
+                            selections: Array.isArray(opp.selections) ? opp.selections : [],
+                            images: Array.isArray(opp.images) ? opp.images : [],
+                            target: opp.target ?? '',
+                        })));
                     }
                     if (startPayload.winning_score) {
                         setWinningScore(startPayload.winning_score);
@@ -171,6 +188,17 @@ export function useOnlineGame({
                     store.updateOpponentScore(msg.payload.score);
                     if (msg.payload.combo !== undefined) {
                         store.setOpponentCombo(msg.payload.combo);
+                    }
+                    if (Array.isArray(msg.payload.br_opponents)) {
+                        store.setBROpponents(msg.payload.br_opponents.map((opp: any) => ({
+                            id: opp.player_id,
+                            score: opp.score ?? 0,
+                            combo: opp.combo ?? 0,
+                            effect: null,
+                            selections: Array.isArray(opp.selections) ? opp.selections : [],
+                            images: Array.isArray(opp.images) ? opp.images : [],
+                            target: opp.target ?? '',
+                        })));
                     }
                     store.resetOpponentSelections();
                     break;
