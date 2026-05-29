@@ -168,10 +168,9 @@ export function useOnlineGame({
                         const eff = msg.payload.effect as string;
                         const aid = msg.payload.attacker_id as string;
                         if (onObstructionFired) onObstructionFired(eff as ObstructionType, aid);
-                        // 表示のみの目的で、攻撃者側でも一時的に妨害エフェクトをセットする。
-                        // ゲームロジックには影響を与えず、既存の useObstructionEffect による
-                        // 3秒クリア処理に任せる（最小改修）。
-                        store.setPlayerEffect(eff as ObstructionType);
+                        // OBSTRUCTION_FIRED は攻撃者への「発動通知」のみ。
+                        // 攻撃者自身には GRAYSCALE 等のエフェクトを適用しない。
+                        // バナー表示は onObstructionFired (showBRAttack) で行われる。
                     } catch (e) {
                         console.warn('Invalid OBSTRUCTION_FIRED payload', e);
                     }

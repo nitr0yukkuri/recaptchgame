@@ -141,7 +141,16 @@ export const useGameStore = create<Store>((set) => ({
         return { mySelections: selections };
     }),
     resetMySelections: () => set({ mySelections: [] }),
-    endGame: (winner, disconnected = false) => set({ gameState: 'RESULT', winner, disconnected }),
+    endGame: (winner, disconnected = false) => set({
+        gameState: 'RESULT',
+        winner,
+        disconnected,
+        playerEffect: null,
+        opponentEffect: null,
+        playerEffectToken: 0,
+        opponentEffectToken: 0,
+        feedback: null,
+    }),
     setFeedback: (feedback) => set({ feedback }),
 
     setPlayerCombo: (count) => set({ playerCombo: count }),
