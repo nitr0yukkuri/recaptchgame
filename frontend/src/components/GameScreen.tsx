@@ -112,7 +112,7 @@ export const GameScreen = ({
                         </AnimatePresence>
 
                         <div className="grid grid-cols-3 gap-0.5 sm:gap-1 w-full aspect-square">
-                            {images.map((img: string, idx: number) => (
+                            {(images || []).map((img: string, idx: number) => (
                                 <div
                                     key={idx}
                                     onClick={() => handleImageClick(idx)}
@@ -174,7 +174,7 @@ export const GameScreen = ({
                             <p className="text-[8px] sm:text-[10px] md:text-xs font-bold text-gray-500">RIVAL VIEW</p>
                         </div>
                         <div className="grid grid-cols-3 gap-0.5 w-full opacity-90">
-                            {rivalImages.map((img: string, idx: number) => (
+                            {(rivalImages || []).map((img: string, idx: number) => (
                                 <div
                                     key={`opp-${idx}`}
                                     className="relative aspect-square overflow-hidden bg-gray-300"

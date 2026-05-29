@@ -620,11 +620,6 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 					if roomObj.Player2 != nil && roomObj.Player2.ID != p.PlayerID {
 						candidates = append(candidates, roomObj.Player2.ID)
 					}
-					for _, extra := range roomObj.ExtraPlayers {
-						if extra != nil && extra.ID != p.PlayerID {
-							candidates = append(candidates, extra.ID)
-						}
-					}
 					if len(candidates) > 0 {
 						targetPlayer := candidates[rand.Intn(len(candidates))]
 						obs := ObstructionPayload{
@@ -633,8 +628,16 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 							TargetID:   targetPlayer,
 						}
 						bObs, _ := json.Marshal(obs)
-						// ルーム全体に送信し、各クライアントが target_id を見て反映先を判断する
 						h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
+						// 攻撃者には発動確認を送る（UI 表示用）
+						confirm := ObstructionPayload{
+							Effect:     output.Effect,
+							AttackerID: p.PlayerID,
+						}
+						bConfirm, _ := json.Marshal(confirm)
+						for _, cID := range h.wsManager.GetClientIDsByPlayerID(p.PlayerID) {
+							_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION_FIRED", Payload: bConfirm})
+						}
 					} else {
 						// fallback: ルーム内全員へ送信
 						obs := ObstructionPayload{

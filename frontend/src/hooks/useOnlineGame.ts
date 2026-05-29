@@ -46,14 +46,14 @@ export function useOnlineGame({
     const isMountedRef = useRef(true);
     const isMatchingRef = useRef(false);
     const prevMessageRef = useRef<MessageEvent<any> | null>(null);
-    const brEffectTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-    void onObstructionFired;
+    const brObstructionTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     useEffect(() => {
         return () => {
             isMountedRef.current = false;
             isMatchingRef.current = false;
-            Object.values(brEffectTimersRef.current).forEach(timer => clearTimeout(timer));
+            Object.values(brObstructionTimersRef.current).forEach(t => clearTimeout(t));
+            brObstructionTimersRef.current = {};
         };
     }, []);
 
@@ -158,36 +158,38 @@ export function useOnlineGame({
                     break;
 
                 case 'OBSTRUCTION':
-                    {
-                        const effect = msg.payload.effect as ObstructionType;
-                        const targetId = msg.payload.target_id as string | undefined;
+                    const effect = msg.payload.effect as ObstructionType;
+                    const targetId = msg.payload.target_id as string | undefined;
 
-                        if (targetId === store.playerId) {
-                            store.setPlayerEffect(effect);
-                            if (msg.payload.attacker_id !== store.playerId) {
-                                store.setPlayerCombo(0);
-                            }
-                            break;
+                    if (targetId && targetId === store.playerId) {
+                        store.setPlayerEffect(effect);
+                    } else if (targetId && store.brOpponents.some(opp => opp.id === targetId)) {
+                        const timers = brObstructionTimersRef.current;
+                        if (timers[targetId]) {
+                            clearTimeout(timers[targetId]);
+                            delete timers[targetId];
                         }
-
-                        const hasBrOpponents = useGameStore.getState().brOpponents.length > 0;
-                        if (hasBrOpponents && targetId) {
-                            store.setBROpponentEffect(targetId, effect);
-                            if (brEffectTimersRef.current[targetId]) {
-                                clearTimeout(brEffectTimersRef.current[targetId]);
-                            }
-                            brEffectTimersRef.current[targetId] = setTimeout(() => {
-                                useGameStore.getState().setBROpponentEffect(targetId, null);
-                                delete brEffectTimersRef.current[targetId];
-                            }, 3000);
-                        } else {
-                            store.setOpponentEffect(effect);
-                        }
-
-                        // 攻撃者以外のプレイヤーはコンボをリセット
-                        if (msg.payload.attacker_id !== store.playerId) {
-                            store.setPlayerCombo(0);
-                        }
+                        store.setBROpponentEffect(targetId, effect);
+                        timers[targetId] = setTimeout(() => {
+                            useGameStore.getState().setBROpponentEffect(targetId, null);
+                            delete timers[targetId];
+                        }, 3000);
+                    } else {
+                        store.setOpponentEffect(effect);
+                    }
+                    // effect の解除は useObstructionEffect に一元管理
+                    break;
+                case 'OBSTRUCTION_FIRED':
+                    // サーバから攻撃者へ発動確認が来る（UI表示用）
+                    try {
+                        const eff = msg.payload.effect as string;
+                        const aid = msg.payload.attacker_id as string;
+                        if (onObstructionFired) onObstructionFired(eff as ObstructionType, aid);
+                        // OBSTRUCTION_FIRED は攻撃者への「発動通知」のみ。
+                        // 攻撃者自身には GRAYSCALE 等のエフェクトを適用しない。
+                        // バナー表示は onObstructionFired (showBRAttack) で行われる。
+                    } catch (e) {
+                        console.warn('Invalid OBSTRUCTION_FIRED payload', e);
                     }
                     break;
                 case 'OPPONENT_SELECT':

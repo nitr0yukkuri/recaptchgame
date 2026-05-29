@@ -53,6 +53,7 @@ type OpponentUpdatePayload struct {
 type ObstructionPayload struct {
 	Effect     string `json:"effect"`
 	AttackerID string `json:"attacker_id"`
+	TargetID   string `json:"target_id"`
 }
 
 type GameResultPayload struct {

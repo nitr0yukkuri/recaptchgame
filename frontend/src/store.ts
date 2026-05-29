@@ -120,9 +120,26 @@ export const useGameStore = create<Store>((set) => ({
         playerEffectToken: 0,
         opponentEffectToken: 0,
     }),
-    updatePattern: (target, images) => set({ target, images, opponentSelections: [], mySelections: [] }),
-    updateCpuPattern: (target, images) => set({ cpuTarget: target, cpuImages: images, opponentSelections: [] }),
-    updatePlayerPattern: (target, images) => set({ target, images, mySelections: [] }),
+    updatePattern: (target, images) => set({
+        target,
+        images: images || [],
+        mySelections: [],
+        cpuTarget: target,
+        cpuImages: images || [],
+        opponentSelections: [],
+    }),
+
+    updateCpuPattern: (target, images) => set({
+        cpuTarget: target,
+        cpuImages: images || [],
+        opponentSelections: [],
+    }),
+
+    updatePlayerPattern: (target, images) => set({
+        target,
+        images: images || [],
+        mySelections: [],
+    }),
 
     setCpuDifficulty: (level) => set({ cpuDifficulty: level }),
 

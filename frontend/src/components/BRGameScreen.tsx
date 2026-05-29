@@ -102,7 +102,7 @@ export const BRGameScreen = ({
                     <p className="text-[8px] md:text-[10px] font-bold text-gray-500">RIVAL</p>
                 </div>
                 <div className="grid grid-cols-3 gap-[1px] w-full opacity-90">
-                    {(opp.images || cpuImages).map((img: string, idx: number) => (
+                    {((opp.images || cpuImages) || []).map((img: string, idx: number) => (
                         <div key={`opp-${idx}`} className="relative aspect-square overflow-hidden bg-gray-300">
                             <div className={`w-full h-full origin-center transition-transform duration-150 ease-out ${opp.selections.includes(idx) ? 'scale-90' : 'scale-100'}`}>
                                 {renderCaptchaImage(img, idx, 'w-full h-full object-contain sm:object-cover aspect-square block')}
@@ -167,7 +167,7 @@ export const BRGameScreen = ({
                             </AnimatePresence>
 
                             <div className="grid grid-cols-3 gap-1 w-full aspect-square">
-                                {images.map((img: string, idx: number) => (
+                                {(images || []).map((img: string, idx: number) => (
                                     <div
                                         key={idx}
                                         onClick={() => handleImageClick(idx)}
