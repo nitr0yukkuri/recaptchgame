@@ -86,7 +86,7 @@ export function useOnlineGame({
                         }
                         break;
                     }
-                    if (store.gameState !== 'RESULT' && store.gameState !== 'PLAYING') {
+                    if (store.gameState !== 'RESULT') {
                         store.setGameState('WAITING');
                     }
                     break;
