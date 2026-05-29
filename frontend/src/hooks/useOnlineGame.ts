@@ -190,15 +190,18 @@ export function useOnlineGame({
                         store.setOpponentCombo(msg.payload.combo);
                     }
                     if (Array.isArray(msg.payload.br_opponents)) {
-                        store.setBROpponents(msg.payload.br_opponents.map((opp: any) => ({
-                            id: opp.player_id,
-                            score: opp.score ?? 0,
-                            combo: opp.combo ?? 0,
-                            effect: null,
-                            selections: Array.isArray(opp.selections) ? opp.selections : [],
-                            images: Array.isArray(opp.images) ? opp.images : [],
-                            target: opp.target ?? '',
-                        })));
+                        store.setBROpponents(msg.payload.br_opponents.map((opp: any) => {
+                            const existingOpp = store.brOpponents.find(existing => existing.id === opp.player_id);
+                            return {
+                                id: opp.player_id,
+                                score: opp.score ?? 0,
+                                combo: opp.combo ?? 0,
+                                effect: existingOpp ? existingOpp.effect : null,
+                                selections: existingOpp ? existingOpp.selections : [],
+                                images: Array.isArray(opp.images) ? opp.images : [],
+                                target: opp.target ?? '',
+                            };
+                        }));
                     }
                     store.resetOpponentSelections();
                     break;

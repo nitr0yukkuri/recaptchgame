@@ -680,6 +680,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 						confirm := ObstructionPayload{
 							Effect:     output.Effect,
 							AttackerID: p.PlayerID,
+							TargetID:   targetPlayer,
 						}
 						bConfirm, _ := json.Marshal(confirm)
 						for _, cID := range h.wsManager.GetClientIDsByPlayerID(p.PlayerID) {

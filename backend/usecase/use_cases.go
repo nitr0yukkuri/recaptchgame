@@ -539,6 +539,9 @@ func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 		}
 	} else {
 		uc.roomRepo.Save(room)
+		if !room.IsActive {
+			_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
+		}
 	}
 
 	return nil
