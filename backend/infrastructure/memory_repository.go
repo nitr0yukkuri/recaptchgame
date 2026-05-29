@@ -30,7 +30,7 @@ func (r *MemoryRoomRepository) FindByID(roomID string) (*domain.Room, error) {
 	if !ok {
 		return nil, fmt.Errorf("room not found: %s", roomID)
 	}
-	return room, nil
+	return copyRoom(room), nil
 }
 
 // Save はルームを保存
@@ -59,11 +59,11 @@ func (r *MemoryRoomRepository) FindByPlayerID(playerID string) (*domain.Room, er
 	for _, room := range r.rooms {
 		if (room.Player1 != nil && room.Player1.ID == playerID) ||
 			(room.Player2 != nil && room.Player2.ID == playerID) {
-			return room, nil
+			return copyRoom(room), nil
 		}
 		for _, p := range room.ExtraPlayers {
 			if p != nil && p.ID == playerID {
-				return room, nil
+				return copyRoom(room), nil
 			}
 		}
 	}
@@ -78,7 +78,7 @@ func (r *MemoryRoomRepository) ListActive() ([]*domain.Room, error) {
 	var active []*domain.Room
 	for _, room := range r.rooms {
 		if room.IsActive {
-			active = append(active, room)
+			active = append(active, copyRoom(room))
 		}
 	}
 	return active, nil
@@ -92,7 +92,50 @@ func (r *MemoryRoomRepository) GetWaitingRoom() (*domain.Room, error) {
 	if r.waitingRoom == nil {
 		return nil, fmt.Errorf("no waiting room")
 	}
-	return r.waitingRoom, nil
+	return copyRoom(r.waitingRoom), nil
+}
+
+// copyRoom makes a shallow copy of Room and its nested structs to avoid exposing
+// internal pointers to callers (prevents data races when callers modify returned object).
+func copyRoom(src *domain.Room) *domain.Room {
+	if src == nil {
+		return nil
+	}
+	dst := &domain.Room{
+		ID:           src.ID,
+		WinningScore: src.WinningScore,
+		IsActive:     src.IsActive,
+		Capacity:     src.Capacity,
+	}
+	if src.Player1 != nil {
+		dst.Player1 = &domain.Player{ID: src.Player1.ID, Score: src.Player1.Score, Combo: src.Player1.Combo}
+	}
+	if src.Player2 != nil {
+		dst.Player2 = &domain.Player{ID: src.Player2.ID, Score: src.Player2.Score, Combo: src.Player2.Combo}
+	}
+	if src.GameState1 != nil {
+		dst.GameState1 = &domain.GameState{Target: src.GameState1.Target, Images: append([]string{}, src.GameState1.Images...)}
+	}
+	if src.GameState2 != nil {
+		dst.GameState2 = &domain.GameState{Target: src.GameState2.Target, Images: append([]string{}, src.GameState2.Images...)}
+	}
+	if len(src.ExtraPlayers) > 0 {
+		dst.ExtraPlayers = make([]*domain.Player, len(src.ExtraPlayers))
+		for i, p := range src.ExtraPlayers {
+			if p != nil {
+				dst.ExtraPlayers[i] = &domain.Player{ID: p.ID, Score: p.Score, Combo: p.Combo}
+			}
+		}
+	}
+	if len(src.ExtraGameStates) > 0 {
+		dst.ExtraGameStates = make([]*domain.GameState, len(src.ExtraGameStates))
+		for i, gs := range src.ExtraGameStates {
+			if gs != nil {
+				dst.ExtraGameStates[i] = &domain.GameState{Target: gs.Target, Images: append([]string{}, gs.Images...)}
+			}
+		}
+	}
+	return dst
 }
 
 // SetWaitingRoom はマッチング待機ルームを設定

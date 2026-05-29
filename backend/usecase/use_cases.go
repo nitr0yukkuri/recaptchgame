@@ -137,57 +137,68 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 
 	// 個別ルームのロックを取りつつ、満員競合が起きた場合はRANDOMなら再試行する
 	for {
-		unlock := uc.roomGuard.Lock(actualRoomID)
+		// 保護ブロック内でロックを取得し、必ず defer で解除することで
+		// panic 発生時のロックリークを防ぐ（スコープも限定する）
+		joinedOrStopped := false
+		func() {
+			unlock := uc.roomGuard.Lock(actualRoomID)
+			defer unlock()
 
-		room, err := uc.roomRepo.FindByID(actualRoomID)
-		if err != nil {
-			// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
-			cap := input.Capacity
-			if cap <= 0 {
-				cap = 2
+			room, err := uc.roomRepo.FindByID(actualRoomID)
+			if err != nil {
+				// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
+				cap := input.Capacity
+				if cap <= 0 {
+					cap = 2
+				}
+				room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, cap)
+				uc.roomRepo.Save(room)
+				if input.RoomID == "RANDOM" {
+					uc.roomRepo.SetWaitingRoom(room)
+				}
+				joinedOrStopped = true
+				return
 			}
-			room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, cap)
-			uc.roomRepo.Save(room)
-			if input.RoomID == "RANDOM" {
-				uc.roomRepo.SetWaitingRoom(room)
+
+			// 既に同一プレイヤーがいる場合は再登録しない
+			if room.GetPlayerByID(input.PlayerID) != nil {
+				joinedOrStopped = true
+				return
 			}
-			unlock()
-			break
-		}
 
-		// 既に同一プレイヤーがいる場合は再登録しない
-		if room.GetPlayerByID(input.PlayerID) != nil {
-			unlock()
-			break
-		}
-
-		// 空きスロットがあれば参加
-		joined := false
-		if room.Player1 == nil || room.Player1.ID == "" {
-			room.Player1 = domain.NewPlayer(input.PlayerID)
-			uc.roomRepo.Save(room)
-			joined = true
-		} else if room.Player2 == nil || room.Player2.ID == "" {
-			room.Player2 = domain.NewPlayer(input.PlayerID)
-			uc.roomRepo.Save(room)
-			joined = true
-		} else {
-			for i := range room.ExtraPlayers {
-				if room.ExtraPlayers[i] == nil || room.ExtraPlayers[i].ID == "" {
-					room.ExtraPlayers[i] = domain.NewPlayer(input.PlayerID)
-					uc.roomRepo.Save(room)
-					joined = true
-					break
+			// 空きスロットがあれば参加
+			joined := false
+			if room.Player1 == nil || room.Player1.ID == "" {
+				room.Player1 = domain.NewPlayer(input.PlayerID)
+				uc.roomRepo.Save(room)
+				joined = true
+			} else if room.Player2 == nil || room.Player2.ID == "" {
+				room.Player2 = domain.NewPlayer(input.PlayerID)
+				uc.roomRepo.Save(room)
+				joined = true
+			} else {
+				for i := range room.ExtraPlayers {
+					if room.ExtraPlayers[i] == nil || room.ExtraPlayers[i].ID == "" {
+						room.ExtraPlayers[i] = domain.NewPlayer(input.PlayerID)
+						uc.roomRepo.Save(room)
+						joined = true
+						break
+					}
 				}
 			}
-		}
-		if joined {
-			unlock()
+			if joined {
+				joinedOrStopped = true
+				return
+			}
+
+			// ここに到達するのはルームが満員のとき
+			return
+		}()
+
+		if joinedOrStopped {
 			break
 		}
 
-		// ここに到達するのはルームが満員のとき
-		unlock()
 		if input.RoomID == "RANDOM" {
 			if randomRetries >= maxRandomRetries {
 				return nil, fmt.Errorf("random room join retries exceeded")

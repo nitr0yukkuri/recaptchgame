@@ -160,6 +160,14 @@ export function useOnlineGame({
                 case 'OBSTRUCTION':
                     const effect = msg.payload.effect as ObstructionType;
                     const targetId = msg.payload.target_id as string | undefined;
+                    const attackerId = msg.payload.attacker_id as string | undefined;
+
+                    // UI-only guard: if this client is the attacker, ignore the broadcasted OBSTRUCTION.
+                    // Server sends OBSTRUCTION to whole room plus OBSTRUCTION_FIRED to attacker; to avoid
+                    // duplicate/incorrect UI application on attacker side, ignore OBSTRUCTION when attacker.
+                    if (attackerId && attackerId === store.playerId) {
+                        break;
+                    }
 
                     if (targetId && targetId === store.playerId) {
                         store.setPlayerEffect(effect);

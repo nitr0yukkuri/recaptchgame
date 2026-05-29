@@ -437,6 +437,12 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 
 	output, err := h.joinRoomUC.Execute(input)
 	if err != nil || output == nil {
+		// join に失敗したことをクライアントへ通知してUIが固まらないようにする
+		errMsg := struct{
+			Message string `json:"message"`
+		}{Message: "JOIN_FAILED"}
+		bErr, _ := json.Marshal(errMsg)
+		_ = h.wsManager.SendToClient(clientID, Message{Type: "JOIN_FAILED", Payload: bErr})
 		return
 	}
 
@@ -624,6 +630,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			if output.SendObstruction {
 				// ルーム情報を取得して候補プレイヤーを抽出
 				if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
+					// 多人数対応: Player1/Player2だけでなく ExtraPlayers からも候補を集める
 					var candidates []string
 					if roomObj.Player1 != nil && roomObj.Player1.ID != p.PlayerID {
 						candidates = append(candidates, roomObj.Player1.ID)
@@ -631,6 +638,12 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 					if roomObj.Player2 != nil && roomObj.Player2.ID != p.PlayerID {
 						candidates = append(candidates, roomObj.Player2.ID)
 					}
+					for _, ex := range roomObj.ExtraPlayers {
+						if ex != nil && ex.ID != "" && ex.ID != p.PlayerID {
+							candidates = append(candidates, ex.ID)
+						}
+					}
+
 					if len(candidates) > 0 {
 						targetPlayer := candidates[rand.Intn(len(candidates))]
 						obs := ObstructionPayload{
