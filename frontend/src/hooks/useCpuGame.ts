@@ -77,6 +77,10 @@ export function useCpuGame({
                         if (newCombo >= 2) {
                             store.setOpponentCombo(0);
                             store.setPlayerEffect(getRandomObstruction());
+                            // Defensive explicit clear to ensure playerEffect is removed in CPU 1v1
+                            controller.scheduleNamed(`playerEffect:${store.playerId}`, () => {
+                                useGameStore.getState().setPlayerEffect(null);
+                            }, 3000);
                         }
                         const next = generateCpuProblem(store.cpuTarget);
                         store.updateCpuPattern(next.target, next.images);
