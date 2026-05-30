@@ -119,6 +119,9 @@ export function useOnlineGame({
                     }
                     if (startPayload.player_effect) {
                         store.setPlayerEffect(startPayload.player_effect as ObstructionType);
+                        controller.scheduleNamed(`playerEffect:${store.playerId}`, () => {
+                            useGameStore.getState().setPlayerEffect(null);
+                        }, 3000);
                     }
                     if (Array.isArray(startPayload.br_opponents)) {
                         store.setBROpponents(startPayload.br_opponents.map((opp: any) => {

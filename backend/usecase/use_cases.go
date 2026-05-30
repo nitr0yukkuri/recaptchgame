@@ -255,11 +255,9 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	// ルームがいっぱいになったら待機ルームをクリア
 	roomSize := room.CountPlayers()
 	if roomSize >= room.Capacity {
-		if input.RoomID == "RANDOM" {
-			waitingRoom, _ := uc.roomRepo.GetWaitingRoom(room.Capacity)
-			if waitingRoom != nil && waitingRoom.ID == actualRoomID {
-				uc.roomRepo.ClearWaitingRoom(room.Capacity)
-			}
+		waitingRoom, _ := uc.roomRepo.GetWaitingRoom(room.Capacity)
+		if waitingRoom != nil && waitingRoom.ID == actualRoomID {
+			uc.roomRepo.ClearWaitingRoom(room.Capacity)
 		}
 	}
 

@@ -599,7 +599,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 	}
 
 	output, err := h.verifyAnswerUC.Execute(input)
-	if err != nil {
+	if err != nil || output == nil {
 		return
 	}
 
@@ -796,7 +796,7 @@ func (h *WebSocketHandler) leaveAndNotify(input usecase.LeaveRoomInput, message 
 						}
 					}
 				}
-				if winnerID != "" {
+				if winnerID != "" && updatedRoom.IsActive {
 					res := GameResultPayload{WinnerID: winnerID, Message: message}
 					b, _ := json.Marshal(res)
 					for _, cID := range h.wsManager.GetClientIDsByPlayerID(winnerID) {
