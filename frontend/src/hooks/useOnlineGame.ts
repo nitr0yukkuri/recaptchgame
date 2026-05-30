@@ -142,7 +142,7 @@ export function useOnlineGame({
                     }
                     setMyScore(() => startPayload.my_current_score ?? 0);
                     setIsVerifying(false);
-                    store.setPlayerCombo(0);
+                    store.setPlayerCombo(startPayload.my_current_combo ?? 0);
                     store.setOpponentCombo(0);
 
                     (async () => {
@@ -263,9 +263,8 @@ export function useOnlineGame({
                     if (msg.payload.player_id !== store.playerId) {
                         if (store.brOpponents.some(opp => opp.id === msg.payload.player_id)) {
                             store.toggleBROpponentSelection(msg.payload.player_id, msg.payload.image_index);
-                        } else {
-                            store.toggleOpponentSelection(msg.payload.image_index);
                         }
+                        store.toggleOpponentSelection(msg.payload.image_index);
                     }
                     break;
 

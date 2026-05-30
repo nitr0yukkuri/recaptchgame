@@ -314,7 +314,7 @@ func NewWebSocketHandler(
 // HandleConnection はWebSocket接続を処理
 func (h *WebSocketHandler) HandleConnection(clientID string, conn *websocket.Conn) {
 	h.wsManager.RegisterConnection(clientID, conn)
-	go h.heartbeatPump(clientID)
+	go h.heartbeatPump(clientID, conn)
 	// left フラグで重複退出処理を防ぐ
 	var left bool
 	defer func() {
@@ -417,6 +417,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 					OpponentImages:       opponentImages,
 					WinningScore:         room.WinningScore,
 					MyCurrentScore:       player.Score,
+					MyCurrentCombo:       player.Combo,
 					OpponentCurrentScore: opponentScore,
 					PlayerEffect:         player.ActiveEffect(),
 					BROpponents:          brOpponents,
@@ -522,6 +523,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 				OpponentImages:       opponentImages,
 				WinningScore:         startOutput.WinningScore,
 				MyCurrentScore:       0,
+				MyCurrentCombo:       player.Combo,
 				OpponentCurrentScore: 0,
 				PlayerEffect:         player.ActiveEffect(),
 				BROpponents:          h.buildBROpponentSnapshots(room, player.ID),
@@ -882,14 +884,14 @@ func (h *WebSocketHandler) buildBROpponentSnapshots(room *domain.Room, playerID 
 	return snapshots
 }
 
-func (h *WebSocketHandler) heartbeatPump(clientID string) {
+func (h *WebSocketHandler) heartbeatPump(clientID string, conn *websocket.Conn) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	const pongTimeout = 45 * time.Second
 
 	for range ticker.C {
 		if h.wsManager.IsPongTimedOut(clientID, pongTimeout) {
-			h.wsManager.UnregisterConnection(clientID)
+			_ = conn.Close()
 			return
 		}
 		_ = h.wsManager.SendToClient(clientID, Message{Type: "PING", Payload: json.RawMessage(`{}`)})
@@ -926,6 +928,7 @@ type GameStartPayload struct {
 	OpponentImages       []string            `json:"opponent_images"`
 	WinningScore         int                 `json:"winning_score"`
 	MyCurrentScore       int                 `json:"my_current_score,omitempty"`
+	MyCurrentCombo       int                 `json:"my_current_combo,omitempty"`
 	OpponentCurrentScore int                 `json:"opponent_current_score,omitempty"`
 	PlayerEffect         string              `json:"player_effect,omitempty"`
 	BROpponents          []BROpponentPayload `json:"br_opponents,omitempty"`

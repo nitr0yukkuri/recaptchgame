@@ -491,6 +491,9 @@ func (uc *StartGameUseCase) Execute(input StartGameInput) (*StartGameOutput, err
 	if !room.IsReady() {
 		return nil, fmt.Errorf("room is not ready")
 	}
+	if room.IsActive {
+		return nil, fmt.Errorf("game already started")
+	}
 
 	room.Start()
 
