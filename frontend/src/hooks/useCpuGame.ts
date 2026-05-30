@@ -212,6 +212,10 @@ export function useCpuGame({
                 showBRAttack(effect);
                 if (cpuPlayerCount === 1) {
                     store.setOpponentEffect(effect);
+                    // Defensive explicit clear to ensure opponentEffect is removed
+                    controller.scheduleNamed(`opponentEffect:${store.playerId}`, () => {
+                        useGameStore.getState().setOpponentEffect(null);
+                    }, 3000);
                 } else {
                     // BRではライバル全員に同じ妨害を適用する
                     const latestOpponents = useGameStore.getState().brOpponents;
