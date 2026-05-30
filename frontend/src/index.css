@@ -43,10 +43,4 @@ html, body, #root {
     .grid {
         max-width: 100%;
     }
-    /* allow aspect-square elements to scale within viewport */
-    .aspect-square {
-        max-width: 92vw;
-        margin-left: auto;
-        margin-right: auto;
-    }
 }

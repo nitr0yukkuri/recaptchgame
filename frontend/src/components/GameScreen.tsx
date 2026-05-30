@@ -132,8 +132,8 @@ export const GameScreen = ({
                                     </div>
 
                                     {mySelections.includes(idx) && (
-                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-0.5 m-0.5 sm:m-1 shadow-md z-10">
-                                            <svg className="w-2.5 h-2.5 sm:w-4 sm:h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-1 m-0.5 sm:m-1 shadow-md z-10 ring-1 ring-white/40">
+                                            <svg className="w-4 h-4 sm:w-6 sm:h-6 md:w-7 md:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
                                         </div>
                                     )}
                                 </div>
@@ -192,8 +192,8 @@ export const GameScreen = ({
                                         {renderCaptchaImage(img, 'w-full h-full object-cover aspect-square block')}
                                     </div>
                                     {opponentSelections.includes(idx) && (
-                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-0.5 m-0.5 sm:m-1 shadow-md z-10">
-                                            <svg className="w-2.5 h-2.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
+                                        <div className="absolute top-0 left-0 text-white bg-[#4285F4] rounded-full p-1 m-0.5 sm:m-1 shadow-md z-10 ring-1 ring-white/40">
+                                            <svg className="w-4 h-4 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
                                         </div>
                                     )}
                                 </div>
