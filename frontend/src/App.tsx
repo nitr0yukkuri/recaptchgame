@@ -336,6 +336,9 @@ function App() {
         setLoginStep('SELECT');
         setInputRoom('');
         setLoginError('');
+        // 応急処置: ホームに戻る際にブラウザを強制リロードして状態を完全初期化する
+        // (LEAVE_ROOM が送信される猶予を与えるため軽微な遅延を入れる)
+        setTimeout(() => window.location.reload(), 200);
     };
 
     useEffect(() => {
