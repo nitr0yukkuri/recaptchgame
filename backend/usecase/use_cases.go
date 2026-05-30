@@ -127,7 +127,13 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	if input.RoomID == "RANDOM" {
 		globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 		waitingRoom, _ := uc.roomRepo.GetWaitingRoom(capacity)
-		isAvailable := waitingRoom != nil && !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity
+		isAvailable := false
+		if waitingRoom != nil {
+			// 個別ルームの状態を読む前に、そのルーム専用のロックを取得してデータ競合を防止する
+			roomUnlock := uc.roomGuard.Lock(waitingRoom.ID)
+			isAvailable = !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity
+			roomUnlock()
+		}
 		if !isAvailable {
 			_ = uc.roomRepo.ClearWaitingRoom(capacity)
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
@@ -222,8 +228,12 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			globalUnlock := uc.roomGuard.Lock("GLOBAL_RANDOM_LOCK")
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom(capacity)
 			if waitingRoom != nil {
-				// 待機ルームがまだ有効（定員未満かつ未開始）なら使う
-				if !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity {
+				// 待機ルームの最新状態を読むため、当該ルームのロックを取得してから判定する
+				roomUnlock := uc.roomGuard.Lock(waitingRoom.ID)
+				stillAvailable := !waitingRoom.IsActive && waitingRoom.CountPlayers() < waitingRoom.Capacity
+				roomUnlock()
+
+				if stillAvailable {
 					actualRoomID = waitingRoom.ID
 					globalUnlock()
 					continue
@@ -609,7 +619,10 @@ func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 	} else {
 		uc.roomRepo.Save(room)
 		if !room.IsActive {
-			_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
+			waitingRoom, _ := uc.roomRepo.GetWaitingRoom(room.Capacity)
+			if waitingRoom == nil || waitingRoom.ID == room.ID {
+				_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
+			}
 		}
 	}
 

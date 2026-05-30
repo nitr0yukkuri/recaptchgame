@@ -135,7 +135,7 @@ func (m *WebSocketManager) RemoveClientAssociation(clientID string) {
 	roomID := m.clientToRoom[clientID]
 	delete(m.clientToRoom, clientID)
 	delete(m.clientToPlayer, clientID)
-	delete(m.lastPongAt, clientID)
+	// Retaining lastPongAt entry to avoid heartbeat false timeouts
 
 	if roomID != "" && m.roomToClients[roomID] != nil {
 		delete(m.roomToClients[roomID], clientID)
@@ -649,8 +649,6 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 					Effect:   opp.Effect,
 				})
 			}
-			bOpp, _ := json.Marshal(updateOpp)
-
 			// 各受信者ごとに「その受信者から見た」BRスナップショットを再構築して送信する
 			for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
 				// 同一プレイヤーの別タブにはOPPONENT_UPDATEを送らない
