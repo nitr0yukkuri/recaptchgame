@@ -41,16 +41,19 @@ export function useCpuGame({
 
     const controller = useGameController();
 
-    const shouldSkipWithObstruction = () => Math.random() < 0.95;
+    // When under an obstruction, CPU previously skipped actions ~95% of the time.
+    // Reduce that so CPU is more likely to act while obstructed.
+    const shouldSkipWithObstruction = () => Math.random() < 0.6;
 
     // ── CPUゲームループ ──────────────────────────────────────
     useEffect(() => {
         if (gameMode !== 'CPU' || gameState !== 'PLAYING') return;
 
         const difficulty = useGameStore.getState().cpuDifficulty;
-        let intervalTime = 800;
-        let actionProb = 0.35;
-        let submitProb = 0.35;
+        // Slightly faster and more aggressive defaults to make CPU stronger overall
+        let intervalTime = 700;
+        let actionProb = 0.45;
+        let submitProb = 0.45;
         if (difficulty === 1) { intervalTime = 1400; actionProb = 0.6; submitProb = 0.2; }
         else if (difficulty === 3) { intervalTime = 900; actionProb = 0.25; submitProb = 0.5; }
 
