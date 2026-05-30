@@ -87,6 +87,7 @@ type Room struct {
 	GameState2      *GameState
 	WinningScore    int
 	IsActive        bool
+	IsPublic        bool
 	Capacity        int
 	ExtraPlayers    []*Player
 	ExtraGameStates []*GameState
@@ -124,6 +125,7 @@ func NewRoom(id string, player1ID string, player2ID string, winningScore int, ca
 		GameState2:      NewGameState("", []string{}),
 		WinningScore:    winningScore,
 		IsActive:        false,
+		IsPublic:        false,
 		Capacity:        capacity,
 		ExtraPlayers:    extraPlayers,
 		ExtraGameStates: extraGameStates,

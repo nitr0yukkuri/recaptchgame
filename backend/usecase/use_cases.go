@@ -139,6 +139,8 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			// 新しいルームIDを生成（実際の保存は個別ルームロック下で行う）
 			actualRoomID = uc.idGenerator.GenerateRoomID()
 			room := domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, capacity)
+			// mark as public since created via RANDOM flow
+			room.IsPublic = true
 			_ = uc.roomRepo.Save(room)
 			_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
 		} else {
@@ -161,10 +163,12 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 			if err != nil {
 				// ルームが存在しない場合（新規生成フロー）、個別ロック下で作成・保存
 				room = domain.NewRoom(actualRoomID, input.PlayerID, "", input.WinningScore, capacity)
-				uc.roomRepo.Save(room)
 				if input.RoomID == "RANDOM" {
+					// mark as public when created from RANDOM
+					room.IsPublic = true
 					uc.roomRepo.SetWaitingRoom(room.Capacity, room)
 				}
+				uc.roomRepo.Save(room)
 				joinedOrStopped = true
 				return
 			}
@@ -618,7 +622,7 @@ func (uc *LeaveRoomUseCase) Execute(input LeaveRoomInput) error {
 		}
 	} else {
 		uc.roomRepo.Save(room)
-		if !room.IsActive {
+		if !room.IsActive && room.IsPublic {
 			waitingRoom, _ := uc.roomRepo.GetWaitingRoom(room.Capacity)
 			if waitingRoom == nil || waitingRoom.ID == room.ID {
 				_ = uc.roomRepo.SetWaitingRoom(room.Capacity, room)
