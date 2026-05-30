@@ -74,8 +74,11 @@ export const GameScreen = ({
     } = useGameStore();
 
     const isOneOnOne = !brOpponents || brOpponents.length === 0;
-    const playerSizeClass = 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[400px]';
-    const opponentSizeClass = isOneOnOne ? playerSizeClass : 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[100px] lg:w-48';
+    // Base and slightly smaller sizes for 1on1 (small reduction to give more padding/余白)
+    const basePlayerSizeClass = 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[400px]';
+    const oneOnOnePlayerSizeClass = 'w-[180px] xs:w-[200px] sm:w-[260px] md:w-[340px]';
+    const playerSizeClass = isOneOnOne ? oneOnOnePlayerSizeClass : basePlayerSizeClass;
+    const opponentSizeClass = isOneOnOne ? oneOnOnePlayerSizeClass : 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[100px] lg:w-48';
 
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
@@ -87,7 +90,7 @@ export const GameScreen = ({
             </div>
 
             <div className="flex flex-col md:flex-row items-center md:items-start justify-center gap-2 sm:gap-6 md:gap-24 w-full max-w-3xl mx-auto px-1 sm:px-4">
-                <div className="flex flex-col items-center w-[210px] xs:w-[240px] sm:w-[300px] md:w-[400px] shrink-0 z-10">
+                <div className={`flex flex-col items-center ${playerSizeClass} shrink-0 z-10`}>
                     <h3 className="text-xs sm:text-lg md:text-2xl font-bold text-gray-700 mb-1 sm:mb-2">自分 {playerCombo > 0 && <span className="text-orange-500 text-[10px] sm:text-xs md:text-base">Combo: {playerCombo}</span>}</h3>
 
                     <motion.div
