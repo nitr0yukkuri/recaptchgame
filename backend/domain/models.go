@@ -1,10 +1,14 @@
 package domain
 
+import "time"
+
 // Player はゲーム内のプレイヤーを表すドメインエンティティ
 type Player struct {
-	ID    string
-	Score int
-	Combo int
+	ID              string
+	Score           int
+	Combo           int
+	CurrentEffect   string
+	EffectExpiresAt time.Time
 }
 
 // NewPlayer は新しいプレイヤーを生成する
@@ -31,6 +35,29 @@ func (p *Player) ResetCombo() {
 	p.Combo = 0
 }
 
+// ApplyEffect は現在の妨害エフェクトを設定する
+func (p *Player) ApplyEffect(effect string, expiresAt time.Time) {
+	p.CurrentEffect = effect
+	p.EffectExpiresAt = expiresAt
+}
+
+// ClearEffect は妨害エフェクトを解除する
+func (p *Player) ClearEffect() {
+	p.CurrentEffect = ""
+	p.EffectExpiresAt = time.Time{}
+}
+
+// ActiveEffect はまだ有効な妨害エフェクトを返す
+func (p *Player) ActiveEffect() string {
+	if p == nil || p.CurrentEffect == "" {
+		return ""
+	}
+	if p.EffectExpiresAt.IsZero() || time.Now().After(p.EffectExpiresAt) {
+		return ""
+	}
+	return p.CurrentEffect
+}
+
 // GameState はゲーム状態を表すドメインエンティティ
 type GameState struct {
 	Target string   // 現在の出題
@@ -53,15 +80,15 @@ func (g *GameState) UpdateState(target string, images []string) {
 
 // Room はゲームルームを表すドメインエンティティ
 type Room struct {
-	ID           string
-	Player1      *Player
-	Player2      *Player
-	GameState1   *GameState
-	GameState2   *GameState
-	WinningScore int
-	IsActive     bool
-	Capacity     int
-	ExtraPlayers []*Player
+	ID              string
+	Player1         *Player
+	Player2         *Player
+	GameState1      *GameState
+	GameState2      *GameState
+	WinningScore    int
+	IsActive        bool
+	Capacity        int
+	ExtraPlayers    []*Player
 	ExtraGameStates []*GameState
 }
 

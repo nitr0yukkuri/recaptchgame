@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -419,6 +418,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 					WinningScore:         room.WinningScore,
 					MyCurrentScore:       player.Score,
 					OpponentCurrentScore: opponentScore,
+					PlayerEffect:         player.ActiveEffect(),
 					BROpponents:          brOpponents,
 				}
 				bGame, _ := json.Marshal(gamePayload)
@@ -523,6 +523,7 @@ func (h *WebSocketHandler) handleJoinRoom(clientID string, conn *websocket.Conn,
 				WinningScore:         startOutput.WinningScore,
 				MyCurrentScore:       0,
 				OpponentCurrentScore: 0,
+				PlayerEffect:         player.ActiveEffect(),
 				BROpponents:          h.buildBROpponentSnapshots(room, player.ID),
 			}
 			if len(gamePayload.BROpponents) > 0 {
@@ -593,6 +594,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 	input := usecase.VerifyAnswerInput{
 		RoomID:          p.RoomID,
 		PlayerID:        p.PlayerID,
+		Target:          p.Target,
 		SelectedIndices: p.SelectedIndices,
 	}
 
@@ -630,12 +632,20 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 		roomID, _ := h.wsManager.GetRoomID(clientID)
 		if roomID != "" {
 			updateOpp := OpponentUpdatePayload{
-				Images: output.NewImages,
-				Score:  output.CurrentScore,
-				Combo:  output.CurrentCombo,
+				Images:      output.NewImages,
+				Score:       output.CurrentScore,
+				Combo:       output.CurrentCombo,
+				BROpponents: make([]BROpponentPayload, 0, len(output.BROpponents)),
 			}
-			if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
-				updateOpp.BROpponents = h.buildBROpponentSnapshots(roomObj, p.PlayerID)
+			for _, opp := range output.BROpponents {
+				updateOpp.BROpponents = append(updateOpp.BROpponents, BROpponentPayload{
+					PlayerID: opp.PlayerID,
+					Target:   opp.Target,
+					Images:   append([]string(nil), opp.Images...),
+					Score:    opp.Score,
+					Combo:    opp.Combo,
+					Effect:   opp.Effect,
+				})
 			}
 			bOpp, _ := json.Marshal(updateOpp)
 
@@ -651,60 +661,23 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 
 			// 妨害エフェクト送信: プレイヤー発の場合はランダムに1人の相手のみを標的にする
 			if output.SendObstruction {
-				// ルーム情報を取得して候補プレイヤーを抽出
-				if roomObj, err := h.roomRepo.FindByID(roomID); err == nil && roomObj != nil {
-					// 多人数対応: Player1/Player2だけでなく ExtraPlayers からも候補を集める
-					var candidates []string
-					if roomObj.Player1 != nil && roomObj.Player1.ID != p.PlayerID {
-						candidates = append(candidates, roomObj.Player1.ID)
-					}
-					if roomObj.Player2 != nil && roomObj.Player2.ID != p.PlayerID {
-						candidates = append(candidates, roomObj.Player2.ID)
-					}
-					for _, ex := range roomObj.ExtraPlayers {
-						if ex != nil && ex.ID != "" && ex.ID != p.PlayerID {
-							candidates = append(candidates, ex.ID)
-						}
-					}
-
-					if len(candidates) > 0 {
-						targetPlayer := candidates[rand.Intn(len(candidates))]
-						obs := ObstructionPayload{
-							Effect:     output.Effect,
-							AttackerID: p.PlayerID,
-							TargetID:   targetPlayer,
-						}
-						bObs, _ := json.Marshal(obs)
-						h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
-						// 攻撃者には発動確認を送る（UI 表示用）
-						confirm := ObstructionPayload{
-							Effect:     output.Effect,
-							AttackerID: p.PlayerID,
-							TargetID:   targetPlayer,
-						}
-						bConfirm, _ := json.Marshal(confirm)
-						for _, cID := range h.wsManager.GetClientIDsByPlayerID(p.PlayerID) {
-							_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION_FIRED", Payload: bConfirm})
-						}
-					} else {
-						// fallback: ルーム内全員へ送信
-						obs := ObstructionPayload{
-							Effect:     output.Effect,
-							AttackerID: p.PlayerID,
-							TargetID:   "",
-						}
-						bObs, _ := json.Marshal(obs)
-						h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
-					}
-				} else {
-					// room が取れない場合は従来の broadcast を行う
+				if output.TargetPlayer != "" {
 					obs := ObstructionPayload{
 						Effect:     output.Effect,
 						AttackerID: p.PlayerID,
-						TargetID:   "",
+						TargetID:   output.TargetPlayer,
 					}
 					bObs, _ := json.Marshal(obs)
 					h.broadcastToRoom(roomID, Message{Type: "OBSTRUCTION", Payload: bObs})
+					confirm := ObstructionPayload{
+						Effect:     output.Effect,
+						AttackerID: p.PlayerID,
+						TargetID:   output.TargetPlayer,
+					}
+					bConfirm, _ := json.Marshal(confirm)
+					for _, cID := range h.wsManager.GetClientIDsByPlayerID(p.PlayerID) {
+						_ = h.wsManager.SendToClient(cID, Message{Type: "OBSTRUCTION_FIRED", Payload: bConfirm})
+					}
 				}
 			}
 		}
@@ -886,6 +859,7 @@ func (h *WebSocketHandler) buildBROpponentSnapshots(room *domain.Room, playerID 
 			PlayerID:   player.ID,
 			Score:      player.Score,
 			Combo:      player.Combo,
+			Effect:     player.ActiveEffect(),
 			Selections: []int{},
 		}
 		if gameState != nil {
@@ -953,12 +927,14 @@ type GameStartPayload struct {
 	WinningScore         int                 `json:"winning_score"`
 	MyCurrentScore       int                 `json:"my_current_score,omitempty"`
 	OpponentCurrentScore int                 `json:"opponent_current_score,omitempty"`
+	PlayerEffect         string              `json:"player_effect,omitempty"`
 	BROpponents          []BROpponentPayload `json:"br_opponents,omitempty"`
 }
 
 type VerifyPayload struct {
 	RoomID          string `json:"room_id"`
 	PlayerID        string `json:"player_id"`
+	Target          string `json:"target"`
 	SelectedIndices []int  `json:"selected_indices"`
 }
 
@@ -982,6 +958,7 @@ type BROpponentPayload struct {
 	Images     []string `json:"images"`
 	Score      int      `json:"score"`
 	Combo      int      `json:"combo"`
+	Effect     string   `json:"effect,omitempty"`
 	Selections []int    `json:"selections"`
 }
 

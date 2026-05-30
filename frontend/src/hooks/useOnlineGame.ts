@@ -103,6 +103,7 @@ export function useOnlineGame({
 
                 case 'GAME_START':
                     const startPayload = msg.payload as any;
+                    const existingBROpponents = store.brOpponents;
                     // If we're already actively matching/playing, avoid double-handling.
                     // However, ignore a stale `isMatchingRef` if we're not in PLAYING state —
                     // this allows reconnect scenarios where GAME_START may arrive again.
@@ -116,16 +117,22 @@ export function useOnlineGame({
                     if (startPayload.opponent_images) {
                         store.updateCpuPattern('', startPayload.opponent_images);
                     }
+                    if (startPayload.player_effect) {
+                        store.setPlayerEffect(startPayload.player_effect as ObstructionType);
+                    }
                     if (Array.isArray(startPayload.br_opponents)) {
-                        store.setBROpponents(startPayload.br_opponents.map((opp: any) => ({
-                            id: opp.player_id,
-                            score: opp.score ?? 0,
-                            combo: opp.combo ?? 0,
-                            effect: null,
-                            selections: Array.isArray(opp.selections) ? opp.selections : [],
-                            images: Array.isArray(opp.images) ? opp.images : [],
-                            target: opp.target ?? '',
-                        })));
+                        store.setBROpponents(startPayload.br_opponents.map((opp: any) => {
+                            const existingOpp = existingBROpponents.find(existing => existing.id === opp.player_id);
+                            return {
+                                id: opp.player_id,
+                                score: opp.score ?? 0,
+                                combo: opp.combo ?? 0,
+                                effect: opp.effect ?? existingOpp?.effect ?? null,
+                                selections: existingOpp ? existingOpp.selections : [],
+                                images: Array.isArray(opp.images) ? opp.images : [],
+                                target: opp.target ?? '',
+                            };
+                        }));
                     }
                     if (startPayload.winning_score) {
                         setWinningScore(startPayload.winning_score);
@@ -196,7 +203,7 @@ export function useOnlineGame({
                                 id: opp.player_id,
                                 score: opp.score ?? 0,
                                 combo: opp.combo ?? 0,
-                                effect: existingOpp ? existingOpp.effect : null,
+                                effect: opp.effect ?? existingOpp?.effect ?? null,
                                 selections: existingOpp ? existingOpp.selections : [],
                                 images: Array.isArray(opp.images) ? opp.images : [],
                                 target: opp.target ?? '',
@@ -306,7 +313,7 @@ export function useOnlineGame({
         setIsVerifying(true);
         sendMessage(JSON.stringify({
             type: 'VERIFY',
-            payload: { room_id: store.roomId, player_id: store.playerId, selected_indices: store.mySelections },
+            payload: { room_id: store.roomId, player_id: store.playerId, target: store.target, selected_indices: store.mySelections },
         }));
         // タイムアウトフォールバック（コントローラで一元管理）
         controller.scheduleVerifyFallback(store.playerId, () => setIsVerifying(prev => prev ? false : prev), 1500);

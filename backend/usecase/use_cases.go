@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"recaptchgame-backend/domain"
 )
@@ -251,9 +252,6 @@ func (uc *JoinRoomUseCase) Execute(input JoinRoomInput) (*JoinRoomOutput, error)
 	// クライアントを割り当て
 	uc.clientRepo.AssignClient(input.ClientID, input.PlayerID)
 
-	// ルームを保存
-	uc.roomRepo.Save(room)
-
 	// ルームがいっぱいになったら待機ルームをクリア
 	roomSize := room.CountPlayers()
 	if roomSize >= room.Capacity {
@@ -295,7 +293,18 @@ func NewVerifyAnswerUseCase(roomRepo domain.RoomRepository, problemGen *ProblemG
 type VerifyAnswerInput struct {
 	RoomID          string
 	PlayerID        string
+	Target          string
 	SelectedIndices []int
+}
+
+// BROpponentSnapshot はバトロワ同期用の相手状態スナップショット
+type BROpponentSnapshot struct {
+	PlayerID string
+	Target   string
+	Images   []string
+	Score    int
+	Combo    int
+	Effect   string
 }
 
 // VerifyAnswerOutput はVerifyAnswerの出力
@@ -309,7 +318,11 @@ type VerifyAnswerOutput struct {
 	Winner          string
 	SendObstruction bool
 	Effect          string
+	TargetPlayer    string
+	BROpponents     []BROpponentSnapshot
 }
+
+const obstructionEffectDuration = 3 * time.Second
 
 // Execute は回答を検証
 func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOutput, error) {
@@ -329,6 +342,9 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 	gameState := room.GetGameStateByPlayerID(input.PlayerID)
 	if gameState == nil {
 		return nil, fmt.Errorf("game state not found")
+	}
+	if input.Target != "" && input.Target != gameState.Target {
+		return nil, nil
 	}
 
 	problem := domain.NewProblem(gameState.Target, gameState.Images)
@@ -366,24 +382,76 @@ func (uc *VerifyAnswerUseCase) Execute(input VerifyAnswerInput) (*VerifyAnswerOu
 		if shouldObstruct {
 			// リセット後の値を反映
 			output.CurrentCombo = player.Combo
-			output.SendObstruction = true
-			// ← エフェクト選択は「戦術的」なのでユースケース層に残す
-			if len(uc.effectTypes) == 0 {
-				output.Effect = string(domain.EffectShake)
-			} else {
-				output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
+			var candidates []string
+			if room.Player1 != nil && room.Player1.ID != input.PlayerID {
+				candidates = append(candidates, room.Player1.ID)
+			}
+			if room.Player2 != nil && room.Player2.ID != input.PlayerID {
+				candidates = append(candidates, room.Player2.ID)
+			}
+			for _, ex := range room.ExtraPlayers {
+				if ex != nil && ex.ID != "" && ex.ID != input.PlayerID {
+					candidates = append(candidates, ex.ID)
+				}
+			}
+			if len(candidates) > 0 {
+				output.SendObstruction = true
+				output.TargetPlayer = candidates[rand.Intn(len(candidates))]
+				// ← エフェクト選択は「戦術的」なのでユースケース層に残す
+				if len(uc.effectTypes) == 0 {
+					output.Effect = string(domain.EffectShake)
+				} else {
+					output.Effect = uc.effectTypes[rand.Intn(len(uc.effectTypes))]
+				}
+				if targetPlayer := room.GetPlayerByID(output.TargetPlayer); targetPlayer != nil {
+					targetPlayer.ApplyEffect(output.Effect, time.Now().Add(obstructionEffectDuration))
+				}
 			}
 		}
+		output.BROpponents = buildBROpponentSnapshots(room, input.PlayerID)
 
 		uc.roomRepo.Save(room)
 	} else {
 		// 不正解
 		player.ResetCombo()
 		output.CurrentCombo = player.Combo
+		output.BROpponents = buildBROpponentSnapshots(room, input.PlayerID)
 		uc.roomRepo.Save(room)
 	}
 
 	return output, nil
+}
+
+func buildBROpponentSnapshots(room *domain.Room, playerID string) []BROpponentSnapshot {
+	snapshots := make([]BROpponentSnapshot, 0, room.CountPlayers())
+	appendSnapshot := func(player *domain.Player, gameState *domain.GameState) {
+		if player == nil || player.ID == "" || player.ID == playerID {
+			return
+		}
+		snapshot := BROpponentSnapshot{
+			PlayerID: player.ID,
+			Score:    player.Score,
+			Combo:    player.Combo,
+			Effect:   player.ActiveEffect(),
+		}
+		if gameState != nil {
+			snapshot.Target = gameState.Target
+			snapshot.Images = append([]string(nil), gameState.Images...)
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+
+	appendSnapshot(room.Player1, room.GameState1)
+	appendSnapshot(room.Player2, room.GameState2)
+	for i, player := range room.ExtraPlayers {
+		var gameState *domain.GameState
+		if i < len(room.ExtraGameStates) {
+			gameState = room.ExtraGameStates[i]
+		}
+		appendSnapshot(player, gameState)
+	}
+
+	return snapshots
 }
 
 // StartGameUseCase はゲーム開始のユースケース

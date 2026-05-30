@@ -9,8 +9,8 @@ import (
 
 // MemoryRoomRepository はメモリベースのルームリポジトリ
 type MemoryRoomRepository struct {
-	mu          sync.RWMutex
-	rooms       map[string]*domain.Room
+	mu           sync.RWMutex
+	rooms        map[string]*domain.Room
 	waitingRooms map[int]*domain.Room
 }
 
@@ -110,10 +110,10 @@ func copyRoom(src *domain.Room) *domain.Room {
 		Capacity:     src.Capacity,
 	}
 	if src.Player1 != nil {
-		dst.Player1 = &domain.Player{ID: src.Player1.ID, Score: src.Player1.Score, Combo: src.Player1.Combo}
+		dst.Player1 = &domain.Player{ID: src.Player1.ID, Score: src.Player1.Score, Combo: src.Player1.Combo, CurrentEffect: src.Player1.CurrentEffect, EffectExpiresAt: src.Player1.EffectExpiresAt}
 	}
 	if src.Player2 != nil {
-		dst.Player2 = &domain.Player{ID: src.Player2.ID, Score: src.Player2.Score, Combo: src.Player2.Combo}
+		dst.Player2 = &domain.Player{ID: src.Player2.ID, Score: src.Player2.Score, Combo: src.Player2.Combo, CurrentEffect: src.Player2.CurrentEffect, EffectExpiresAt: src.Player2.EffectExpiresAt}
 	}
 	if src.GameState1 != nil {
 		dst.GameState1 = &domain.GameState{Target: src.GameState1.Target, Images: append([]string{}, src.GameState1.Images...)}
@@ -125,7 +125,7 @@ func copyRoom(src *domain.Room) *domain.Room {
 		dst.ExtraPlayers = make([]*domain.Player, len(src.ExtraPlayers))
 		for i, p := range src.ExtraPlayers {
 			if p != nil {
-				dst.ExtraPlayers[i] = &domain.Player{ID: p.ID, Score: p.Score, Combo: p.Combo}
+				dst.ExtraPlayers[i] = &domain.Player{ID: p.ID, Score: p.Score, Combo: p.Combo, CurrentEffect: p.CurrentEffect, EffectExpiresAt: p.EffectExpiresAt}
 			}
 		}
 	}
