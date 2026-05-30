@@ -651,6 +651,7 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 			}
 			bOpp, _ := json.Marshal(updateOpp)
 
+			// 各受信者ごとに「その受信者から見た」BRスナップショットを再構築して送信する
 			for _, cID := range h.wsManager.GetClientIDsByRoomIDExcept(roomID, clientID) {
 				// 同一プレイヤーの別タブにはOPPONENT_UPDATEを送らない
 				if pid, ok := h.wsManager.GetPlayerID(cID); ok {
@@ -658,7 +659,28 @@ func (h *WebSocketHandler) handleVerify(clientID string, conn *websocket.Conn, p
 						continue
 					}
 				}
-				_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_UPDATE", Payload: bOpp})
+
+				// 最新のルーム情報を取得して、受信者視点でスナップショットを作る
+				roomLatest, err := h.roomRepo.FindByID(roomID)
+				if err != nil || roomLatest == nil {
+					continue
+				}
+
+				targetPlayerID, ok := h.wsManager.GetPlayerID(cID)
+				if !ok || targetPlayerID == "" {
+					continue
+				}
+
+				snaps := h.buildBROpponentSnapshots(roomLatest, targetPlayerID)
+
+				updateOppForRecipient := OpponentUpdatePayload{
+					Images:      output.NewImages,
+					Score:       output.CurrentScore,
+					Combo:       output.CurrentCombo,
+					BROpponents: snaps,
+				}
+				bOppRec, _ := json.Marshal(updateOppForRecipient)
+				_ = h.wsManager.SendToClient(cID, Message{Type: "OPPONENT_UPDATE", Payload: bOppRec})
 			}
 
 			// 妨害エフェクト送信: プレイヤー発の場合はランダムに1人の相手のみを標的にする

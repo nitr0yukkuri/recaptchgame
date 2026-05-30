@@ -145,6 +145,12 @@ export function useOnlineGame({
                     store.setPlayerCombo(startPayload.my_current_combo ?? 0);
                     store.setOpponentCombo(0);
 
+                    // If we are already in PLAYING state (reconnect during an active match),
+                    // skip the countdown animation and only restore state.
+                    if (store.gameState === 'PLAYING') {
+                        return;
+                    }
+
                     (async () => {
                         // Clear any previous BR obstruction timers carried over
                         // from a prior match to avoid cross-match leakage.
