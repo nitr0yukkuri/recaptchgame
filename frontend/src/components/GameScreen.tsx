@@ -76,11 +76,9 @@ export const GameScreen = ({
     const isOneOnOne = !brOpponents || brOpponents.length === 0;
     // Base and slightly smaller sizes for 1on1 (small reduction to give more padding/余白)
     const basePlayerSizeClass = 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[400px]';
-    const oneOnOnePlayerSizeClass = 'w-[180px] xs:w-[200px] sm:w-[260px] md:w-[340px]';
-    // For 1on1 matches make opponent slightly larger on desktop (md+) for better visibility
-    const oneOnOneOpponentSizeClass = 'w-[200px] xs:w-[220px] sm:w-[300px] md:w-[380px] lg:w-[420px]';
-    const playerSizeClass = isOneOnOne ? oneOnOnePlayerSizeClass : basePlayerSizeClass;
-    const opponentSizeClass = isOneOnOne ? oneOnOneOpponentSizeClass : 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[100px] lg:w-48';
+    const oneOnOneSizeClass = 'w-[180px] xs:w-[200px] sm:w-[260px] md:w-[340px]';
+    const playerSizeClass = isOneOnOne ? oneOnOneSizeClass : basePlayerSizeClass;
+    const opponentSizeClass = isOneOnOne ? oneOnOneSizeClass : 'w-[210px] xs:w-[240px] sm:w-[300px] md:w-[100px] lg:w-48';
 
     const rivalImages = gameMode === 'CPU' ? cpuImages : cpuImages;
 
